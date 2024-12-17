@@ -71,7 +71,7 @@ def play_audio_from_position(start_pos):
 def sound_length(sound_file):
     load = MP3(sound_file)
     length = load.info.length
-    length = int(length)
+    #length = int(length)
     print(length)
     return length
 
@@ -87,6 +87,10 @@ initial_position = 425  # por ejemplo, iniciar desde los 120 segundos (2 minutos
 #play_audio_from_position(initial_position)
 
 
+entry_message.play()
+#wait=sound_length(entry_message)
+#wait = int(wait)
+time.sleep(20)
 pygame.mixer.music.play()
 
 
@@ -99,11 +103,6 @@ print(f"""########### R A D I O  C L U B   G U A D I A N A  A . C .#############
           
           derecho reservados @rcg.org.mx
           """)
-
-
-entry_message.play()
-wait=sound_length(entry_message)
-time.sleep(wait)
 
 # Ciclo de reproducción y pausa
 while pygame.mixer.music.get_busy():
