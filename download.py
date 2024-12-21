@@ -19,8 +19,8 @@ def descargar_audio_facebook(url, nombre_archivo="audio.mp3"):
         ydl.download([url])
 
 # URL del video de Facebook
-url_video = "https://www.youtube.com/watch?v=vzfECgHjXTI"
-nombre_archivo = "radioaficion"
+url_video = "https://www.youtube.com/watch?v=NpOmHdYQigs"
+nombre_archivo = "boletin"
 
 # Descargar el audio
 descargar_audio_facebook(url_video, nombre_archivo)
