@@ -7,8 +7,8 @@ import time
 import locale
 from datetime import datetime
 from mutagen.mp3 import MP3
-from tts import tts
-from functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar
+from src.func.tts import tts
+from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar
 
 # Función para manejar CTRL+C
 def handle_exit_signal(signal_number, frame):

@@ -5,7 +5,7 @@ import time
 import locale
 from datetime import datetime
 from mutagen.mp3 import MP3
-from tts import tts
+from src.func.tts import tts
 import requests
 
 # URL de la API 
