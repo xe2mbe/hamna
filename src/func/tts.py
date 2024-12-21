@@ -1,4 +1,5 @@
 import pyttsx3
+import os
 
 
 def tts(text,output_file,velocidad):
@@ -9,6 +10,9 @@ def tts(text,output_file,velocidad):
     engine.setProperty('rate', velocidad)
 
     # Guarda el texto convertido a voz en un archivo MP3
+    # Construye la ruta completa del archivo
+    #output_file = path + "'\'" + output_file
+    print(output_file)
     engine.save_to_file(text, output_file)
 
     # Ejecuta el motor y espera a que termine

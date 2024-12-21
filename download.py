@@ -20,7 +20,9 @@ def descargar_audio_facebook(url, nombre_archivo="audio.mp3"):
 
 # URL del video de Facebook
 url_video = "https://www.youtube.com/watch?v=NpOmHdYQigs"
+#media_path = '\\src\\media\\'
 nombre_archivo = "boletin"
+#archivo = media_path + nombre_archivo
 
 # Descargar el audio
 descargar_audio_facebook(url_video, nombre_archivo)

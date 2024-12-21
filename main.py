@@ -1,5 +1,5 @@
 from os import environ, system
-import sys
+import sys, os
 import signal
 environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame
@@ -27,6 +27,11 @@ locale.setlocale(locale.LC_TIME, 'es_ES')
 fecha = datetime.now()
 fecha = fecha.strftime("%A, %d de %B de %Y")
 
+#definimos donde se guardan los audios
+# Directorio base del script
+script_path = os.path.dirname(os.path.abspath(__file__))
+media_path = script_path + '/src/media/'
+
 # Mensajes de bienvenida y salida
 mensaje_entrada = """Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
 Gracias por sintonizarnos, en un instante iniciamos. 
@@ -39,29 +44,32 @@ Agradecemos por escuchar este medio de difusión de la máxima autoridad de radi
 ahora damos paso a la estación control para que inicie la toma de reportes, hasta la próxima edición, 73 y feliz día.""")
 
 # Generar audios de entrada y salida
-tts(mensaje_entrada, "audio_entrada.mp3", 120)
-tts(mensaje_salida, "audio_salida.mp3", 120)
+audio_entrada = media_path + "/audio_entrada.mp3"
+tts(mensaje_entrada, audio_entrada, 120)
+audio_salida = media_path + "/audio_salida.mp3"
+tts(mensaje_salida, audio_salida, 120)
 
 # Inicializar Pygame y el mixer
 pygame.init()
 pygame.mixer.init()
 
 # Archivos de audio
-boletin = 'FMRE.mp3'
-alerta = 'pause_alert2.mp3'
+boletin = 'boletin.mp3'
+alerta = 'pause_alert.mp3'
 pausa = 'pausa.mp3'
 continua = 'continuamos.mp3'
 entrada = 'audio_entrada.mp3'
 salida = 'audio_salida.mp3'
 
 # Carga archivos de audio
+
 pygame.mixer.music.load(boletin)
-alert_sound = pygame.mixer.Sound(alerta)
+alert_sound = pygame.mixer.Sound(media_path + alerta)
 alert_sound.set_volume(1.0) 
-pausa_message = pygame.mixer.Sound(pausa)
-continue_message = pygame.mixer.Sound(continua)
-entry_message = pygame.mixer.Sound(entrada)
-end_message = pygame.mixer.Sound(salida)
+pausa_message = pygame.mixer.Sound(media_path + pausa)
+continue_message = pygame.mixer.Sound(media_path + continua)
+entry_message = pygame.mixer.Sound(media_path + entrada)
+end_message = pygame.mixer.Sound(media_path + salida)
 
 # Obtén la duración total del audio
 boletin_load = MP3(boletin)
@@ -76,7 +84,7 @@ rewind_time = 3
 
 # Configurar tiempos de inicio y fin (en formato hh:mm:ss)
 start_time_str = "00:00:00"
-end_time_str = "00:30:07"
+end_time_str = "00:05:07"
 
 # Convertir tiempos a segundos
 start_time = convert_hhmmss_to_seconds(start_time_str)
