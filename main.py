@@ -76,15 +76,16 @@ boletin_load = MP3(boletin)
 boletin_length = boletin_load.info.length
 boletin_length_formatted = convert_seconds_to_hhmmss(boletin_length)
 
+
 # Configuración de parámetros
-play_duration = 150
+play_duration = 90
 pause_duration = 8
 alert_time = 7
 rewind_time = 3
 
 # Configurar tiempos de inicio y fin (en formato hh:mm:ss)
-start_time_str = "00:00:00"
-end_time_str = "00:05:07"
+start_time_str = "00:05:40"
+end_time_str = "00:21:45"
 
 # Convertir tiempos a segundos
 start_time = convert_hhmmss_to_seconds(start_time_str)
