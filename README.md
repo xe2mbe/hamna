@@ -2,7 +2,7 @@
 > La radioafición siempre ha destacado por la creatividad y la innovación de sus operadores. 
 > En este espíritu, nace HAMNA (HAM Net Automation), un proyecto diseñado para facilitar y 
 > modernizar las transmisiones en estaciones de radioaficionados, especialmente para aplicaciones 
-> como boletines dominicales y otros contenidos recurrentes.
+> como boletines y otros contenidos recurrentes que sean grabados o preparados con anticipación.
 
 ¿Qué es HAMNA? HAMNA es un software de código abierto que automatiza la transmisión de contenido pregrabado en estaciones de radio. Su principal objetivo es reducir la carga operativa del radioaficionado o estacion control responsable de la transmision del boletín, programa o net al permitir programar y transmitir contenido sin la necesidad de estar presente físicamente frente a la estación.
 
