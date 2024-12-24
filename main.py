@@ -39,7 +39,7 @@ Esta es una transmisión automátizada mediante la aplicación HAMNA"""
 
 mensaje_salida = (f"""Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
 Hemos terminado con nuestra emisión de este día {fecha}. 
-Les recordamos que esta es una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
+Les recordamos que esta fue una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
 Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país, 
 ahora damos paso a la estación control para que inicie la toma de reportes, hasta la próxima edición, 73 y feliz día.""")
 
@@ -80,12 +80,12 @@ boletin_length_formatted = convert_seconds_to_hhmmss(boletin_length)
 # Configuración de parámetros
 play_duration = 90
 pause_duration = 8
-alert_time = 7
-rewind_time = 3
+alert_time = 8
+rewind_time = 2
 
 # Configurar tiempos de inicio y fin (en formato hh:mm:ss)
 start_time_str = "00:05:40"
-end_time_str = "00:21:45"
+end_time_str = "00:07:40"
 
 # Convertir tiempos a segundos
 start_time = convert_hhmmss_to_seconds(start_time_str)
@@ -111,8 +111,11 @@ print(f"""
           Intervalo de reproducción seleccionado: {start_time_str} - {end_time_str}
           Duración del intervalo seleccionado: {convert_seconds_to_hhmmss(custom_duration)} (hh:mm:ss).
           Retroceso de audio después de pausa: {rewind_time} segundos.
+          Alerta de pausa: {alert_time} segundos.
           
-          © rcg.org.mx
+          Un proyecto del Radio Club Guadiana A.C.
+          
+          Visita https://rcg.org.mx
           """)
 ptt('on')
 time.sleep(2)
