@@ -40,9 +40,9 @@ def get_metadata(url):
 
 
 # URL del video de Facebook
-url_video = "https://www.facebook.com/100063632881722/videos/567793132897904"
+url_video = "https://www.youtube.com/watch?v=WuY86jOIzfk"
 #media_path = '\\src\\media\\'
-nombre_archivo = "boletin"
+nombre_archivo = "lora"
 #archivo = media_path + nombre_archivo
 
 # Descargar el audio

@@ -1,21 +1,27 @@
 import pyttsx3
-import os
 
-
-def tts(text,output_file,velocidad):
+def tts(text, output_file, velocidad):
     # Inicializa el motor TTS
     engine = pyttsx3.init()
 
-    # Configura la velocidad del habla (opcional)
+    # Configura la velocidad del habla
     engine.setProperty('rate', velocidad)
 
+    # Busca y selecciona una voz en español
+    voces = engine.getProperty('voices')
+    for voz in voces:
+        if "spanish" in voz.languages or "es" in voz.id.lower():
+            engine.setProperty('voice', voz.id)
+            break
+    else:
+        print("Advertencia: No se encontró una voz en español. Usando la predeterminada.")
+
     # Guarda el texto convertido a voz en un archivo MP3
-    # Construye la ruta completa del archivo
-    #output_file = path + "'\'" + output_file
-    print(output_file)
     engine.save_to_file(text, output_file)
 
     # Ejecuta el motor y espera a que termine
     engine.runAndWait()
 
-#tts("hola","test.mp3",100)
+# Ejemplo de uso
+texto = "Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A.C."
+tts(texto, "test.mp3", 150)

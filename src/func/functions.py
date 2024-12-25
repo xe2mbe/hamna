@@ -1,6 +1,7 @@
 import time
 from os import environ, system, name
 import requests
+import yaml
 
 BASE_URL = "http://192.168.1.37"
 
@@ -38,3 +39,7 @@ def ptt(action):
         print(response.json())  # Muestra el mensaje de respuesta
     else:
         print(f"Error: {response.status_code}")
+
+def load_config(file_path="cfg.yml"):
+    with open(file_path, "r") as file:
+        return yaml.safe_load(file)
