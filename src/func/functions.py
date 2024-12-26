@@ -4,7 +4,7 @@ import requests
 import yaml
 from mutagen.mp3 import MP3
 
-BASE_URL = "http://192.168.1.37"
+BASE_URL = "http://stn8422.ip.irlp.net"
 
 # Función para convertir segundos a formato hh:mm:ss
 def convert_seconds_to_hhmmss(seconds):
@@ -61,9 +61,12 @@ def resume(file_yaml):
     # Imprimir detalles de cada sección
     resumen = []
     for idx, seccion in enumerate(secciones, start=1):
-        duration = file_duration({seccion['archivo']})
+        file = str(seccion['archivo'])
+        duration = file_duration(seccion['archivo'])
+        sect = {seccion['nombre']}
+        duration = convert_seconds_to_hhmmss(duration)
         resumen.append(
-            f"Sección {idx}: {seccion['nombre']}\n"
+            f"Sección {idx}: {file}\n"
             f"  Duración Total: {duration}\n"
             f"  Archivo: {seccion['archivo']}\n"
             f"  Inicio: {seccion['inicio']}\n"
@@ -71,4 +74,39 @@ def resume(file_yaml):
         )
     return "\n".join(resumen)
 
-resumen = resume("cfg.yml")
+def resume_menu(file_yaml):
+
+    # Leer el archivo
+    with open(file_yaml, "r", encoding="utf-8") as file:
+        configuracion = yaml.safe_load(file)
+
+    # Acceder a las secciones
+    secciones = configuracion.get("secciones", [])
+    resumen = []
+    for idx, seccion in enumerate(secciones, start=1):
+        file = str(seccion['archivo'])
+        duration = file_duration(seccion['archivo'])
+        duration = convert_seconds_to_hhmmss(duration)
+        resumen.append(
+            f"Sección {idx}: {file}\n"
+            f"  Duración Total: {duration}\n"
+            f"  Archivo: {seccion['archivo']}\n"
+            f"  Inicio: {seccion['inicio']}\n"
+            f"  Fin: {seccion['fin']}\n"
+        )
+        index = idx
+        duration_total = duration
+        file_name = seccion['archivo']
+        start = seccion['inicio']
+        end = seccion['fin']
+        print (f'''
+                 Sección {index}:
+                     Archivo: {file_name}
+                     Duración Total del archivo: {duration_total}
+                     Inicio: {start}
+                     Fin: {end}
+        '''
+        )
+    #return resumen
+#resumen = resume_menu("cfg.yml")
+#print(resumen)

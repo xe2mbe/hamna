@@ -1,0 +1,42 @@
+# Configuración general
+general:
+  locale: "es_ES"
+  media_path: "./src/media/"
+
+# Parámetros de las secciones del boletín
+secciones:
+  - nombre: "Introducción"
+    archivo: "boletin.mp3"
+    inicio: "00:00:00"
+    fin: "00:01:30"
+
+  - nombre: "Colaboración "
+    archivo: "lora.mp3"
+    inicio: "00:00:00"
+    fin: "00:03:00"
+
+# Duraciones y tiempos
+duraciones:
+  reproduccion: 90
+  pausa: 8
+  alerta: 8
+  retroceso: 2
+
+# Textos para TTS
+mensajes:
+  entrada: |
+    Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
+    Gracias por sintonizarnos, en un instante iniciamos. 
+    Esta es una transmisión automátizada mediante la aplicación HAMNA
+  salida: |
+    Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
+    Hemos terminado con nuestra emisión de este día {fecha}. 
+    Les recordamos que esta fue una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
+    Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país, 
+    ahora damos paso a la estación control para que inicie la toma de reportes, hasta la próxima edición, 73 y feliz día.
+
+alertas:
+  - nombre: "pausa"
+    archivo: "pausa.mp3"
+  - nombre: "continuamos"
+    archivo: "continuamos.mp3"
