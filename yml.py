@@ -80,6 +80,7 @@ def play_section(section):
     alert_sound.set_volume(1.0)
     pausa =  config["alertas"]
     pausa_message = pygame.mixer.Sound(media_path + pausa)
+    continua = config["alertas"]
     continue_message = pygame.mixer.Sound(media_path + continua)
 
     total_elapsed_time = start_time
