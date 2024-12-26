@@ -21,7 +21,6 @@ def handle_exit_signal(signal_number, frame):
 signal.signal(signal.SIGINT, handle_exit_signal)
 
 # Cargar configuración desde cfg.yml
-global config
 config = load_config()
 
 # Configuración general
@@ -55,7 +54,6 @@ rewind_time = config["duraciones"]["retroceso"]
 
 # Función para manejar la reproducción de una sección
 def play_section(section):
-    global config
     #archivo = media_path + section["archivo"]
     archivo = section["archivo"]
     start_time = convert_hhmmss_to_seconds(section["inicio"])
@@ -71,16 +69,10 @@ def play_section(section):
         raise ValueError(f"El tiempo de inicio debe ser menor al tiempo de fin en la sección '{section['nombre']}'.")
 
     custom_duration = end_time - start_time
-    media_path = config["general"]["media_path"]
+
     pygame.mixer.music.load(archivo)
     pygame.mixer.music.play(start=0)
     pygame.mixer.music.set_pos(start_time)
-    alerta = config["alertas"]
-    alert_sound = pygame.mixer.Sound(media_path + alerta)
-    alert_sound.set_volume(1.0)
-    pausa =  config["alertas"]
-    pausa_message = pygame.mixer.Sound(media_path + pausa)
-    continue_message = pygame.mixer.Sound(media_path + continua)
 
     total_elapsed_time = start_time
 
@@ -91,14 +83,12 @@ def play_section(section):
             time.sleep(1)
             total_elapsed_time += 1
             remaining_time = end_time - total_elapsed_time
-            if total_elapsed_time >= end_time:
-                break
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
             print(f"Sección '{section['nombre']}': Tiempo restante del boletín: {convert_seconds_to_hhmmss(remaining_time)} {bar}")
         pygame.mixer.music.stop()
         return
-    # Reproducción con pausas
+
     while pygame.mixer.music.get_busy() and total_elapsed_time < end_time:
         elapsed_time = 0
         time_to_pause = play_duration
@@ -115,7 +105,6 @@ def play_section(section):
 
             if time_to_pause == alert_time:
                 print(f"Sección '{section['nombre']}': Alerta de pausa...")
-                alert_sound.play()
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
             print(f"Sección '{section['nombre']}': Tiempo restante del boletín: {convert_seconds_to_hhmmss(remaining_time)} {bar}")

@@ -24,4 +24,4 @@ def tts(text, output_file, velocidad):
 
 # Ejemplo de uso
 texto = "Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A.C."
-tts(texto, "test.mp3", 150)
+#tts(texto, "test.mp3", 150)
