@@ -8,7 +8,7 @@ import locale
 from datetime import datetime
 from mutagen.mp3 import MP3
 from src.func.tts import tts
-from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, load_
+from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume
 
 # Cargar configuración desde cfg.yml
 config = load_config()
@@ -108,10 +108,30 @@ def play_section(section):
             pygame.mixer.music.set_pos(total_elapsed_time)
             pygame.mixer.music.unpause()
 
+
 # Reproducción principal
 clear_screen()
 print("Iniciando transmisión automatizada...")
-ptt("on")
+resumen = resume("cfg.yml")
+print(resumen)
+print(f"""
+           ################ H A M N A - Amateur Radio Network Automation #################
+           ############ B y  R A D I O  C L U B   G U A D I A N A  A . C . ###############
+      
+           El boletin consta de las siguientes secciones:
+          
+             Sección 1: {config['nombre']}.
+                Duración del total del archivo: {file_duration(boletin_length)}
+                Intervalo de reproducción seleccionado: {start_time_str} - {end_time_str}
+           Duración del intervalo seleccionado: {convert_seconds_to_hhmmss(custom_duration)} (hh:mm:ss).
+           Retroceso de audio después de pausa: {rewind_time} segundos.
+           Alerta de pausa: {alert_time} segundos.
+          
+           Un proyecto del Radio Club Guadiana A.C.
+          
+           Visita https://rcg.org.mx
+           """)
+#ptt("on")
 time.sleep(2)
 entry_message.play()
 time.sleep(20)
@@ -124,5 +144,5 @@ for section in config["secciones"]:
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
 end_message.play()
 time.sleep(30)
-ptt("off")
+#ptt("off")
 input("Presiona Enter para salir...")

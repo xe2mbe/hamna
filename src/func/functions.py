@@ -2,6 +2,7 @@ import time
 from os import environ, system, name
 import requests
 import yaml
+from mutagen.mp3 import MP3
 
 BASE_URL = "http://192.168.1.37"
 
@@ -39,7 +40,35 @@ def ptt(action):
         print(response.json())  # Muestra el mensaje de respuesta
     else:
         print(f"Error: {response.status_code}")
+        
+def file_duration(file):
+    audio_info = MP3(file)
+    total_duration = audio_info.info.length
+    return total_duration
 
 def load_config(file_path="cfg.yml"):
     with open(file_path, "r") as file:
         return yaml.safe_load(file)
+
+def resume(file_yaml):
+
+    # Leer el archivo
+    with open(file_yaml, "r", encoding="utf-8") as file:
+        configuracion = yaml.safe_load(file)
+
+    # Acceder a las secciones
+    secciones = configuracion.get("secciones", [])
+    # Imprimir detalles de cada sección
+    resumen = []
+    for idx, seccion in enumerate(secciones, start=1):
+        duration = file_duration({seccion['archivo']})
+        resumen.append(
+            f"Sección {idx}: {seccion['nombre']}\n"
+            f"  Duración Total: {duration}\n"
+            f"  Archivo: {seccion['archivo']}\n"
+            f"  Inicio: {seccion['inicio']}\n"
+            f"  Fin: {seccion['fin']}\n"
+        )
+    return "\n".join(resumen)
+
+resumen = resume("cfg.yml")
