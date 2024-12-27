@@ -6,7 +6,7 @@ from mutagen.mp3 import MP3
 from mutagen import MutagenError
 import subprocess
 import os
-os.environ["PATH"] = r"C:\Python\ffmpeg\bin;" + os.environ["PATH"]
+os.environ["PATH"] = r"C:\ffmpeg\bin;" + os.environ["PATH"]
 
 BASE_URL = "http://stn8422.ip.irlp.net"
 
@@ -63,15 +63,22 @@ def file_duration(file):
         print(f"Ocurrió un error inesperado: {e}")
         return 0
 
-def convert_to_valid_mp3(raw_file,mp3name,path):
-    #name = file
-    #output_file = name.replace("raw_","",1)
-    name = path+mp3name
+def convert_to_valid_mp3(raw_file, mp3name, path):
+    # Ruta completa del archivo de salida
+    output_file = os.path.join(path, mp3name)
+    
+    # Verificar si el archivo ya existe y eliminarlo
+    if os.path.exists(output_file):
+        os.remove(output_file)
+        print(f"Archivo existente eliminado: {output_file}")
+    
     try:
+        # Ejecutar FFmpeg para convertir el archivo
         subprocess.run(
-            ["ffmpeg", "-i", raw_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", name],
+            ["ffmpeg", "-i", raw_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", output_file],
             check=True
         )
+        print(f"Archivo convertido y guardado como: {output_file}")
         return mp3name
     except subprocess.CalledProcessError as e:
         print(f"Error al convertir el archivo: {e}")

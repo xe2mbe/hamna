@@ -27,6 +27,7 @@ signal.signal(signal.SIGINT, handle_exit_signal)
 global config
 config = load_config()
 
+total_secciones = len(config["secciones"])  # Contar el número total de secciones
 # Configuración general
 #locale.setlocale(locale.LC_TIME, config["general"]["locale"])
 locale.setlocale(locale.LC_TIME, 'es_ES')
@@ -175,11 +176,9 @@ def play_section(section):
 
         if total_elapsed_time < end_time:
             pygame.mixer.music.pause()
-
-
-            print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
             time.sleep(1)
             clear_screen()
+            print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
             pausa_message.play()
             #time.sleep(5)
             time.sleep(pausa_message_idle)  
@@ -205,7 +204,7 @@ print(f"""
            ################ H A M N A - Amateur Radio Network Automation #################
            ############ B y  R A D I O  C L U B   G U A D I A N A  A . C . ###############
       
-           El boletin consta de las siguientes secciones:
+           El boletin consta de las siguientes {total_secciones} secciones:
     """)
 resume_menu("cfg.yml")            
 print(f"""         
