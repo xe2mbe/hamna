@@ -3,6 +3,10 @@ from os import environ, system, name
 import requests
 import yaml
 from mutagen.mp3 import MP3
+from mutagen import MutagenError
+import subprocess
+import os
+os.environ["PATH"] = r"C:\Python\ffmpeg\bin;" + os.environ["PATH"]
 
 BASE_URL = "http://stn8422.ip.irlp.net"
 
@@ -41,10 +45,37 @@ def ptt(action):
     else:
         print(f"Error: {response.status_code}")
         
+#def file_duration(file):
+#    audio_info = MP3(file)
+#    total_duration = audio_info.info.length
+#    return total_duration
+
 def file_duration(file):
-    audio_info = MP3(file)
-    total_duration = audio_info.info.length
-    return total_duration
+    try:
+        # Asegúrate de que sea un archivo MP3 válido
+        audio_info = MP3(file)
+        total_duration = audio_info.info.length
+        return total_duration
+    except MutagenError as e:
+        print(f"Error al procesar el archivo: {file}. Detalles: {e}")
+        return 0  # Retorna 0 o lanza una excepción personalizada
+    except Exception as e:
+        print(f"Ocurrió un error inesperado: {e}")
+        return 0
+
+def convert_to_valid_mp3(raw_file,mp3name,path):
+    #name = file
+    #output_file = name.replace("raw_","",1)
+    name = path+mp3name
+    try:
+        subprocess.run(
+            ["ffmpeg", "-i", raw_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", name],
+            check=True
+        )
+        return mp3name
+    except subprocess.CalledProcessError as e:
+        print(f"Error al convertir el archivo: {e}")
+        return None
 
 def load_config(file_path="cfg.yml"):
     with open(file_path, "r",encoding='utf-8') as file:

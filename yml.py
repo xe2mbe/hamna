@@ -9,7 +9,7 @@ from datetime import datetime
 from mutagen.mp3 import MP3
 from src.func.tts import tts
 from textwrap import dedent, fill
-from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu,get_fileNameMP3
+from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu,get_fileNameMP3, convert_to_valid_mp3
 
 
 clear_screen()
@@ -40,10 +40,16 @@ mensaje_salida = config["mensajes"]["salida"].format(fecha=fecha)
 print(mensaje_salida)
 
 # Generar audios de entrada y salida
+raw_entrada = media_path + "raw_audio_entrada.mp3"
+raw_salida = media_path + "raw_audio_salida.mp3"
+tts(mensaje_entrada, raw_entrada, 120)
+time.sleep(5)
+convert_to_valid_mp3(raw_entrada,"audio_entrada.mp3",media_path )
+tts(mensaje_salida, raw_salida, 120)
+time.sleep(5)
+convert_to_valid_mp3(raw_entrada,"audio_salida.mp3",media_path )
 entrada = media_path + "audio_entrada.mp3"
 salida = media_path + "audio_salida.mp3"
-tts(mensaje_entrada, entrada, 120)
-tts(mensaje_salida, salida, 120)
 
 # Inicializar Pygame y el mixer
 pygame.init()
@@ -89,8 +95,10 @@ def play_section(section):
     alert_sound.set_volume(1.0)
     pausa =  get_fileNameMP3('cfg.yml','alertas','nombre','pause')
     pausa_message = pygame.mixer.Sound(media_path + pausa)
+    pausa_message_idle = (file_duration(media_path+pausa)+int(1.5)) #obtener tiempo pausa menssage y agregamos 1.5 más de pausa para no empalmar mensaje
     continua = get_fileNameMP3('cfg.yml','alertas','nombre','continuamos')
     continue_message = pygame.mixer.Sound(media_path + continua)
+    continue_message_idle = (file_duration(media_path+continua)+int(1.5)) #obtener tiempo continua menssage y agregamos 1.5 más de pausa para no empalmar mensaje
 
     total_elapsed_time = start_time
 
@@ -112,9 +120,9 @@ def play_section(section):
 
 
 
-                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} seg.
+                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} s.
 
-                             La sección es menor a {play_duration} seg, será reproducida sin pausas.
+                             La sección es menor a {play_duration} s, será reproducida sin pausas.
      
     
                                  Tiempo restante de la sección: {convert_seconds_to_hhmmss(remaining_time)} 
@@ -153,9 +161,9 @@ def play_section(section):
 
 
 
-                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} seg.
+                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} s.
 
-                             La sección será reproducida con pausas cada {play_duration} seg.
+                             La sección será reproducida con pausas cada {play_duration} s.
      
     
                                  Tiempo restante de la sección: {convert_seconds_to_hhmmss(remaining_time)} 
@@ -171,9 +179,8 @@ def play_section(section):
             clear_screen()
             print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
             pausa_message.play()
-            #pause_time = file_duration(pausa_message)
-            #time.sleep(pause_time + 1)
-            time.sleep(5)  
+            #time.sleep(5)
+            time.sleep(pausa_message_idle)  
             ptt('off')
             time.sleep(pause_duration)
             total_elapsed_time -= rewind_time
@@ -181,7 +188,8 @@ def play_section(section):
             ptt('on')
             time.sleep(1)
             continue_message.play()
-            time.sleep(4)
+            #time.sleep(4)
+            time.sleep(continue_message_idle)
             pygame.mixer.music.unpause()
             print(f"Boletín reanudado, retrocedido {rewind_time} segundos")
 
@@ -206,10 +214,12 @@ print(f"""
            """)
 ptt("on")
 time.sleep(2)
+entry_message_idle = (file_duration(entrada)+int(1.5))
+print(entry_message_idle)
 entry_message.play()
-time.sleep(20)
+time.sleep(entry_message_idle)
 ptt("off")
-time.sleep(8)
+time.sleep(6)
 clear_screen()
 
 for section in config["secciones"]:
@@ -227,7 +237,8 @@ for section in config["secciones"]:
 ptt("on")
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
 time.sleep(2)
+end_message_idle = (file_duration(salida)+int(1.5))
 end_message.play()
-time.sleep(30)
+time.sleep(end_message_idle)
 ptt("off")
 input("Presiona Enter para salir...")
