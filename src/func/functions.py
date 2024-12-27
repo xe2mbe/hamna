@@ -16,7 +16,7 @@ def convert_hhmmss_to_seconds(hhmmss):
     return h * 3600 + m * 60 + s
 
 # Función para generar una barra de estado
-def progress_bar(current, total, bar_length=50):
+def progress_bar(current, total, bar_length=45):
     fraction = current / total
     arrow = int(fraction * bar_length) * '█'
     padding = (bar_length - len(arrow)) * '░'
@@ -88,6 +88,7 @@ def resume_menu(file_yaml):
 
     # Acceder a las secciones
     secciones = configuracion.get("secciones", [])
+    total_secciones = len(configuracion["secciones"])  # Contar el número total de secciones
     resumen = []
     for idx, seccion in enumerate(secciones, start=1):
         file = str(seccion['archivo'])
@@ -114,7 +115,7 @@ def resume_menu(file_yaml):
         start = seccion['inicio']
         end = seccion['fin']
         print (f'''
-                 Sección {index}:
+                 Sección {index} de {total_secciones}:
                      Archivo: {file_name}
                      Duración Total del archivo: {duration_total}
                      Tiempo de reproduccion: {play_duration}
@@ -122,9 +123,9 @@ def resume_menu(file_yaml):
                         Fin: {end}
         '''
         )
-    print("""
-          Tiempo de reproduccion Total del Boletin: {duration_total
-          """)
+    print(f'''
+          Tiempo de reproduccion total del boletín ( {total_secciones} secciones ): {duration_total}
+        ''')
 def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
     # Cargar el archivo YAML
     with open(yml_file, 'r', encoding='utf-8') as archivo:

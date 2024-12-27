@@ -8,6 +8,7 @@ import locale
 from datetime import datetime
 from mutagen.mp3 import MP3
 from src.func.tts import tts
+from textwrap import dedent, fill
 from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu,get_fileNameMP3
 
 # Función para manejar CTRL+C
@@ -63,6 +64,7 @@ def play_section(section):
     archivo = section["archivo"]
     start_time = convert_hhmmss_to_seconds(section["inicio"])
     end_time = convert_hhmmss_to_seconds(section["fin"])
+    total_secciones = len(config["secciones"])  # Contar el número total de secciones
 
     # Validar límites
     audio_info = MP3(archivo)
@@ -101,7 +103,22 @@ def play_section(section):
                 break
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
-            print(f"Sección '{section['nombre']}': Tiempo restante del boletín (SP): {convert_seconds_to_hhmmss(remaining_time)} {bar}")
+
+            print(
+             f"""
+             ################################# HAMNA - Amateur Radio Net Automation ##################################
+
+
+             
+                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} seg.
+
+                             La sección es menor a {play_duration} seg, será reproducida sin pausas.
+     
+    
+                                 Tiempo restante de la sección: {convert_seconds_to_hhmmss(remaining_time)} 
+
+                             {bar.strip()}              
+             """)
         pygame.mixer.music.stop()
         return
     # Reproducción con pausas
@@ -126,7 +143,23 @@ def play_section(section):
                 alert_sound.play()
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
-            print(f"Sección '{section['nombre']}': Tiempo restante ({play_duration}): {convert_seconds_to_hhmmss(remaining_time)} {bar}")
+            #print(f"Sección '{section['nombre']}': Tiempo restante ({play_duration}): {convert_seconds_to_hhmmss(remaining_time)} {bar}")
+            print(
+             f"""
+
+             ################################# HAMNA - Amateur Radio Net Automation ##################################
+
+
+
+                             Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} seg.
+
+                             La sección será reproducida con pausas cada {play_duration} seg.
+     
+    
+                                 Tiempo restante de la sección: {convert_seconds_to_hhmmss(remaining_time)} 
+
+                             {bar.strip()}              
+             """)
 
             time_to_pause -= 1
 
@@ -161,9 +194,8 @@ print(f"""
            ############ B y  R A D I O  C L U B   G U A D I A N A  A . C . ###############
       
            El boletin consta de las siguientes secciones:
-      """)
+    """)
 resume_menu("cfg.yml")            
-
 print(f"""         
            
            Un proyecto del Radio Club Guadiana A.C.
