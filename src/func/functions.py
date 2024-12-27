@@ -63,14 +63,20 @@ def resume(file_yaml):
     for idx, seccion in enumerate(secciones, start=1):
         file = str(seccion['archivo'])
         duration = file_duration(seccion['archivo'])
-        sect = {seccion['nombre']}
+        #Calculamos la duracion de la reprodución
+        play_duration = duration - (seccion['fin'] - seccion['inicio'])
+        print(play_duration)
+        play_duration = convert_seconds_to_hhmmss(play_duration)
+        print(play_duration)
+        #sect = {seccion['nombre']}
         duration = convert_seconds_to_hhmmss(duration)
         resumen.append(
             f"Sección {idx}: {file}\n"
             f"  Duración Total: {duration}\n"
             f"  Archivo: {seccion['archivo']}\n"
-            f"  Inicio: {seccion['inicio']}\n"
-            f"  Fin: {seccion['fin']}\n"
+            f"    Reproduccion: {play_duration}\n"
+            f"     Inicio: {seccion['inicio']}\n"
+            f"     Fin: {seccion['fin']}\n"
         )
     return "\n".join(resumen)
 
