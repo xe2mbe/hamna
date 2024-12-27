@@ -69,8 +69,10 @@ def play_section(section):
     total_duration = audio_info.info.length
 
     if start_time >= total_duration or end_time > total_duration:
+        ptt('off')
         raise ValueError(f"El tiempo de inicio o fin en la sección '{section['nombre']}' excede la duración del audio.")
     if start_time >= end_time:
+        ptt('off')
         raise ValueError(f"El tiempo de inicio debe ser menor al tiempo de fin en la sección '{section['nombre']}'.")
 
     custom_duration = end_time - start_time
