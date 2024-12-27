@@ -18,7 +18,7 @@ secciones:
   - nombre: "Colaboración Zona XE2"
     archivo: "lora.mp3"
     inicio: "00:00:00"
-    fin: "00:05:00"
+    fin: "00:03:50"
 
 # Duraciones y tiempos
 duraciones:
