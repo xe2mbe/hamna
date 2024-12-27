@@ -118,6 +118,3 @@ def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
     value = find_value['archivo']
     
     return value
-    #return resumen
-#resumen = resume_menu("cfg.yml")
-#print(resumen)
