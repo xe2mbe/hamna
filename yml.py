@@ -47,7 +47,7 @@ time.sleep(5)
 convert_to_valid_mp3(raw_entrada,"audio_entrada.mp3",media_path )
 tts(mensaje_salida, raw_salida, 120)
 time.sleep(5)
-convert_to_valid_mp3(raw_entrada,"audio_salida.mp3",media_path )
+convert_to_valid_mp3(raw_salida,"audio_salida.mp3",media_path )
 entrada = media_path + "audio_entrada.mp3"
 salida = media_path + "audio_salida.mp3"
 
@@ -175,9 +175,11 @@ def play_section(section):
 
         if total_elapsed_time < end_time:
             pygame.mixer.music.pause()
+
+
+            print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
             time.sleep(1)
             clear_screen()
-            print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
             pausa_message.play()
             #time.sleep(5)
             time.sleep(pausa_message_idle)  
