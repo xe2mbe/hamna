@@ -17,7 +17,7 @@ secciones:
 
 # Duraciones y tiempos
 duraciones:
-  reproduccion: 90
+  reproduccion: 30
   pausa: 8
   alerta: 8
   retroceso: 2
@@ -36,7 +36,9 @@ mensajes:
     ahora damos paso a la estación control para que inicie la toma de reportes, hasta la próxima edición, 73 y feliz día.
 
 alertas:
-  - nombre: "pausa"
-    archivo: "pausa.mp3"
+  - nombre: "pause_alert"
+    archivo: "pause_alert.mp3"
+  - nombre: "pause"
+    archivo: "pause.mp3"
   - nombre: "continuamos"
     archivo: "continuamos.mp3"

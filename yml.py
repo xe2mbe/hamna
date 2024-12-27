@@ -8,7 +8,7 @@ import locale
 from datetime import datetime
 from mutagen.mp3 import MP3
 from src.func.tts import tts
-from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu
+from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu,get_fileNameMP3
 
 # Función para manejar CTRL+C
 def handle_exit_signal(signal_number, frame):
@@ -25,14 +25,18 @@ global config
 config = load_config()
 
 # Configuración general
-locale.setlocale(locale.LC_TIME, config["general"]["locale"])
+#locale.setlocale(locale.LC_TIME, config["general"]["locale"])
+locale.setlocale(locale.LC_TIME, 'es_ES')
 media_path = config["general"]["media_path"]
 
 # Obtener fecha actual para los mensajes
 fecha = datetime.now().strftime("%A, %d de %B de %Y")
 mensaje_entrada = config["mensajes"]["entrada"]
+print(mensaje_entrada)
 mensaje_salida = config["mensajes"]["salida"].format(fecha=fecha)
+print(mensaje_salida)
 
+input()
 # Generar audios de entrada y salida
 entrada = media_path + "audio_entrada.mp3"
 salida = media_path + "audio_salida.mp3"
@@ -75,12 +79,12 @@ def play_section(section):
     pygame.mixer.music.load(archivo)
     pygame.mixer.music.play(start=0)
     pygame.mixer.music.set_pos(start_time)
-    alerta = config["alertas"]
+    alerta = get_fileNameMP3('cfg.yml','alertas','nombre','pause_alert')
     alert_sound = pygame.mixer.Sound(media_path + alerta)
     alert_sound.set_volume(1.0)
-    pausa =  config["alertas"]
+    pausa =  get_fileNameMP3('cfg.yml','alertas','nombre','pause')
     pausa_message = pygame.mixer.Sound(media_path + pausa)
-    continua = config["alertas"]
+    continua = get_fileNameMP3('cfg.yml','alertas','nombre','continuamos')
     continue_message = pygame.mixer.Sound(media_path + continua)
 
     total_elapsed_time = start_time
@@ -125,18 +129,29 @@ def play_section(section):
 
         if total_elapsed_time < end_time:
             pygame.mixer.music.pause()
+            time.sleep(1)
+            clear_screen()
             print(f"Sección '{section['nombre']}': Pausa de {pause_duration} segundos.")
-            
+            pausa_message.play()
+            #pause_time = file_duration(pausa_message)
+            #time.sleep(pause_time + 1)
+            time.sleep(5)  
+            ptt('off')
             time.sleep(pause_duration)
             total_elapsed_time -= rewind_time
             pygame.mixer.music.set_pos(total_elapsed_time)
+            ptt('on')
+            time.sleep(1)
+            continue_message.play()
+            time.sleep(4)
             pygame.mixer.music.unpause()
+            print(f"Boletín reanudado, retrocedido {rewind_time} segundos")
 
 
 # Reproducción principal
 clear_screen()
 print("Iniciando transmisión automatizada...")
-#resumen = resume_menu("cfg.yml")
+
 clear_screen()
 print(f"""
            ################ H A M N A - Amateur Radio Network Automation #################
@@ -152,7 +167,7 @@ print(f"""
           
            Visita https://rcg.org.mx
            """)
-#ptt("on")
+ptt("on")
 time.sleep(2)
 entry_message.play()
 time.sleep(20)
@@ -160,10 +175,12 @@ time.sleep(20)
 for section in config["secciones"]:
     print(f"Reproduciendo sección: {section['nombre']}...")
     play_section(section)
+    clear_screen()
     print(f"Sección '{section['nombre']}' finalizada.")
 
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
+time.sleep(4)
 end_message.play()
 time.sleep(30)
-#ptt("off")
+ptt("off")
 input("Presiona Enter para salir...")

@@ -47,7 +47,7 @@ def file_duration(file):
     return total_duration
 
 def load_config(file_path="cfg.yml"):
-    with open(file_path, "r") as file:
+    with open(file_path, "r",encoding='utf-8') as file:
         return yaml.safe_load(file)
 
 def resume(file_yaml):
@@ -107,6 +107,17 @@ def resume_menu(file_yaml):
                      Fin: {end}
         '''
         )
+
+def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
+    # Cargar el archivo YAML
+    with open(yml_file, 'r', encoding='utf-8') as archivo:
+        datos = yaml.safe_load(archivo)
+    alertas_dict = {alerta[values_dict]: alerta for alerta in datos[main_key]}
+    #value_list = alertas_dict[value][list]
+    find_value = alertas_dict.get(find_key)
+    value = find_value['archivo']
+    
+    return value
     #return resumen
 #resumen = resume_menu("cfg.yml")
 #print(resumen)
