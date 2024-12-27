@@ -93,6 +93,14 @@ def resume_menu(file_yaml):
         file = str(seccion['archivo'])
         duration = file_duration(seccion['archivo'])
         duration = convert_seconds_to_hhmmss(duration)
+        custom_play = convert_hhmmss_to_seconds(duration)
+        #Calculamos la duracion de la reprodución
+        inicio = convert_hhmmss_to_seconds(seccion['inicio'])
+        fin = convert_hhmmss_to_seconds(seccion['fin'])
+        play_duration = (fin - inicio)
+        #print(play_duration)
+        play_duration = convert_seconds_to_hhmmss(play_duration)
+        #print(play_duration)
         resumen.append(
             f"Sección {idx}: {file}\n"
             f"  Duración Total: {duration}\n"
@@ -109,11 +117,14 @@ def resume_menu(file_yaml):
                  Sección {index}:
                      Archivo: {file_name}
                      Duración Total del archivo: {duration_total}
-                     Inicio: {start}
-                     Fin: {end}
+                     Tiempo de reproduccion: {play_duration}
+                        Inicio: {start}
+                        Fin: {end}
         '''
         )
-
+    print("""
+          Tiempo de reproduccion Total del Boletin: {duration_total
+          """)
 def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
     # Cargar el archivo YAML
     with open(yml_file, 'r', encoding='utf-8') as archivo:

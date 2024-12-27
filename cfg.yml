@@ -8,16 +8,21 @@ secciones:
   - nombre: "Introducción"
     archivo: "boletin.mp3"
     inicio: "00:00:00"
-    fin: "00:01:30"
+    fin: "00:01:00"
+  
+  - nombre: "Radio Club Guadiana"
+    archivo: "FMRE.mp3"
+    inicio: "00:00:10"
+    fin: "00:02:30"
 
-  - nombre: "Colaboración "
+  - nombre: "Colaboración Zona XE2"
     archivo: "lora.mp3"
     inicio: "00:00:00"
     fin: "00:03:00"
 
 # Duraciones y tiempos
 duraciones:
-  reproduccion: 30
+  reproduccion: 150
   pausa: 8
   alerta: 8
   retroceso: 2

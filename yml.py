@@ -100,7 +100,7 @@ def play_section(section):
                 break
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
-            print(f"Sección '{section['nombre']}': Tiempo restante del boletín: {convert_seconds_to_hhmmss(remaining_time)} {bar}")
+            print(f"Sección '{section['nombre']}': Tiempo restante del boletín (SP): {convert_seconds_to_hhmmss(remaining_time)} {bar}")
         pygame.mixer.music.stop()
         return
     # Reproducción con pausas
@@ -116,6 +116,8 @@ def play_section(section):
 
             if total_elapsed_time >= end_time:
                 pygame.mixer.music.stop()
+                #ptt('off')
+                #time.sleep(5)
                 return
 
             if time_to_pause == alert_time:
@@ -123,7 +125,7 @@ def play_section(section):
                 alert_sound.play()
             clear_screen()
             bar = progress_bar(total_elapsed_time - start_time, custom_duration)
-            print(f"Sección '{section['nombre']}': Tiempo restante del boletín: {convert_seconds_to_hhmmss(remaining_time)} {bar}")
+            print(f"Sección '{section['nombre']}': Tiempo restante ({play_duration}): {convert_seconds_to_hhmmss(remaining_time)} {bar}")
 
             time_to_pause -= 1
 
@@ -171,15 +173,25 @@ ptt("on")
 time.sleep(2)
 entry_message.play()
 time.sleep(20)
+ptt("off")
+time.sleep(8)
 
 for section in config["secciones"]:
+    ptt("on")
     print(f"Reproduciendo sección: {section['nombre']}...")
+    time.sleep(2)
     play_section(section)
     clear_screen()
     print(f"Sección '{section['nombre']}' finalizada.")
-
+    #termina una seccion y hacemos una pausa
+    time.sleep(2)
+    ptt("off")
+    time.sleep(8)
+    #Hacemos un PTT off para que caigan los sistemas déspues de una sección
+    
+ptt("on")
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
-time.sleep(4)
+time.sleep(2)
 end_message.play()
 time.sleep(30)
 ptt("off")
