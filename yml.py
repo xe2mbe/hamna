@@ -36,7 +36,6 @@ print(mensaje_entrada)
 mensaje_salida = config["mensajes"]["salida"].format(fecha=fecha)
 print(mensaje_salida)
 
-input()
 # Generar audios de entrada y salida
 entrada = media_path + "audio_entrada.mp3"
 salida = media_path + "audio_salida.mp3"
