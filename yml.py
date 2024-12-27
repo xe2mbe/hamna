@@ -11,6 +11,8 @@ from src.func.tts import tts
 from textwrap import dedent, fill
 from src.func.functions import convert_seconds_to_hhmmss, convert_hhmmss_to_seconds, clear_screen, ptt, progress_bar, load_config, file_duration, resume,resume_menu,get_fileNameMP3
 
+
+clear_screen()
 # Función para manejar CTRL+C
 def handle_exit_signal(signal_number, frame):
     print("\nInterrupción detectada. Deteniendo audio y desactivando PTT...")
@@ -106,10 +108,10 @@ def play_section(section):
 
             print(
              f"""
-             ################################# HAMNA - Amateur Radio Net Automation ##################################
+             ################################### HAMNA - Amateur Radio Net Automation ###################################
 
 
-             
+
                              Sección '{section['nombre']}': Tiempo de Reproducción: {custom_duration} seg.
 
                              La sección es menor a {play_duration} seg, será reproducida sin pausas.
@@ -147,7 +149,7 @@ def play_section(section):
             print(
              f"""
 
-             ################################# HAMNA - Amateur Radio Net Automation ##################################
+             ################################### HAMNA - Amateur Radio Net Automation ###################################
 
 
 
@@ -208,6 +210,7 @@ entry_message.play()
 time.sleep(20)
 ptt("off")
 time.sleep(8)
+clear_screen()
 
 for section in config["secciones"]:
     ptt("on")
@@ -216,11 +219,10 @@ for section in config["secciones"]:
     play_section(section)
     clear_screen()
     print(f"Sección '{section['nombre']}' finalizada.")
-    #termina una seccion y hacemos una pausa
-    time.sleep(2)
-    ptt("off")
+    time.sleep(2) #termina una seccion y hacemos una pausa
+    ptt("off") #Hacemos un PTT off para que caigan los sistemas déspues de una sección
     time.sleep(8)
-    #Hacemos un PTT off para que caigan los sistemas déspues de una sección
+    
     
 ptt("on")
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
