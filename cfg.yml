@@ -5,15 +5,15 @@ general:
 
 # Parámetros de las secciones del boletín
 secciones:
-  - nombre: "Editorial"
-    archivo: "Boletín FMRE 29 Dic 2024.wav"
-    inicio: "00:00:00"
-    fin: "00:09:14"
+  # - nombre: "Editorial"
+  #   archivo: "Boletín FMRE 29 Dic 2024.wav"
+  #   inicio: "00:00:00"
+  #   fin: "00:09:14"
   
-  - nombre: "Colaboracion HAMNA"
-    archivo: "HAMNA.mp3"
-    inicio: "00:00:00"
-    fin: "00:08:30"
+  # - nombre: "Colaboracion HAMNA"
+  #   archivo: "HAMNA.mp3"
+  #   inicio: "00:00:00"
+  #   fin: "00:08:30"
 
   - nombre: "Estadisticas"
     archivo: "Estadisticas.mp3"
