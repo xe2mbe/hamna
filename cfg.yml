@@ -24,7 +24,7 @@ secciones:
 duraciones:
   reproduccion: 80
   pausa: 8
-  alerta: 8
+  alerta: 10
   retroceso: 2
 
 # Textos para TTS
@@ -36,11 +36,11 @@ mensajes:
     
     Esta es una transmisión automátizada mediante la aplicación HAMNA.
   salida: |
-    Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
-    Hemos terminado con nuestra emisión de este día {fecha}. 
+    Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C.
+    Hemos terminado con nuestra emisión de este día {fecha}.
     Les recordamos que esta fue una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
     Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país,
-    ahora damos paso a la estación control para que inicie la toma de reportes, que tengan un feliz festejo de año nuevo y 
+    ahora damos paso a la estación control para que inicie la toma de reportes, que tengan un feliz festejo de año nuevo,
     nos saludamos el año que entra, hasta la próxima edición, 73 y feliz domingo.
     
 

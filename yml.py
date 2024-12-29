@@ -44,10 +44,10 @@ print(mensaje_salida)
 raw_entrada = media_path + "raw_audio_entrada.mp3"
 raw_salida = media_path + "raw_audio_salida.mp3"
 tts(mensaje_entrada, raw_entrada, 120)
-time.sleep(5)
+#time.sleep(5)
 convert_to_valid_mp3(raw_entrada,"audio_entrada.mp3",media_path )
 tts(mensaje_salida, raw_salida, 120)
-time.sleep(5)
+#time.sleep(5)
 convert_to_valid_mp3(raw_salida,"audio_salida.mp3",media_path )
 entrada = media_path + "audio_entrada.mp3"
 salida = media_path + "audio_salida.mp3"
