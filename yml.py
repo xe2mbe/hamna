@@ -93,7 +93,7 @@ def play_section(section):
     pygame.mixer.music.set_pos(start_time)
     alerta = get_fileNameMP3('cfg.yml','alertas','nombre','pause_alert')
     alert_sound = pygame.mixer.Sound(media_path + alerta)
-    alert_sound.set_volume(1.0)
+    alert_sound.set_volume(0.75)
     pausa =  get_fileNameMP3('cfg.yml','alertas','nombre','pause')
     pausa_message = pygame.mixer.Sound(media_path + pausa)
     pausa_message.set_volume(0.5)

@@ -8,7 +8,7 @@ import subprocess
 import os
 os.environ["PATH"] = r"C:\ffmpeg\bin;" + os.environ["PATH"]
 
-BASE_URL = "http://stn8422.ip.irlp.net"
+BASE_URL = "http://192.168.1.37"
 
 # Función para convertir segundos a formato hh:mm:ss
 def convert_seconds_to_hhmmss(seconds):
