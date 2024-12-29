@@ -96,16 +96,18 @@ def play_section(section):
     alert_sound.set_volume(1.0)
     pausa =  get_fileNameMP3('cfg.yml','alertas','nombre','pause')
     pausa_message = pygame.mixer.Sound(media_path + pausa)
+    pausa_message.set_volume(0.5)
     pausa_message_idle = (file_duration(media_path+pausa)+int(1.5)) #obtener tiempo pausa menssage y agregamos 1.5 más de pausa para no empalmar mensaje
     continua = get_fileNameMP3('cfg.yml','alertas','nombre','continuamos')
     continue_message = pygame.mixer.Sound(media_path + continua)
+    continue_message.set_volume(0.5)
     continue_message_idle = (file_duration(media_path+continua)+int(1.5)) #obtener tiempo continua menssage y agregamos 1.5 más de pausa para no empalmar mensaje
 
     total_elapsed_time = start_time
 
     if custom_duration <= play_duration:
         # Reproducción continua sin pausas
-        print("Duración menor a play_duration, reproduciendo sin pausas...")
+        print(f"Duración menor a {play_duration}, reproduciendo sin pausas...")
         while pygame.mixer.music.get_busy() and total_elapsed_time < end_time:
             time.sleep(1)
             total_elapsed_time += 1
@@ -216,7 +218,6 @@ print(f"""
 ptt("on")
 time.sleep(2)
 entry_message_idle = (file_duration(entrada)+int(1.5))
-print(entry_message_idle)
 entry_message.play()
 time.sleep(entry_message_idle)
 ptt("off")

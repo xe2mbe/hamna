@@ -5,24 +5,24 @@ general:
 
 # Parámetros de las secciones del boletín
 secciones:
-  - nombre: "Introducción"
-    archivo: "boletin.mp3"
+  - nombre: "Editorial"
+    archivo: "Boletín FMRE 29 Dic 2024.wav"
     inicio: "00:00:00"
-    fin: "00:02:00"
+    fin: "00:09:14"
   
-  - nombre: "Radio Club Guadiana"
-    archivo: "FMRE.mp3"
+  - nombre: "Colaboracion HAMNA"
+    archivo: "HAMNA.mp3"
     inicio: "00:00:00"
-    fin: "00:02:30"
+    fin: "00:08:30"
 
-  - nombre: "Colaboración Zona XE2"
-    archivo: "lora.mp3"
+  - nombre: "Estadisticas"
+    archivo: "Estadisticas.mp3"
     inicio: "00:00:00"
-    fin: "00:03:50"
+    fin: "00:01:03"
 
-# Duraciones y tiempos
+# Duraciones y tiempos en segundos
 duraciones:
-  reproduccion: 140
+  reproduccion: 80
   pausa: 8
   alerta: 8
   retroceso: 2
@@ -31,14 +31,18 @@ duraciones:
 mensajes:
   entrada: |
     Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
-    Gracias por sintonizarnos, en un instante iniciamos. 
-    Esta es una transmisión automátizada mediante la aplicación HAMNA
+    Les recordamos que este boletín se transmite todos los domingos en punto de las 9 horas mediante el reflector IRLP 0077 y en el TG 33 450 de Brandmeister.
+    Gracias por sintonizarnos, en un instante iniciamos con el editorial a cargo de Jesús Miguel Sarmiento Montesinos, X E 1 Eco Wiskey, presidente de la FMRE.
+    
+    Esta es una transmisión automátizada mediante la aplicación HAMNA.
   salida: |
     Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
     Hemos terminado con nuestra emisión de este día {fecha}. 
     Les recordamos que esta fue una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
-    Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país, 
-    ahora damos paso a la estación control para que inicie la toma de reportes, hasta la próxima edición, 73 y feliz día.
+    Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país,
+    ahora damos paso a la estación control para que inicie la toma de reportes, que tengan un feliz festejo de año nuevo y 
+    nos saludamos el año que entra, hasta la próxima edición, 73 y feliz domingo.
+    
 
 alertas:
   - nombre: "pause_alert"
