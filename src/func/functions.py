@@ -6,6 +6,8 @@ from mutagen.mp3 import MP3
 from mutagen import MutagenError
 import subprocess
 import os
+import socket
+
 os.environ["PATH"] = r"C:\ffmpeg\bin;" + os.environ["PATH"]
 
 BASE_URL = "http://192.168.1.37"
@@ -174,3 +176,39 @@ def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
     value = find_value['archivo']
     
     return value
+
+
+# Detalles de conexión con el nodo
+host = "192.168.1.37"
+port = 5038
+username = "asl"
+password = "RCG_Gu4d14n4"
+
+def connect_ami():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+    s.sendall(f"Action: Login\nUsername: {username}\nSecret: {password}\n\n".encode())
+    return s
+
+def check_cos(s):
+    """Verifica si hay COS en el nodo"""
+    try:
+        s.sendall("Action: Command\nCommand: rpt fun 1\n\n".encode())
+        data = s.recv(4096).decode()
+        if "RPT_TXKEYED" in data:
+            return True  # Hay COS
+        return False  # No hay COS
+    except Exception as e:
+        print(f"Error al verificar COS: {e}")
+        return False
+
+def listen_events(s):
+    """Escucha los eventos del nodo"""
+    try:
+        while True:
+            data = s.recv(4096).decode()
+            if "Event: RPT_TXKEYED" in data:
+                print(data)
+    except KeyboardInterrupt:
+        print("\nDeteniendo el script...")
+        s.close()
