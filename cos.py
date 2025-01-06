@@ -221,6 +221,12 @@ print(f"""
           
            Visita https://rcg.org.mx
            """)
+# Aquí agregamos la verificación de COS antes de continuar
+ami_socket = connect_ami()
+while check_cos(ami_socket):
+    print("Detectando COS... Esperando a que el nodo se libere.")
+    time.sleep(2)  # Esperar antes de volver a verificar  
+ami_socket.close()  
 ptt("on")
 time.sleep(2)
 entry_message_idle = (file_duration(entrada)+int(1.5))
@@ -241,8 +247,13 @@ for section in config["secciones"]:
     ptt("off") #Hacemos un PTT off para que caigan los sistemas déspues de una sección
     time.sleep(8)
     
-    
+# Aquí agregamos la verificación de COS antes de continuar
+ami_socket = connect_ami()
+while check_cos(ami_socket):
+    print("Detectando COS... Esperando a que el nodo se libere.")
+    time.sleep(2)  # Esperar antes de volver a verificar  
 ptt("on")
+ami_socket.close()   
 print("Reproducción finalizada. Reproduciendo mensaje de salida...")
 time.sleep(2)
 end_message_idle = (file_duration(salida)+int(1.5))
