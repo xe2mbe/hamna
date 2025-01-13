@@ -25,5 +25,5 @@ def convertir_a_wav(archivo_audio):
         logging.info("El archivo ya está en formato WAV.")
         return archivo_audio
     
-wav = convertir_a_wav("HAMNA.mp3")
+wav = convertir_a_wav("Boletín FMRE 29 Dic 2024_normalized.wav")
     

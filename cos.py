@@ -224,7 +224,7 @@ print(f"""
 # Aquí agregamos la verificación de COS antes de continuar
 ami_socket = connect_ami()
 while check_cos(ami_socket):
-    print("Detectando COS... Esperando a que el nodo se libere.")
+    print("Detectando COS... Esperando a que el nodo se libre.")
     time.sleep(2)  # Esperar antes de volver a verificar  
 ami_socket.close()  
 ptt("on")

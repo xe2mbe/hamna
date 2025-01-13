@@ -5,20 +5,21 @@ general:
 
 # Parámetros de las secciones del boletín
 secciones:
-  # - nombre: "Editorial"
-  #   archivo: "Boletín FMRE 29 Dic 2024.wav"
-  #   inicio: "00:00:00"
-  #   fin: "00:09:14"
+  - nombre: "Editorial"
+    archivo: "Editorial FMRE 12 de Enero 2025.wav"
+    inicio: "00:00:00"
+    #fin: "00:01:40"
+    fin: "00:09:56"
   
-  # - nombre: "Colaboracion HAMNA"
-  #   archivo: "HAMNA.mp3"
-  #   inicio: "00:00:00"
-  #   fin: "00:08:30"
+  - nombre: "Del Valle al Radio Club"
+    archivo: "Del Valle al Radio Club.mp3"
+    inicio: "00:00:01"
+    fin: "00:12:24"
 
   - nombre: "Estadisticas"
-    archivo: "Estadisticas.mp3"
-    inicio: "00:00:00"
-    fin: "00:01:03"
+    archivo: "Estadisticas enero 11.mp3"
+    inicio: "00:00:01"
+    fin: "00:01:01"
 
 # Duraciones y tiempos en segundos
 duraciones:
@@ -31,17 +32,17 @@ duraciones:
 mensajes:
   entrada: |
     Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
-    Les recordamos que este boletín se transmite todos los domingos en punto de las 9 horas mediante el reflector IRLP 0077 y en el TG 33 450 de Brandmeister.
-    Gracias por sintonizarnos, en un instante iniciamos con el editorial a cargo de Jesús Miguel Sarmiento Montesinos, X E 1 Eco Wiskey, presidente de la FMRE.
+    Les recordamos que este boletín se transmite todos los domingos en punto de las 9 horas mediante el reflector IRLP 0077, en el TG 33 450 de Brandmeister.
+    y recientemente por el Nodo 29 90 81 de AllStar Link. Gracias por sintonizarnos, en un instante iniciamos con el editorial a cargo de Jesús Miguel Sarmiento Montesinos, X E 1 Eco Wiskey, presidente de la FMRE.
     
-    Esta es una transmisión automátizada mediante la aplicación HAMNA.
+    Esta es una transmisión automátizada mediante la aplicación HAMNA. Se emitira una alerta sonora 5 segundos antes de la pausa.
   salida: |
     Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C.
     Hemos terminado con nuestra emisión de este día {fecha}.
     Les recordamos que esta fue una transmisión automátizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A C.
     Agradecemos por escuchar este medio de difusión de la máxima autoridad de radio afición en nuestro país,
-    ahora damos paso a la estación control para que inicie la toma de reportes, que tengan un feliz festejo de año nuevo,
-    nos saludamos el año que entra, hasta la próxima edición, 73 y feliz domingo.
+    ahora damos paso a la estación control para que inicie la toma de reportes, que tengan un feliz año 2025 y que todos sus deseos se cumplan,
+    nos saludamos en la próxima emisión, 73 y feliz domingo.
     
 
 alertas:
