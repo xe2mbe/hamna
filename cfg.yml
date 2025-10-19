@@ -2,37 +2,66 @@
 general:
   locale: "es_ES"
   media_path: "./src/media/"
-
+  volume: 1.0   # Valor entre 0.0 (mute) y 1.0 (máximo)
+  
 # Parámetros de las secciones del boletín
 secciones:
-  - nombre: "Introducción"
-    archivo: "boletin.mp3"
-    inicio: "00:00:00"
-    fin: "00:02:00"
-  
-  - nombre: "Radio Club Guadiana"
-    archivo: "FMRE.mp3"
-    inicio: "00:00:00"
-    fin: "00:02:30"
 
-  - nombre: "Colaboración Zona XE2"
-    archivo: "lora.mp3"
+  - nombre: "Introduccion"
+    archivo: "#Static Intro.mp3"
     inicio: "00:00:00"
-    fin: "00:03:50"
+    fin: "00:02:11"
+
+  - nombre: "Editorial"
+    archivo: "#41 Editorial.mp3"
+    inicio: "00:00:00"
+    fin: "00:05:15"
+
+  - nombre: "Colaboracion 1"
+    archivo: "#41.1 SK.mp3"
+    inicio: "00:00:00"
+    fin: "00:03:22"
+
+  - nombre: "Colaboracion 2"
+    archivo: "#41.2 REMEASAT.mp3"
+    inicio: "00:00:00"
+    fin: "00:02:59"  
+
+  - nombre: "Colaboracion 3"
+    archivo: "#41.3 DXPeditions.mp3"
+    inicio: "00:00:00"
+    fin: "00:05:39"
+
+  - nombre: "Colaboracion 4"
+    archivo: "#41.4 Estadisticas.mp3"
+    inicio: "00:00:00"
+    fin: "00:05:27"
+
+  - nombre: "Cardchecker"
+    archivo: "#Static CardChecker.mp3"
+    inicio: "00:00:00"
+    fin: "00:02:09"
+
+  - nombre: "Cierre"
+    archivo: "#Cierre Boletin.mp3"
+    inicio: "00:00:00"
+    fin: "00:01:19"
+
 
 # Duraciones y tiempos
 duraciones:
-  reproduccion: 140
-  pausa: 8
+  reproduccion: 160
+  pausa: 12
   alerta: 8
-  retroceso: 2
+  retroceso: 4
 
 # Textos para TTS
 mensajes:
   entrada: |
     Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
-    Gracias por sintonizarnos, en un instante iniciamos. 
-    Esta es una transmisión automátizada mediante la aplicación HAMNA
+    Gracias por sintonizarnos, en un instante iniciamos con el editorial por Jesús Miguel Sarmiento Montesinos, XE1 Eco Wisky, Presidente de la Federación Mexicana de Radio Experimentadores A C.
+    Les recordamos que esta es una transmisión automátizada mediante la aplicación HAMNA.
+    La transmisión tendrá pausas cada 160 segundos, estas pausas permiten la correcta operación de los repetidores y nodos conectados para escuchar este boletín.
   salida: |
     Gracias por sintonizar el boletín dominical de la Federación Mexicana de Radio Experimentadores A C. 
     Hemos terminado con nuestra emisión de este día {fecha}. 
@@ -44,6 +73,12 @@ alertas:
   - nombre: "pause_alert"
     archivo: "pause_alert.mp3"
   - nombre: "pause"
-    archivo: "pause.mp3"
+    archivo: "pause_mx.mp3"
   - nombre: "continuamos"
-    archivo: "continuamos.mp3"
+    archivo: "continuamos_mx.mp3"
+
+ami:
+  host: "192.168.1.37"
+  port: 5038
+  username: "asl"
+  password: "RCG_Gu4d14n4"

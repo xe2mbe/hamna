@@ -6,9 +6,11 @@ from mutagen.mp3 import MP3
 from mutagen import MutagenError
 import subprocess
 import os
+import socket
 os.environ["PATH"] = r"C:\ffmpeg\bin;" + os.environ["PATH"]
 
 BASE_URL = "http://stn8422.ip.irlp.net"
+BASE_URL = "http://192.168.1.37"
 
 # Función para convertir segundos a formato hh:mm:ss
 def convert_seconds_to_hhmmss(seconds):
@@ -174,3 +176,52 @@ def get_fileNameMP3(yml_file,main_key,values_dict,find_key):
     value = find_value['archivo']
     
     return value
+
+def connect_ami(host, port, username, password):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+        s.sendall(f"Action: Login\nUsername: {username}\nSecret: {password}\n\n".encode())
+        return s
+    except Exception as e:
+        print(f"Error al conectar con AMI: {e}")
+        return None
+
+def close_ami(ami_socket):
+    """
+    Cierra la conexión AMI de forma explícita.
+    """
+    if ami_socket:
+        try:
+            ami_socket.close()
+            print("Socket AMI cerrado exitosamente.")
+        except Exception as e:
+            print(f"Ocurrió un error al cerrar el socket: {e}")
+    else:
+        print("El socket ya está cerrado o no fue inicializado.")
+def hub_activity(ami_socket):
+    """
+    Escucha eventos AMI desde un nodo HUB y muestra cuándo un nodo
+    comienza (EventValue=1) o termina (EventValue=0) de transmitir (RPT_RXKEYED).
+    """
+    try:
+        buffer = ""
+        while True:
+            # Recibir datos en 'chunks'
+            chunk = ami_socket.recv(4096).decode(errors='ignore')
+            if not chunk:
+                break
+
+            buffer += chunk
+            # Procesar eventos completos separados por doble salto de línea
+            while "\r\n\r\n" in buffer:
+                raw_event, buffer = buffer.split("\r\n\r\n", 1)
+                #print(raw_event)
+
+                # Verificamos si es un evento RPT_RXKEYED
+                if "ChannelStateDesc: Rsrvd" in raw_event:
+                    cos = True
+                    return cos
+    except KeyboardInterrupt:
+        print("Saliendo con CTRL+C...")
+
