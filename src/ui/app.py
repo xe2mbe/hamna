@@ -175,20 +175,37 @@ class ConfigurationTab(ttk.Frame):
         tts.columnconfigure(1, weight=1)
         tts.columnconfigure(3, weight=1)
 
-        # Azure Speech section
+        # Azure config
         self.azure_frame = ttk.LabelFrame(tts, text="Azure Speech")
         # Inline within TTS, appears only when provider == 'azure'
         self.azure_frame.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        
+        # Region row
         ttk.Label(self.azure_frame, text="Region:").grid(row=0, column=0, sticky="w")
         self.azure_region_entry = tk.Entry(self.azure_frame, textvariable=self.azure_region_var)
         self.azure_region_entry.bind("<FocusOut>", lambda _e=None: self.on_azure_region_blur())
-        self.azure_region_entry.grid(row=0, column=1, sticky="ew", padx=5)
-        ttk.Label(self.azure_frame, text="Key:").grid(row=0, column=2, sticky="w")
-        self.azure_key_entry = tk.Entry(self.azure_frame, textvariable=self.azure_key_var, show="*")
-        self.azure_key_entry.grid(row=0, column=3, sticky="ew", padx=5)
+        self.azure_region_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+        
+        # Key row with toggle button
+        ttk.Label(self.azure_frame, text="Key:").grid(row=1, column=0, sticky="w")
+        key_frame = ttk.Frame(self.azure_frame)
+        key_frame.grid(row=1, column=1, columnspan=3, sticky="ew", pady=2)
+        key_frame.columnconfigure(0, weight=1)
+        
+        self.azure_key_entry = tk.Entry(key_frame, textvariable=self.azure_key_var, show="*")
+        self.azure_key_entry.grid(row=0, column=0, sticky="ew")
+        
+        # Toggle key visibility button
+        self.show_key = False
+        self.toggle_key_btn = ttk.Button(key_frame, text="", width=3, 
+                                      command=self.toggle_key_visibility)
+        self.toggle_key_btn.grid(row=0, column=1, padx=(5, 0))
+        
+        # Load from .env if exists
+        self.load_azure_from_env()
+        
         self.azure_frame.columnconfigure(1, weight=1)
-        self.azure_frame.columnconfigure(3, weight=1)
-        ttk.Button(self.azure_frame, text="Save", command=self.save_settings, width=12).grid(row=1, column=0, columnspan=4, pady=(8, 0))
+        ttk.Button(self.azure_frame, text="Save", command=self.save_settings, width=12).grid(row=2, column=0, columnspan=4, pady=(8, 0))
 
         self.ptt_var = tk.StringVar()
         self.pre_roll_var = tk.StringVar()
@@ -462,6 +479,40 @@ class ConfigurationTab(ttk.Frame):
                 self.azure_region_var.set(reg)
         except Exception:
             pass
+            
+    def toggle_key_visibility(self):
+        """Toggle between showing and hiding the Azure key"""
+        self.show_key = not self.show_key
+        self.azure_key_entry.config(show="" if self.show_key else "*")
+        self.toggle_key_btn.config(style="TButton" if self.show_key else "")
+        
+    def load_azure_from_env(self):
+        """Load Azure credentials from .env file if they exist"""
+        from dotenv import load_dotenv
+        load_dotenv(override=True)  # Forzar recarga del archivo .env
+        
+        # Solo cargar si los campos están vacíos o contienen valores por defecto
+        current_region = (self.azure_region_var.get() or "").strip()
+        current_key = (self.azure_key_var.get() or "").strip()
+        
+        # Cargar región si no hay una configurada o está marcada como (from .env)
+        if not current_region or current_region == "(from .env)":
+            region = os.getenv("AZURE_SPEECH_REGION")
+            if region and region != "(from .env)":
+                self.azure_region_var.set(region)
+            
+        # Cargar clave si no hay una configurada o está marcada como (from .env)
+        if not current_key or current_key == "(from .env)":
+            key = os.getenv("AZURE_SPEECH_KEY")
+            if key and key != "(from .env)":
+                # Guardar la clave real en la variable pero mostrar (from .env) en la interfaz
+                self.azure_key_var.set(key)
+                self.azure_key_entry.config(show="*")
+                self.show_key = False
+                # Guardar una referencia a la clave real
+                self._azure_actual_key = key
+                # Mostrar (from .env) en la interfaz
+                self.after_idle(lambda: self.azure_key_var.set("(from .env)"))
 
     def set_ami_status(self, state: str, custom_text: str | None = None):
         colors = {
@@ -944,10 +995,16 @@ class ConfigurationTab(ttk.Frame):
             messagebox.showerror("TTS", f"Preview failed: {e}")
 
     def load_settings(self):
+        # Primero cargar desde .env solo las credenciales de Azure
+        self.load_azure_from_env()
+        
+        # Luego cargar desde cfg.yaml
         data, used_path = read_cfg()
         if not data:
             return
+            
         if used_path and used_path.endswith("cfg.yml"):
+            # Código existente para manejar cfg.yml
             dur = (data.get("duraciones") or {})
             self.pause_var.set(str(dur.get("pausa", "")))
             self.rewind_var.set(str(dur.get("retroceso", "")))
@@ -960,16 +1017,22 @@ class ConfigurationTab(ttk.Frame):
             self.ami_pass_var.set(str(ami.get("password", "")))
             self.refresh_placeholder_visuals()
             return
+            
+        # Cargar ajustes generales
         settings = data.get("settings", {})
         self.ptt_var.set(str(settings.get("ptt_time", "")))
         self.pre_roll_var.set(str(settings.get("pre_roll_delay", "")))
         self.pause_var.set(str(settings.get("pause", "")))
         self.rewind_var.set(str(settings.get("rewind_time", "")))
+        
+        # Cargar configuración AMI
         ami = data.get("ami", {})
         self.ami_host_var.set(str(ami.get("host", "")))
         self.ami_port_var.set(str(ami.get("port", "")))
         self.ami_user_var.set(str(ami.get("username", "")))
         self.ami_pass_var.set(str(ami.get("password", "")))
+        
+        # Cargar configuración de radio
         radio = data.get("radio_interface") or data.get("radio") or {}
         def set_hex_or_str(var, value, width=4):
             if value is None or value == "":
@@ -979,36 +1042,62 @@ class ConfigurationTab(ttk.Frame):
                 var.set(f"0x{iv:0{width}x}")
             except Exception:
                 var.set(str(value))
+                
         set_hex_or_str(self.hid_vid_var, radio.get("vid"), 4)
         set_hex_or_str(self.hid_pid_var, radio.get("pid"), 4)
         set_hex_or_str(self.hid_ptt_bit_var, radio.get("ptt_bit"), 2)
         set_hex_or_str(self.hid_cos_bit_var, radio.get("cos_bit"), 2)
+        
         inv = radio.get("invert_cos")
         if isinstance(inv, bool):
             self.hid_invert_cos_var.set(inv)
         invp = radio.get("invert_ptt")
         if isinstance(invp, bool):
             self.hid_invert_ptt_var.set(invp)
+            
+        # Cargar configuración de API
         api_cfg = data.get("api", {})
         self.api_base_url_var.set(str(api_cfg.get("base_url", "")))
         self.api_ptt_on_path_var.set(str(api_cfg.get("ptt_on_path", "/ptt_on")))
         self.api_ptt_off_path_var.set(str(api_cfg.get("ptt_off_path", "/ptt_off")))
+        
+        # Cargar configuración de TTS
         tts_cfg = data.get("tts", {})
         self.tts_voice_id_var.set(str(tts_cfg.get("voice_id", "")))
         self.tts_rate_var.set(str(tts_cfg.get("rate", "")))
         self.tts_volume_var.set(str(tts_cfg.get("volume", "")))
+        
+        # Establecer el proveedor de TTS
         provider_code = str(tts_cfg.get("provider", "windows")).lower()
         self.set_provider_combo_from_code(provider_code)
+        
+        # Establecer el formato de salida
         fmt = str(tts_cfg.get("format", "mp3" if provider_code in ("edge", "gtts", "azure") else "wav"))
         try:
             self.tts_format_var.set(fmt)
             self.tts_format_combo.set(fmt)
         except Exception:
             pass
+            
         self.update_tts_format_for_provider()
-        # Azure config
-        self.azure_region_var.set(str(tts_cfg.get("azure_region", "") or (tts_cfg.get("azure", {}) or {}).get("region", "")))
-        self.azure_key_var.set(str(tts_cfg.get("azure_key", "") or (tts_cfg.get("azure", {}) or {}).get("key", "")))
+        
+        # No cargar configuración de Azure desde cfg.yaml si ya se cargó desde .env
+        current_region = (self.azure_region_var.get() or "").strip()
+        current_key = (self.azure_key_var.get() or "").strip()
+        
+        # Solo cargar desde cfg.yaml si no hay valores de .env
+        if not current_region or current_region == "(from .env)":
+            azure_cfg = tts_cfg.get("azure", {}) or {}
+            azure_region = tts_cfg.get("azure_region") or azure_cfg.get("region", "")
+            if azure_region and azure_region != "(from .env)":
+                self.azure_region_var.set(str(azure_region))
+                
+        if not current_key or current_key == "(from .env)":
+            azure_cfg = tts_cfg.get("azure", {}) or {}
+            azure_key = tts_cfg.get("azure_key") or azure_cfg.get("key", "")
+            if azure_key and azure_key != "(from .env)":
+                self.azure_key_var.set(str(azure_key))
+        
         self.refresh_placeholder_visuals()
 
     def refresh_placeholder_visuals(self):
@@ -1078,20 +1167,66 @@ class ConfigurationTab(ttk.Frame):
                     "volume": tts_volume,
                     "provider": provider_code,
                     "format": ("mp3" if provider_code in ("edge", "gtts", "azure") else "wav"),
-                    "azure_region": (self.normalize_azure_region(self.azure_region_var.get()) or ""),
-                    "azure_key": (self.azure_key_var.get() or ""),
+                    # No guardar credenciales en cfg.yaml, solo en .env
+                    "azure_region": "(from .env)",
+                    "azure_key": "(from .env)",
                 },
             )
-            # Set env vars for Azure for immediate effect
+            # Save Azure credentials to .env file
             try:
                 if provider_code == "azure":
-                    reg = self.normalize_azure_region(self.azure_region_var.get())
-                    if reg:
-                        os.environ["AZURE_SPEECH_REGION"] = reg
-                    if (self.azure_key_var.get() or "").strip():
-                        os.environ["AZURE_SPEECH_KEY"] = (self.azure_key_var.get() or "").strip()
-            except Exception:
-                pass
+                    # Get the values from the UI
+                    region = self.normalize_azure_region(self.azure_region_var.get())
+                    # Si el campo muestra "(from .env)", usar la clave guardada, de lo contrario usar la del campo
+                    key = getattr(self, '_azure_actual_key', '') if self.azure_key_var.get() == "(from .env)" else (self.azure_key_var.get() or "")
+                    
+                    # Read existing .env file if it exists
+                    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+                    env_lines = []
+                    region_exists = False
+                    key_exists = False
+                    
+                    if os.path.exists(env_path):
+                        with open(env_path, 'r') as f:
+                            env_lines = f.readlines()
+                    
+                    # Update or add AZURE_SPEECH_REGION
+                    new_lines = []
+                    for line in env_lines:
+                        if line.strip().startswith('AZURE_SPEECH_REGION='):
+                            new_lines.append(f'AZURE_SPEECH_REGION={region}\n')
+                            region_exists = True
+                        elif line.strip().startswith('AZURE_SPEECH_KEY='):
+                            new_lines.append(f'AZURE_SPEECH_KEY={key}\n')
+                            key_exists = True
+                        else:
+                            new_lines.append(line)
+                    
+                    # Add missing entries - solo si hay valores para guardar
+                    if not region_exists and region and region != "(from .env)":
+                        new_lines.append(f'AZURE_SPEECH_REGION={region}\n')
+                    if not key_exists and key and key != "(from .env)":
+                        new_lines.append(f'AZURE_SPEECH_KEY={key}\n')
+                    
+                    # Write back to .env file
+                    with open(env_path, 'w') as f:
+                        f.writelines(new_lines)
+                    
+                    # Update environment variables for current session
+                    if region and region != "(from .env)":
+                        os.environ["AZURE_SPEECH_REGION"] = region
+                    if key and key != "(from .env)":
+                        os.environ["AZURE_SPEECH_KEY"] = key
+                        
+                    # Update the UI to show (from .env) if we just saved the key
+                    if key and self.azure_key_var.get() != "(from .env)":
+                        self._azure_actual_key = key
+                        self.azure_key_var.set("(from .env)")
+                        self.azure_key_entry.config(show="*")
+                        self.show_key = False
+                        
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save Azure credentials: {str(e)}")
             messagebox.showinfo("Saved", f"Settings saved to {os.path.basename(cfg_path)}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save settings: {e}")

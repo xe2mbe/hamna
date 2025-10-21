@@ -20,7 +20,7 @@ api:
   ptt_on_path: /ptt_on
   ptt_off_path: /ptt_off
 tts:
-  voice_id: ''
+  voice_id: af-ZA-AdriNeural
   rate: 100
   volume: ''
   provider: azure
