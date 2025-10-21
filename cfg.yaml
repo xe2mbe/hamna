@@ -1,0 +1,30 @@
+settings:
+  ptt_time: 100
+  pre_roll_delay: 1
+  pause: 15
+  rewind_time: 4
+ami:
+  host: 192.168.1.37
+  port: 5038
+  username: asl
+  password: RCG_Gu4d14n4
+radio_interface:
+  vid: ''
+  pid: ''
+  ptt_bit: ''
+  cos_bit: ''
+  invert_cos: true
+  invert_ptt: false
+api:
+  base_url: http://192.168.1.37
+  ptt_on_path: /ptt_on
+  ptt_off_path: /ptt_off
+tts:
+  voice_id: ''
+  rate: 100
+  volume: ''
+  provider: azure
+  format: mp3
+  proxy: ''
+  azure_region: (from .env)
+  azure_key: (from .env)
