@@ -483,36 +483,49 @@ class ConfigurationTab(ttk.Frame):
     def toggle_key_visibility(self):
         """Toggle between showing and hiding the Azure key"""
         self.show_key = not self.show_key
-        self.azure_key_entry.config(show="" if self.show_key else "*")
+        
+        # Si estamos mostrando la clave y actualmente muestra "(from .env)"
+        if self.show_key and self.azure_key_var.get() == "(from .env)" and hasattr(self, '_azure_actual_key'):
+            self.azure_key_var.set(self._azure_actual_key)
+            self.azure_key_entry.config(show="")
+        # Si estamos ocultando la clave y la mostrábamos desde .env
+        elif not self.show_key and hasattr(self, '_azure_actual_key'):
+            self.azure_key_var.set("(from .env)")
+            self.azure_key_entry.config(show="*")
+        # Comportamiento normal
+        else:
+            self.azure_key_entry.config(show="" if self.show_key else "*")
+            
         self.toggle_key_btn.config(style="TButton" if self.show_key else "")
         
     def load_azure_from_env(self):
         """Load Azure credentials from .env file if they exist"""
         from dotenv import load_dotenv
-        load_dotenv(override=True)  # Forzar recarga del archivo .env
         
-        # Solo cargar si los campos están vacíos o contienen valores por defecto
-        current_region = (self.azure_region_var.get() or "").strip()
-        current_key = (self.azure_key_var.get() or "").strip()
+        # Obtener la ruta al directorio raíz del proyecto (donde está el .env)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        env_path = os.path.join(project_root, '.env')
         
-        # Cargar región si no hay una configurada o está marcada como (from .env)
-        if not current_region or current_region == "(from .env)":
-            region = os.getenv("AZURE_SPEECH_REGION")
-            if region and region != "(from .env)":
-                self.azure_region_var.set(region)
+        # Cargar el archivo .env si existe
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+        
+        # Obtener los valores actuales de las variables de entorno
+        region = os.getenv("AZURE_SPEECH_REGION", "").strip()
+        key = os.getenv("AZURE_SPEECH_KEY", "").strip()
+        
+        # Actualizar la región si existe en .env
+        if region and region != "(from .env)":
+            self.azure_region_var.set(region)
             
-        # Cargar clave si no hay una configurada o está marcada como (from .env)
-        if not current_key or current_key == "(from .env)":
-            key = os.getenv("AZURE_SPEECH_KEY")
-            if key and key != "(from .env)":
-                # Guardar la clave real en la variable pero mostrar (from .env) en la interfaz
-                self.azure_key_var.set(key)
-                self.azure_key_entry.config(show="*")
-                self.show_key = False
-                # Guardar una referencia a la clave real
-                self._azure_actual_key = key
-                # Mostrar (from .env) en la interfaz
-                self.after_idle(lambda: self.azure_key_var.set("(from .env)"))
+        # Actualizar la clave si existe en .env
+        if key and key != "(from .env)":
+            # Guardar la clave real en una variable de instancia
+            self._azure_actual_key = key
+            # Configurar el campo para mostrar (from .env) pero mantener la clave real
+            self.azure_key_var.set("(from .env)")
+            self.azure_key_entry.config(show="*")
+            self.show_key = False
 
     def set_ami_status(self, state: str, custom_text: str | None = None):
         colors = {
