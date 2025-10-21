@@ -357,36 +357,60 @@ def synthesize(text: str, output_file: str, voice_id: str | None = None, rate = 
         except Exception as e:
             raise e
     if provider == 'azure':
+        import ssl
+        # SSL fix (solves handshake failures)
+        ssl._create_default_https_context = ssl._create_unverified_context
+        
+        # Enable detailed logs
+        os.environ["SPEECHSDK_LOG_FILENAME"] = "speechsdk.log"
+        os.environ["SPEECHSDK_LOG_LEVEL"] = "1"
+        
         key, region = _get_azure_cfg()
         if not key or not region:
             raise RuntimeError('Azure Speech key/region not configured')
+            
         if speechsdk is None:
             # REST fallback when SDK is not available
             _azure_synthesize_rest(text, output_file, voice_id, region, key, rate=rate, volume=volume)
             return
+            
         try:
+            # Service configuration
             speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
-            # Prefer MP3 output for consistency with Edge/gTTS preview
-            try:
-                speech_config.set_speech_synthesis_output_format(
-                    speechsdk.SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
-                )
-            except Exception:
-                pass
-            if isinstance(voice_id, str) and voice_id.strip():
-                speech_config.speech_synthesis_voice_name = voice_id.strip()
-            audio_config = speechsdk.audio.AudioOutputConfig(filename=output_file)
-            synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+            
+            # Set voice if specified
+            if voice_id:
+                speech_config.speech_synthesis_voice_name = voice_id
+                
+            # Configure audio output
+            if output_file.endswith('.wav'):
+                audio_config = speechsdk.audio.AudioOutputConfig(filename=output_file)
+            else:
+                audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
+                
+            # Create synthesizer
+            synthesizer = speechsdk.SpeechSynthesizer(
+                speech_config=speech_config, 
+                audio_config=audio_config
+            )
+            
+            # Synthesize voice
             result = synthesizer.speak_text_async(text).get()
-            if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
-                # SDK failed; try REST fallback
-                _azure_synthesize_rest(text, output_file, voice_id, region, key, rate=rate, volume=volume)
-                return
-            return
+            
+            # Check result
+            if result.reason == speechsdk.ResultReason.Canceled:
+                cancellation = result.cancellation_details
+                error_msg = f"Voice synthesis canceled: {cancellation.reason}"
+                if cancellation.reason == speechsdk.CancellationReason.Error:
+                    error_msg += f"\nDetails: {cancellation.error_details}"
+                    error_msg += "\nCheck the speechsdk.log file for more details"
+                raise RuntimeError(error_msg)
+                
         except Exception as e:
-            # As a last resort, try REST synthesis
+            # If there's an error, try the REST method as a fallback
+            print(f"Error with Azure SDK: {str(e)}")
+            print("Trying with REST method...")
             _azure_synthesize_rest(text, output_file, voice_id, region, key, rate=rate, volume=volume)
-            return
     if pyttsx3 is None:
         raise ImportError("pyttsx3 is not installed")
     engine = pyttsx3.init(driverName='sapi5')

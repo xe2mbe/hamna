@@ -197,8 +197,14 @@ class ConfigurationTab(ttk.Frame):
         
         # Toggle key visibility button
         self.show_key = False
-        self.toggle_key_btn = ttk.Button(key_frame, text="", width=3, 
-                                      command=self.toggle_key_visibility)
+        # Create a style for the button
+        style = ttk.Style()
+        style.configure('Eye.TButton', font=('Segoe UI Emoji', 9))
+        
+        # Create button with eye icon (👁️)
+        self.toggle_key_btn = ttk.Button(key_frame, text="👁️", width=3, 
+                                      command=self.toggle_key_visibility,
+                                      style='Eye.TButton')
         self.toggle_key_btn.grid(row=0, column=1, padx=(5, 0))
         
         # Load from .env if exists
@@ -496,7 +502,11 @@ class ConfigurationTab(ttk.Frame):
         else:
             self.azure_key_entry.config(show="" if self.show_key else "*")
             
-        self.toggle_key_btn.config(style="TButton" if self.show_key else "")
+        # Update the eye icon based on visibility state
+        if self.show_key:
+            self.toggle_key_btn.config(text="👁️", style='Eye.TButton')
+        else:
+            self.toggle_key_btn.config(text="👁️", style='Eye.TButton')
         
     def load_azure_from_env(self):
         """Load Azure credentials from .env file if they exist"""
