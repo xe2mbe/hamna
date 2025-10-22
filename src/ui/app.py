@@ -8,6 +8,7 @@ import tempfile
 import subprocess
 import winsound
 import ctypes
+import sqlite3
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -93,13 +94,245 @@ class ProductionTab(ttk.Frame):
 class EditingTab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        ttk.Label(self, text="Editing").pack(pady=10)
-        frame = ttk.Frame(self)
-        frame.pack(fill="x", padx=10, pady=10)
-        ttk.Label(frame, text="Audio file:").grid(row=0, column=0, sticky="w")
-        ttk.Entry(frame).grid(row=0, column=1, sticky="ew", padx=5)
-        ttk.Button(frame, text="Browse").grid(row=0, column=2)
-        frame.columnconfigure(1, weight=1)
+        self.parent = parent
+        
+        # Título
+        ttk.Label(self, text="Editing", font=('Helvetica', 14, 'bold')).pack(pady=10)
+        
+        # Frame para los botones de acción
+        button_frame = ttk.Frame(self)
+        button_frame.pack(fill="x", padx=10, pady=5)
+        
+        # Botón Nuevo
+        self.new_button = ttk.Button(button_frame, text="Nuevo", command=self.show_new_event_dialog)
+        self.new_button.pack(side="left", padx=5)
+        
+        # Botón Editar
+        self.edit_button = ttk.Button(button_frame, text="Editar", command=self.edit_selected_event)
+        self.edit_button.pack(side="left", padx=5)
+        
+        # Botón Eliminar
+        self.delete_button = ttk.Button(button_frame, text="Eliminar", command=self.delete_selected_event)
+        self.delete_button.pack(side="left", padx=5)
+        
+        # Cargar tipos de eventos
+        self.load_event_types()
+        
+        # Frame para la lista de eventos
+        list_frame = ttk.LabelFrame(self, text="Eventos", padding=10)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Treeview para mostrar los eventos
+        self.tree = ttk.Treeview(list_frame, columns=('id', 'tipo', 'nombre', 'fecha_creacion'), show='headings')
+        self.tree.heading('id', text='ID')
+        self.tree.heading('tipo', text='Tipo')
+        self.tree.heading('nombre', text='Nombre')
+        self.tree.heading('fecha_creacion', text='Fecha de Creación')
+        
+        # Ajustar el ancho de las columnas
+        self.tree.column('id', width=50, anchor='center')
+        self.tree.column('tipo', width=150)
+        self.tree.column('nombre', width=200)
+        self.tree.column('fecha_creacion', width=150, anchor='center')
+        
+        # Scrollbar para el Treeview
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        # Empaquetar Treeview y Scrollbar
+        self.tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Cargar eventos existentes
+        self.load_events()
+    
+    def show_new_event_dialog(self):
+        """Muestra el diálogo para crear un nuevo evento"""
+        if not hasattr(self, 'event_types') or not self.event_types:
+            messagebox.showerror("Error", "No se pudieron cargar los tipos de eventos")
+            return
+        self._show_event_dialog("Nuevo Evento")
+    
+    def load_event_types(self):
+        """Cargar los tipos de eventos desde la base de datos"""
+        try:
+            # Conectar a la base de datos
+            db_path = os.path.join('data', 'hamana.db')
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Obtener los tipos de eventos activos
+            cursor.execute('SELECT nombre, descripcion FROM eventos_types WHERE activo = 1')
+            self.event_types = cursor.fetchall()  # Guardar los tipos de eventos
+            
+            conn.close()
+            
+        except sqlite3.Error as e:
+            messagebox.showerror("Error", f"No se pudieron cargar los tipos de eventos: {e}")
+            self.event_types = []  # Inicializar como lista vacía en caso de error
+    
+    def load_events(self):
+        """Cargar los eventos existentes desde la base de datos"""
+        try:
+            # Limpiar el Treeview
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            
+            # Conectar a la base de datos
+            db_path = os.path.join('data', 'hamana.db')
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Obtener los eventos
+            cursor.execute('''
+                SELECT e.id, e.tipo, e.nombre, e.fecha_creacion 
+                FROM eventos e
+                ORDER BY e.fecha_creacion DESC
+            ''')
+            
+            # Agregar los eventos al Treeview
+            for row in cursor.fetchall():
+                # Formatear la fecha para mostrarla mejor
+                fecha = row[3].split('.')[0]  # Eliminar los milisegundos si existen
+                self.tree.insert('', 'end', values=(row[0], row[1], row[2], fecha))
+            
+            conn.close()
+            
+        except sqlite3.Error as e:
+            messagebox.showerror("Error", f"No se pudieron cargar los eventos: {e}")
+    
+    def create_new_event(self, event_type):
+        """Mostrar diálogo para crear un nuevo evento del tipo especificado"""
+        self._show_event_dialog("Nuevo Evento", event_type=event_type)
+    
+    def edit_selected_event(self):
+        """Edita el evento seleccionado en el Treeview"""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Advertencia", "Por favor seleccione un evento para editar")
+            return
+            
+        item = self.tree.item(selected[0])
+        event_id = item['values'][0]
+        event_type = item['values'][1]
+        event_name = item['values'][2]
+        
+        self._show_event_dialog("Editar Evento", event_id, event_type, event_name)
+    
+    def delete_selected_event(self):
+        """Elimina el evento seleccionado del Treeview"""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Advertencia", "Por favor seleccione un evento para eliminar")
+            return
+            
+        item = self.tree.item(selected[0])
+        event_id = item['values'][0]
+        event_name = item['values'][2]
+        
+        if messagebox.askyesno("Confirmar eliminación", f"¿Está seguro de que desea eliminar el evento '{event_name}'?"):
+            try:
+                conn = sqlite3.connect('data/hamana.db')
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM eventos WHERE id = ?', (event_id,))
+                conn.commit()
+                self.load_events()
+                messagebox.showinfo("Éxito", "Evento eliminado correctamente")
+            except sqlite3.Error as e:
+                messagebox.showerror("Error", f"Error al eliminar el evento: {str(e)}")
+            finally:
+                conn.close()
+    
+    def _show_event_dialog(self, title, event_id=None, event_type=None, event_name=''):
+        """Muestra un diálogo para crear o editar un evento"""
+        is_edit = event_id is not None
+        dialog = tk.Toplevel(self)
+        dialog.title(title)
+        dialog.transient(self)  # Hace que la ventana sea modal
+        dialog.grab_set()
+        
+        # Centrar el diálogo
+        dialog.geometry("400x200" if is_edit else "400x150")
+        dialog.update_idletasks()
+        width = dialog.winfo_width()
+        height = dialog.winfo_height()
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Variables
+        nombre_var = tk.StringVar(value=event_name)
+        tipo_var = tk.StringVar(value=event_type if event_type else '')
+        
+        # Frame principal
+        main_frame = ttk.Frame(dialog, padding=10)
+        main_frame.pack(fill="both", expand=True)
+        
+        # Campos del formulario
+        row = 0
+        
+        if is_edit:
+            ttk.Label(main_frame, text="ID del evento:").grid(row=row, column=0, sticky="w", pady=5)
+            ttk.Label(main_frame, text=str(event_id), font=('Arial', 10, 'bold')).grid(row=row, column=1, sticky="w", pady=5)
+            row += 1
+        
+        ttk.Label(main_frame, text="Tipo de evento:").grid(row=row, column=0, sticky="w", pady=5)
+        if is_edit:
+            ttk.Label(main_frame, text=event_type, font=('Arial', 10, 'bold')).grid(row=row, column=1, sticky="w", pady=5)
+        else:
+            tipo_menu = ttk.Combobox(main_frame, textvariable=tipo_var, state="readonly")
+            tipo_menu['values'] = [event[0] for event in self.event_types]
+            tipo_menu.current(0)
+            tipo_menu.grid(row=row, column=1, sticky="we", pady=5, padx=(0, 10))
+        row += 1
+        
+        ttk.Label(main_frame, text="Nombre del evento:").grid(row=row, column=0, sticky="w", pady=5)
+        ttk.Entry(main_frame, textvariable=nombre_var, width=40).grid(row=row, column=1, sticky="we", pady=5, padx=(0, 10))
+        row += 1
+        
+        # Frame para los botones
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=row, column=0, columnspan=2, pady=(20, 0))
+        
+        def save_event():
+            nombre = nombre_var.get().strip()
+            tipo = event_type if is_edit else tipo_var.get()
+            
+            if not nombre:
+                messagebox.showerror("Error", "El nombre del evento no puede estar vacío")
+                return
+                
+            try:
+                conn = sqlite3.connect('data/hamana.db')
+                cursor = conn.cursor()
+                
+                if is_edit:
+                    cursor.execute(
+                        'UPDATE eventos SET nombre = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?',
+                        (nombre, event_id)
+                    )
+                    message = "Evento actualizado correctamente"
+                else:
+                    cursor.execute(
+                        'INSERT INTO eventos (tipo, nombre) VALUES (?, ?)',
+                        (tipo, nombre)
+                    )
+                    message = "Evento creado correctamente"
+                    
+                conn.commit()
+                self.load_events()
+                dialog.destroy()
+                messagebox.showinfo("Éxito", message)
+                
+            except sqlite3.Error as e:
+                messagebox.showerror("Error", f"No se pudo guardar el evento: {e}")
+        
+        # Botones
+        ttk.Button(button_frame, text="Guardar", command=save_event).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Cancelar", command=dialog.destroy).pack(side="left", padx=5)
+        
+        # Hacer que el diálogo sea modal
+        dialog.wait_window()
 
 
 class ConfigurationTab(ttk.Frame):
