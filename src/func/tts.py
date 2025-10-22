@@ -13,6 +13,15 @@ import json
 import sys
 import html
 import requests
+import time
+import logging
+import wave
+import io
+import base64
+import tempfile
+import shutil
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple, Union, Any, Callable
 try:
     import edge_tts
 except Exception:
@@ -23,6 +32,14 @@ try:
 except Exception:
     gTTS = None
     gtts_langs = None
+
+# Configurar el sistema de registro
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Configuración de reintentos para solicitudes HTTP
+MAX_RETRIES = 3
+RETRY_DELAY = 1  # segundos
 
 try:
     import azure.cognitiveservices.speech as speechsdk
@@ -97,45 +114,192 @@ def _get_tts_proxy_from_cfg():
 
 def _get_azure_cfg():
     try:
-        key = os.environ.get('AZURE_SPEECH_KEY') or os.environ.get('AZURE_TTS_KEY')
-        region = os.environ.get('AZURE_SPEECH_REGION') or os.environ.get('AZURE_TTS_REGION')
+        print("\n[DEBUG] === Iniciando búsqueda de configuración de Azure ===")
+        
+        # 1. Primero intentar cargar desde .env usando python-dotenv
+        try:
+            from dotenv import load_dotenv
+            import os.path
+            
+            # Buscar el archivo .env en el directorio raíz del proyecto
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+            if os.path.exists(env_path):
+                print(f"[DEBUG] Cargando configuración desde: {env_path}")
+                load_dotenv(dotenv_path=env_path, override=True)
+            else:
+                print(f"[ADVERTENCIA] No se encontró el archivo .env en: {env_path}")
+        except Exception as e:
+            print(f"[ADVERTENCIA] No se pudo cargar el archivo .env: {str(e)}")
+        
+        # 2. Obtener las variables de entorno (ya sea del sistema o cargadas desde .env)
+        key = os.getenv('AZURE_SPEECH_KEY') or os.getenv('AZURE_TTS_KEY')
+        region = os.getenv('AZURE_SPEECH_REGION') or os.getenv('AZURE_TTS_REGION')
+        
+        # Depuración detallada
+        print("\n[DEBUG] Revisando variables de entorno:")
+        print(f"[DEBUG] AZURE_SPEECH_KEY: {'PRESENTE' if os.getenv('AZURE_SPEECH_KEY') else 'NO ENCONTRADO'}")
+        print(f"[DEBUG] AZURE_TTS_KEY: {'PRESENTE' if os.getenv('AZURE_TTS_KEY') else 'NO ENCONTRADO'}")
+        print(f"[DEBUG] AZURE_SPEECH_REGION: {'PRESENTE' if os.getenv('AZURE_SPEECH_REGION') else 'NO ENCONTRADO'}")
+        print(f"[DEBUG] AZURE_TTS_REGION: {'PRESENTE' if os.getenv('AZURE_TTS_REGION') else 'NO ENCONTRADO'}")
+        
+        # Verificar si las variables tienen contenido
         if key and region:
-            return str(key).strip(), str(region).strip()
-    except Exception:
-        pass
+            key = key.strip()
+            region = region.strip()
+            key_debug = f"{key[:5]}...{key[-5:]}" if len(key) > 10 else "[clave muy corta]"
+            
+            print(f"\n[DEBUG] Configuración encontrada en variables de entorno:")
+            print(f"[DEBUG] Clave: {key_debug}")
+            print(f"[DEBUG] Región: {region}")
+            print(f"[DEBUG] Longitud de la clave: {len(key)} caracteres")
+            
+            # Verificar formato de la clave (debería ser un GUID de 32 caracteres)
+            if not (len(key) == 32 and all(c in '0123456789abcdefABCDEF' for c in key)):
+                print("[ADVERTENCIA] El formato de la clave no parece ser válido (debería ser un GUID de 32 caracteres hexadecimales)")
+            
+            return key, region
+        else:
+            print("\n[DEBUG] No se encontró configuración completa en las variables de entorno")
+    
+    except Exception as e:
+        print(f"[ERROR] Error al leer la configuración de Azure: {str(e)}")
+    
+    # 3. Si no se encontró en las variables de entorno, buscar en el archivo de configuración
     if callable(read_cfg):
         try:
+            print("\n[DEBUG] Buscando configuración en el archivo de configuración...")
             data, _ = read_cfg()
             tcfg = (data or {}).get('tts', {}) or {}
             key = tcfg.get('azure_key') or (tcfg.get('azure', {}) or {}).get('key')
             region = tcfg.get('azure_region') or (tcfg.get('azure', {}) or {}).get('region')
+            
             if key and region:
-                return str(key).strip(), str(region).strip()
-        except Exception:
-            return None, None
+                key = str(key).strip()
+                region = str(region).strip()
+                key_debug = f"{key[:5]}...{key[-5:]}" if len(key) > 10 else "[clave muy corta]"
+                
+                print(f"\n[DEBUG] Configuración encontrada en archivo de configuración:")
+                print(f"[DEBUG] Clave: {key_debug}")
+                print(f"[DEBUG] Región: {region}")
+                print(f"[DEBUG] Longitud de la clave: {len(key)} caracteres")
+                
+                # Verificar formato de la clave
+                if not (len(key) == 32 and all(c in '0123456789abcdefABCDEF' for c in key)):
+                    print("[ADVERTENCIA] El formato de la clave no parece ser válido (debería ser un GUID de 32 caracteres hexadecimales)")
+                
+                return key, region
+            else:
+                print("[DEBUG] No se encontró configuración completa en el archivo de configuración")
+                
+        except Exception as e:
+            print(f"[ERROR] Error al leer la configuración del archivo: {str(e)}")
+    
+    print("\n[ERROR] No se pudo encontrar una configuración válida de Azure")
+    print("[SOLUCIÓN] Por favor, asegúrate de tener configuradas las siguientes variables de entorno:")
+    print("  - AZURE_SPEECH_KEY o AZURE_TTS_KEY: Tu clave de suscripción de Azure")
+    print("  - AZURE_SPEECH_REGION o AZURE_TTS_REGION: La región de tu recurso de Azure (ej: 'eastus', 'westeurope')")
+    print("\nO configura estas opciones en el archivo de configuración de la aplicación.")
+    
     return None, None
 
 def _azure_list_voices_http(region: str, key: str):
     try:
-        url = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list"
-        hdr = {"Ocp-Apim-Subscription-Key": key}
-        r = requests.get(url, headers=hdr, timeout=10)
-        if r.status_code != 200:
-            return []
-        arr = r.json() if r.content else []
-        res = []
-        for v in arr or []:
+        print(f"[DEBUG] Intentando obtener voces de Azure. Región: {region}")
+        
+        # Asegurarse de que la región no tenga espacios ni caracteres extraños
+        region = region.strip().lower()
+        
+        # Construir la URL del endpoint
+        endpoint = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list"
+        print(f"[DEBUG] Endpoint: {endpoint}")
+        
+        # Configurar los encabezados de la solicitud
+        headers = {
+            "Ocp-Apim-Subscription-Key": key.strip(),
+            "Content-Type": "application/ssml+xml",
+            "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+            "User-Agent": "hamna-tts-client/1.0"
+        }
+        
+        # Imprimir información de depuración (sin mostrar la clave completa)
+        key_preview = f"{key[:5]}...{key[-5:]}" if key and len(key) > 10 else "[clave no válida]"
+        print(f"[DEBUG] Usando clave: {key_preview}")
+        print(f"[DEBUG] Headers: {headers}")
+        
+        # Realizar la solicitud con un tiempo de espera mayor
+        print("[DEBUG] Realizando solicitud a la API de Azure TTS...")
+        response = requests.get(endpoint, headers=headers, timeout=30)
+        
+        # Verificar el código de estado
+        print(f"[DEBUG] Código de estado HTTP: {response.status_code}")
+        
+        # Si hay un error 401, proporcionar más detalles
+        if response.status_code == 401:
+            print("[ERROR] Error 401 - No autorizado. Posibles causas:")
+            print("1. La clave de suscripción es incorrecta o ha expirado")
+            print("2. La región no coincide con la región de la clave")
+            print("3. La clave no tiene permisos para acceder al servicio de voz")
+            print(f"4. URL utilizada: {endpoint}")
+            print("5. Asegúrate de que el recurso de Azure esté en la región correcta")
+            print("6. Verifica que el recurso de Azure tenga habilitado el servicio de voz")
+            
+            # Intentar obtener más detalles del error
             try:
-                vid = v.get('ShortName') or v.get('Shortname') or v.get('shortName') or v.get('Name') or ''
-                name = v.get('DisplayName') or v.get('LocalName') or v.get('Name') or vid
-                loc = v.get('Locale') or ''
-                res.append({'id': vid, 'name': name, 'languages': [loc] if loc else []})
-            except Exception:
-                continue
-        return res
-    except Exception:
+                error_details = response.json()
+                print(f"[ERROR] Detalles del error: {error_details}")
+            except:
+                print("[ERROR] No se pudieron obtener detalles adicionales del error")
+                print(f"[ERROR] Respuesta cruda: {response.text[:500]}")
+            
+            return []
+        
+        # Si la respuesta no es exitosa, devolver lista vacía
+        if response.status_code != 200:
+            print(f"[ERROR] Error al obtener voces. Código: {response.status_code}, Respuesta: {response.text[:200]}")
+            return []
+        
+        # Procesar la respuesta exitosa
+        try:
+            arr = response.json() if response.content else []
+            print(f"[DEBUG] Se recibieron {len(arr)} voces de Azure TTS")
+            
+            # Verificar si la respuesta tiene el formato esperado
+            if not isinstance(arr, list):
+                print(f"[ERROR] La respuesta no tiene el formato esperado. Se esperaba una lista, se obtuvo: {type(arr)}")
+                return []
+                
+            # Procesar las voces
+            res = []
+            for v in arr:
+                try:
+                    vid = v.get('ShortName') or v.get('Shortname') or v.get('shortName') or v.get('Name') or ''
+                    name = v.get('DisplayName') or v.get('LocalName') or v.get('Name') or vid
+                    loc = v.get('Locale') or ''
+                    res.append({'id': vid, 'name': name, 'languages': [loc] if loc else []})
+                except Exception as e:
+                    print(f"[ADVERTENCIA] Error al procesar voz: {str(e)}")
+                    continue
+                    
+            return res
+            
+        except Exception as e:
+            print(f"[ERROR] Error al procesar la respuesta de Azure TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+            
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Error de conexión al obtener voces de Azure: {str(e)}")
         return []
-    return None
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Error al decodificar la respuesta JSON: {str(e)}")
+        print(f"Respuesta recibida: {response.text[:500] if 'response' in locals() else 'No hay respuesta'}")
+        return []
+    except Exception as e:
+        print(f"[ERROR] Error inesperado al obtener voces de Azure: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 def _azure_synthesize_rest(text: str, output_file: str, voice_id: str | None, region: str, key: str, rate=None, volume=None):
     url = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
@@ -224,36 +388,58 @@ def _edge_list_voices_cli(proxy: str | None = None):
 
 def list_voices(provider: str = 'windows'):
     provider = (provider or 'windows').lower()
+    print(f"\n[DEBUG] list_voices - Procesando proveedor: {provider}")
+    
     if provider == 'edge':
+        print("[DEBUG] Usando proveedor Edge TTS")
         proxy = _get_tts_proxy_from_cfg()
         voices = []
         if proxy:
+            print("[DEBUG] Usando proxy para Edge TTS")
             voices = _edge_list_voices_cli(proxy)
         else:
+            print("[DEBUG] Intentando obtener voces de Edge TTS de forma asíncrona")
             voices = _run_async(_edge_list_voices_async())
             if not voices:
+                print("[DEBUG] Falló la obtención asíncrona, intentando con CLI")
                 voices = _edge_list_voices_cli()
         return voices or EDGE_FALLBACK_VOICES
+        
     if provider == 'gtts':
+        print("[DEBUG] Usando proveedor gTTS")
         res = []
         try:
             langs = gtts_langs() if callable(gtts_langs) else {}
             for code, name in (langs or {}).items():
                 res.append({'id': code, 'name': f"{name} ({code})", 'languages': [code]})
-        except Exception:
+        except Exception as e:
+            print(f"[ERROR] Error al obtener idiomas de gTTS: {str(e)}")
             res = []
-        # Ensure Spanish options exist even if langs fails
+        # Asegurar que existan opciones en español incluso si falla langs
         if not res:
+            print("[DEBUG] Usando lista de respaldo para gTTS")
             res = [
                 {'id': 'es', 'name': 'Spanish (es)', 'languages': ['es']},
                 {'id': 'es-us', 'name': 'Spanish (US) (es-us)', 'languages': ['es-us']},
             ]
         return res
+        
     if provider == 'azure':
+        print("[DEBUG] Usando proveedor Azure TTS")
         key, region = _get_azure_cfg()
+        
         if not key or not region:
+            print("[ERROR] No se pudo obtener la configuración de Azure (falta clave o región)")
+            print("[DEBUG] Variables de entorno AZURE_TTS_KEY:", 'PRESENTE' if os.environ.get('AZURE_TTS_KEY') else 'FALTANTE')
+            print("[DEBUG] Variables de entorno AZURE_TTS_REGION:", 'PRESENTE' if os.environ.get('AZURE_TTS_REGION') else 'FALTANTE')
             return []
-        return _azure_list_voices_http(region, key)
+            
+        print(f"[DEBUG] Solicitando voces a Azure TTS...")
+        voices = _azure_list_voices_http(region, key)
+        print(f"[DEBUG] Se obtuvieron {len(voices)} voces de Azure TTS")
+        if not voices:
+            print("[ADVERTENCIA] No se pudieron cargar las voces de Azure. Verifica tu conexión y credenciales.")
+        return voices
     # Windows (pyttsx3)
     voices = []
     if pyttsx3 is None:

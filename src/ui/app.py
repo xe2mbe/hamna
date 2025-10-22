@@ -9,6 +9,16 @@ import subprocess
 import winsound
 import ctypes
 from urllib.parse import urlparse
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+load_dotenv(dotenv_path=env_path)
+
+# Depuración: Verificar que las variables se cargaron correctamente
+print(f"[DEBUG] Ruta del archivo .env: {env_path}")
+print(f"[DEBUG] AZURE_SPEECH_KEY presente: {'SÍ' if os.getenv('AZURE_SPEECH_KEY') else 'NO'}")
+print(f"[DEBUG] AZURE_SPEECH_REGION presente: {'SÍ' if os.getenv('AZURE_SPEECH_REGION') else 'NO'}")
 try:
     from src.func.functions import (
         parse_int,
