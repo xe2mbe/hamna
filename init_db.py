@@ -45,7 +45,39 @@ def init_database():
             fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             usuario_creacion TEXT DEFAULT 'sistema',
             usuario_actualizacion TEXT DEFAULT 'sistema',
-            FOREIGN KEY (tipo) REFERENCES eventos_types(nombre)
+            FOREIGN KEY (tipo) REFERENCES eventos_types(nombre) ON UPDATE CASCADE
+        )
+        ''')
+        
+        # Crear tabla de tipos de sección
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tipos_seccion (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL UNIQUE
+        )
+        ''')
+        
+        # Insertar tipos de sección iniciales si no existen
+        tipos_iniciales = ['tts', 'audio', 'sonido']
+        for tipo in tipos_iniciales:
+            cursor.execute('''
+            INSERT OR IGNORE INTO tipos_seccion (nombre) VALUES (?)
+            ''', (tipo,))
+        
+        # Crear tabla de secciones
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS secciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            descripcion TEXT,
+            evento_id INTEGER NOT NULL,
+            tipo_id INTEGER NOT NULL,
+            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            usuario_creacion TEXT DEFAULT 'sistema',
+            usuario_actualizacion TEXT DEFAULT 'sistema',
+            FOREIGN KEY (evento_id) REFERENCES eventos(id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (tipo_id) REFERENCES tipos_seccion(id) ON UPDATE CASCADE
         )
         ''')
         
