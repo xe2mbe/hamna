@@ -50,21 +50,22 @@ class HAMNAApp(tk.Tk):
     
     def init_tabs(self):
         """Initialize all application tabs"""
-        # Configuration Tab
-        self.tabs['config'] = ConfigTab(self.notebook)
-        self.notebook.add(self.tabs['config'], text="Configuración")
-        
-        # Studio Tab
-        self.tabs['studio'] = StudioTab(self.notebook)
-        self.notebook.add(self.tabs['studio'], text="Estudio")
-        
-        # Schedule Tab
-        self.tabs['schedule'] = ScheduleTab(self.notebook)
-        self.notebook.add(self.tabs['schedule'], text="Programación")
         
         # Production Tab
         self.tabs['production'] = ProductionTab(self.notebook)
         self.notebook.add(self.tabs['production'], text="Producción")
+
+        # Schedule Tab
+        self.tabs['schedule'] = ScheduleTab(self.notebook)
+        self.notebook.add(self.tabs['schedule'], text="Programación")
+
+        # Studio Tab
+        self.tabs['studio'] = StudioTab(self.notebook)
+        self.notebook.add(self.tabs['studio'], text="Estudio")
+
+        # Configuration Tab
+        self.tabs['config'] = ConfigTab(self.notebook)
+        self.notebook.add(self.tabs['config'], text="Configuración")
     
     def update_status(self, message):
         """Update the status bar message"""

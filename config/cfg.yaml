@@ -1,0 +1,5 @@
+transmitting:
+  pause: 1.0
+  pre_roll_delay: 0.5
+  ptt_time: 0.5
+  rewind: 0.5
