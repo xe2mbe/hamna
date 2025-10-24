@@ -31,8 +31,14 @@ class HAMNAApp(tk.Tk):
         self.main_container = ttk.Frame(self)
         self.main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Create notebook (tabs)
-        self.notebook = ttk.Notebook(self.main_container)
+        # Configure style for main application tabs
+        style = ttk.Style()
+        style.configure('Main.TNotebook.Tab', 
+                       padding=[30, 8], 
+                       font=('Helvetica', 10, 'bold'))
+        
+        # Create notebook (tabs) with custom style
+        self.notebook = ttk.Notebook(self.main_container, style='Main.TNotebook')
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
         # Initialize tabs

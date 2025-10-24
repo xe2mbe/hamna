@@ -9,6 +9,8 @@ from functools import partial
 import hid  # For CM108 interface
 from src.func.cm108 import hid_enumerate_filtered, hid_open_device, hid_close_device, hid_set_ptt, hid_read_cos
 from src.func.serial import SerialInterface
+from src.func.ami import AMIConnection, AMIConnectionError
+from src.func.api import APIConnection, APIConnectionError
 
 class ConfigTab(ttk.Frame):
     def __init__(self, parent):
@@ -21,6 +23,8 @@ class ConfigTab(ttk.Frame):
         self.cos_state = False
         self.cm108_device = None
         self.serial_interface = SerialInterface()
+        self.ami_connection = None  # Will be initialized when needed
+        self.api_connection = APIConnection()  # API connection instance
         self.running = True
         self.setup_ui()
         
@@ -45,6 +49,13 @@ class ConfigTab(ttk.Frame):
                 'cos_bit': '1',
                 'invert_ptt': False,
                 'invert_cos': False
+            },
+            'ami': {
+                'host': '',
+                'port': '5038',
+                'username': '',
+                'password': '',
+                'enabled': False
             }
         }
         
@@ -79,31 +90,43 @@ class ConfigTab(ttk.Frame):
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Create notebook for different configuration sections
-        config_notebook = ttk.Notebook(main_frame)
+        # Configure style for configuration tabs with more padding
+        style = ttk.Style()
+        style.configure('Config.TNotebook.Tab', padding=[10, 2])
+        
+        # Create notebook for different configuration sections with custom style
+        config_notebook = ttk.Notebook(main_frame, style='Config.TNotebook')
         config_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # General Settings Tab
+        general_frame = ttk.Frame(config_notebook, padding="10")
+        self.setup_general_settings(general_frame)
+        config_notebook.add(general_frame, text="General")      
         
         # Radio Interface Tab
         radio_frame = ttk.Frame(config_notebook, padding="10")
         self.setup_radio_interface(radio_frame)
         config_notebook.add(radio_frame, text="Radio Interface")
         
+        # AMI Settings Tab
+        ami_frame = ttk.Frame(config_notebook, padding="10")
+        self.setup_ami_settings(ami_frame)
+        config_notebook.add(ami_frame, text="AMI")
+        
+        # API Settings Tab
+        api_frame = ttk.Frame(config_notebook, padding="10")
+        self.setup_api_settings(api_frame)
+        config_notebook.add(api_frame, text="API")
+        
         # Transmitting Settings Tab
         transmitting_frame = ttk.Frame(config_notebook, padding="10")
         self.setup_transmitting_settings(transmitting_frame)
         config_notebook.add(transmitting_frame, text="Transmitting")
-        
-        # General Settings Tab
-        general_frame = ttk.Frame(config_notebook, padding="10")
-        self.setup_general_settings(general_frame)
-        config_notebook.add(general_frame, text="General")
-        
-        # Audio Settings Tab has been removed
-        
+            
         # Database Settings Tab
         db_frame = ttk.Frame(config_notebook, padding="10")
         self.setup_database_settings(db_frame)
-        config_notebook.add(db_frame, text="Base de Datos")
+        config_notebook.add(db_frame, text="Base de Datos")      
         
         # Save/Cancel Buttons
         btn_frame = ttk.Frame(main_frame)
@@ -889,3 +912,612 @@ class ConfigTab(ttk.Frame):
         # TODO: Implement database restore
         if messagebox.askyesno("Restaurar", "¿Está seguro de que desea restaurar la base de datos desde una copia de seguridad?"):
             messagebox.showinfo("Restaurar", "Base de datos restaurada correctamente.")
+            
+    def setup_ami_settings(self, parent):
+        """Set up AMI (Asterisk Manager Interface) settings section"""
+        # AMI Settings Frame
+        ami_frame = ttk.LabelFrame(parent, text="AMI Settings", padding=10)
+        ami_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Enable AMI Checkbox
+        self.ami_enabled_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            ami_frame,
+            text="Habilitar AMI",
+            variable=self.ami_enabled_var,
+            command=self.toggle_ami_settings
+        ).grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0, 10))
+        
+        # Host
+        ttk.Label(ami_frame, text="Host:").grid(row=1, column=0, sticky=tk.W, pady=2, padx=5)
+        self.ami_host_var = tk.StringVar()
+        host_entry = ttk.Entry(ami_frame, textvariable=self.ami_host_var, width=30)
+        host_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        # Port
+        ttk.Label(ami_frame, text="Port:").grid(row=2, column=0, sticky=tk.W, pady=2, padx=5)
+        self.ami_port_var = tk.StringVar()
+        port_entry = ttk.Entry(ami_frame, textvariable=self.ami_port_var, width=10)
+        port_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        # Username
+        ttk.Label(ami_frame, text="Username:").grid(row=3, column=0, sticky=tk.W, pady=2, padx=5)
+        self.ami_username_var = tk.StringVar()
+        username_entry = ttk.Entry(ami_frame, textvariable=self.ami_username_var, width=30)
+        username_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        # Password
+        ttk.Label(ami_frame, text="Password:").grid(row=4, column=0, sticky=tk.W, pady=2, padx=5)
+        self.ami_password_var = tk.StringVar()
+        self.ami_password_entry = ttk.Entry(
+            ami_frame, 
+            textvariable=self.ami_password_var, 
+            show="*",
+            width=30
+        )
+        self.ami_password_entry.grid(row=4, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        # Status
+        self.ami_status_var = tk.StringVar(value="Status: Disconnected")
+        status_frame = ttk.Frame(ami_frame)
+        status_frame.grid(row=5, column=0, columnspan=2, pady=(10, 5), sticky=tk.W, padx=5)
+        
+        # Status indicator (dot)
+        self.ami_status_canvas = tk.Canvas(
+            status_frame, 
+            width=14, 
+            height=14, 
+            highlightthickness=0
+        )
+        self.ami_status_canvas.pack(side=tk.LEFT, padx=(0, 5))
+        self.ami_status_dot = self.ami_status_canvas.create_oval(
+            4, 4, 12, 12, fill="gray", outline=""
+        )
+        
+        # Status label with fixed width
+        status_label = ttk.Label(status_frame, textvariable=self.ami_status_var, width=20, anchor='w')
+        status_label.pack(side=tk.LEFT)
+        
+        # Buttons
+        button_frame = ttk.Frame(ami_frame)
+        button_frame.grid(row=5, column=0, columnspan=3, pady=(5, 0), sticky=tk.EW)
+        
+        self.ami_test_btn = ttk.Button(
+            button_frame,
+            text="Test Connection",
+            command=self.test_ami_connection,
+            width=15
+        )
+        self.ami_test_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.ami_save_btn = ttk.Button(
+            button_frame,
+            text="Save",
+            command=self.save_ami_settings,
+            width=10
+        )
+        self.ami_save_btn.pack(side=tk.LEFT)
+        
+        # Configure grid weights
+        ami_frame.columnconfigure(1, weight=1)
+        
+        # Load saved settings
+        self.load_ami_settings()
+    
+    def test_ami_connection(self):
+        """Test the AMI connection with current settings"""
+        host = self.ami_host_var.get().strip()
+        port_str = self.ami_port_var.get().strip()
+        username = self.ami_username_var.get().strip()
+        password = self.ami_password_var.get().strip()
+        
+        if not all([host, port_str, username, password]):
+            messagebox.showwarning(
+                "Missing Information",
+                "Please fill in all AMI connection details."
+            )
+            return
+        
+        try:
+            port = int(port_str)
+        except ValueError:
+            messagebox.showerror(
+                "Invalid Port",
+                "Port must be a valid number."
+            )
+            return
+        
+        # Update status to connecting
+        self.update_ami_status("connecting")
+        
+        # Test connection in a separate thread to avoid freezing the UI
+        import threading
+        
+        def _test_connection():
+            try:
+                # Create a test connection
+                ami = AMIConnection()
+                connected = ami.test_connection(host, port, username, password)
+                
+                if connected:
+                    self.after(0, self.update_ami_status, "connected")
+                    self.after(0, messagebox.showinfo, 
+                             "Connection Successful", 
+                             "Successfully connected to AMI.")
+                else:
+                    self.after(0, self.update_ami_status, "disconnected")
+                    self.after(0, messagebox.showerror,
+                             "Connection Failed",
+                             "Could not connect to AMI. Please check your settings.")
+                
+            except Exception as e:
+                self.after(0, self.update_ami_status, "error")
+                self.after(0, messagebox.showerror,
+                         "Connection Error",
+                         f"An error occurred while testing the connection:\n{str(e)}")
+        
+        # Start the connection test in a separate thread
+        thread = threading.Thread(target=_test_connection, daemon=True)
+        thread.start()
+    
+    def connect_ami(self):
+        """Connect to AMI server using saved settings"""
+        if not self.ami_connection or not self.ami_connection.is_connected():
+            host = self.ami_host_var.get().strip()
+            port_str = self.ami_port_var.get().strip()
+            username = self.ami_username_var.get().strip()
+            password = self.ami_password_var.get().strip()
+            
+            if not all([host, port_str, username, password]):
+                return False
+            
+            try:
+                port = int(port_str)
+                self.ami_connection = AMIConnection()
+                if self.ami_connection.connect(host, port, username, password):
+                    self.update_ami_status("connected")
+                    return True
+                else:
+                    self.update_ami_status("disconnected")
+                    return False
+            except Exception as e:
+                self.update_ami_status("error")
+                print(f"AMI connection error: {e}")
+                return False
+        return True
+    
+    def disconnect_ami(self):
+        """Disconnect from AMI server"""
+        if self.ami_connection:
+            self.ami_connection.disconnect()
+            self.ami_connection = None
+        self.update_ami_status("disconnected")
+    
+    def update_ami_status(self, status):
+        """Update the AMI connection status indicator"""
+        if status == "connected":
+            self.ami_status_canvas.itemconfig(self.ami_status_dot, fill="green")
+            self.ami_status_var.set("Status: Connected")
+            self.ami_test_btn.config(state=tk.NORMAL)
+        elif status == "connecting":
+            self.ami_status_canvas.itemconfig(self.ami_status_dot, fill="orange")
+            self.ami_status_var.set("Status: Connecting...")
+            self.ami_test_btn.config(state=tk.DISABLED)
+        elif status == "error":
+            self.ami_status_canvas.itemconfig(self.ami_status_dot, fill="red")
+            self.ami_status_var.set("Status: Connection Error")
+            self.ami_test_btn.config(state=tk.NORMAL)
+        else:  # disconnected
+            self.ami_status_canvas.itemconfig(self.ami_status_dot, fill="gray")
+            self.ami_status_var.set("Status: Disconnected")
+            self.ami_test_btn.config(state=tk.NORMAL)
+    
+    def save_ami_settings(self):
+        """Save AMI settings to config"""
+        if 'ami' not in self.config:
+            self.config['ami'] = {}
+        
+        # Get current values
+        host = self.ami_host_var.get().strip()
+        port = self.ami_port_var.get().strip()
+        username = self.ami_username_var.get().strip()
+        password = self.ami_password_var.get().strip()
+        enabled = self.ami_enabled_var.get()
+        
+        # Update config
+        self.config['ami'].update({
+            'host': host,
+            'port': port,
+            'username': username,
+            'password': password,
+            'enabled': enabled
+        })
+        
+        if self.save_config():
+            # If we have a connection, reconnect with new settings
+            if self.ami_connection and self.ami_connection.is_connected():
+                self.disconnect_ami()
+                if host:  # If host is not empty, reconnect with new settings
+                    self.connect_ami()
+            
+            messagebox.showinfo("Success", "AMI settings saved successfully.")
+        else:
+            messagebox.showerror("Error", "Failed to save AMI settings.")
+    
+    def toggle_ami_settings(self):
+        """Enable/disable AMI controls based on checkbox state"""
+        state = tk.NORMAL if self.ami_enabled_var.get() else tk.DISABLED
+        
+        # Habilitar/deshabilitar todos los controles de AMI
+        for widget in [
+            self.ami_host_var, self.ami_port_var, 
+            self.ami_username_var, self.ami_password_var,
+            self.ami_test_btn, self.ami_save_btn
+        ]:
+            if hasattr(widget, 'widget'):  # Si es un widget
+                widget.widget.config(state=state)
+            elif hasattr(widget, 'config'):  # Si es un Entry u otro widget
+                widget.config(state=state)
+        
+        # Actualizar el estado de la conexión
+        if not self.ami_enabled_var.get() and hasattr(self, 'ami_connection'):
+            self.disconnect_ami()
+            
+    def load_ami_settings(self):
+        """Load AMI settings from config"""
+        if 'ami' in self.config:
+            ami_config = self.config['ami']
+            self.ami_host_var.set(ami_config.get('host', ''))
+            self.ami_port_var.set(ami_config.get('port', '5038'))
+            self.ami_username_var.set(ami_config.get('username', ''))
+            self.ami_password_var.set(ami_config.get('password', ''))
+            self.ami_enabled_var.set(ami_config.get('enabled', False))
+            self.toggle_ami_settings()
+            self.update_ami_status("disconnected")
+            
+    def setup_api_settings(self, parent):
+        """Set up API settings section"""
+        # API Settings Frame
+        api_frame = ttk.LabelFrame(parent, text="API Settings", padding=10)
+        api_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Enable/Disable API Checkbox
+        self.api_enabled_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            api_frame, 
+            text="Habilitar API", 
+            variable=self.api_enabled_var,
+            command=self.toggle_api_settings
+        ).grid(row=0, column=0, sticky=tk.W, pady=2, columnspan=3)
+        
+        # Base URL
+        ttk.Label(api_frame, text="Base URL:").grid(row=1, column=0, sticky=tk.W, pady=2, padx=5)
+        self.api_base_url_var = tk.StringVar()
+        self.api_base_url_entry = ttk.Entry(api_frame, textvariable=self.api_base_url_var, width=30)
+        self.api_base_url_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        self.api_base_url_entry.insert(0, "http://192.168.1.50")
+        self.api_base_url_entry.config(foreground='gray')
+        
+        def on_entry_click(event, entry_widget, default_text):
+            current_text = entry_widget.get()
+            if current_text == default_text and entry_widget.cget('foreground') == 'gray':
+                entry_widget.delete(0, tk.END)
+                entry_widget.config(foreground='black')
+                
+        def on_focus_out(event, entry_widget, default_text):
+            current_text = entry_widget.get()
+            if not current_text or current_text == default_text:
+                entry_widget.delete(0, tk.END)
+                entry_widget.insert(0, default_text)
+                entry_widget.config(foreground='gray')
+            else:
+                entry_widget.config(foreground='black')
+        
+        # Bind events for base URL
+        self.api_base_url_entry.bind('<FocusIn>', 
+                          lambda e: on_entry_click(e, self.api_base_url_entry, "http://192.168.1.50"))
+        self.api_base_url_entry.bind('<FocusOut>', 
+                          lambda e: on_focus_out(e, self.api_base_url_entry, "http://192.168.1.50"))
+        
+        # PTT ON Path
+        ttk.Label(api_frame, text="PTT ON Path:").grid(row=2, column=0, sticky=tk.W, pady=2, padx=5)
+        self.api_ptt_on_var = tk.StringVar()
+        self.ptt_on_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_on_var, width=30)
+        self.ptt_on_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
+        self.ptt_on_entry.insert(0, "/ptt_on")
+        self.ptt_on_entry.config(foreground='gray')
+        
+        # Bind events for PTT ON path
+        self.ptt_on_entry.bind('<FocusIn>', 
+                         lambda e: on_entry_click(e, self.ptt_on_entry, "/ptt_on"))
+        self.ptt_on_entry.bind('<FocusOut>', 
+                         lambda e: on_focus_out(e, self.ptt_on_entry, "/ptt_on"))
+        
+        # PTT OFF Path
+        ttk.Label(api_frame, text="PTT OFF Path:").grid(row=3, column=0, sticky=tk.W, pady=2, padx=5)
+        self.api_ptt_off_var = tk.StringVar()
+        self.ptt_off_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_off_var, width=30)
+        self.ptt_off_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
+        self.ptt_off_entry.insert(0, "/ptt_off")
+        self.ptt_off_entry.config(foreground='gray')
+        
+        # Bind events for PTT OFF path
+        self.ptt_off_entry.bind('<FocusIn>', 
+                          lambda e: on_entry_click(e, self.ptt_off_entry, "/ptt_off"))
+        self.ptt_off_entry.bind('<FocusOut>', 
+                          lambda e: on_focus_out(e, self.ptt_off_entry, "/ptt_off"))
+        
+        # Status
+        self.api_status_var = tk.StringVar(value="Status: Desconectado")
+        status_frame = ttk.Frame(api_frame)
+        status_frame.grid(row=4, column=0, columnspan=2, pady=(10, 5), sticky=tk.W, padx=5)
+        
+        # Status indicator (dot)
+        self.api_status_canvas = tk.Canvas(
+            status_frame, 
+            width=14, 
+            height=14, 
+            highlightthickness=0
+        )
+        self.api_status_canvas.pack(side=tk.LEFT, padx=(0, 5))
+        self.api_status_dot = self.api_status_canvas.create_oval(
+            4, 4, 12, 12, fill="gray", outline=""
+        )
+        
+        # Status label with fixed width
+        status_label = ttk.Label(status_frame, textvariable=self.api_status_var, width=20, anchor='w')
+        status_label.pack(side=tk.LEFT)
+        
+        # Buttons frame
+        btn_frame = ttk.Frame(api_frame)
+        btn_frame.grid(row=5, column=0, columnspan=2, pady=(5, 0), sticky=tk.W, padx=5)
+        
+        # Test Connection Button
+        self.api_test_btn = ttk.Button(
+            btn_frame,
+            text="Test Connection",
+            command=self.test_api_connection,
+            width=15
+        )
+        self.api_test_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Save Button
+        self.api_save_btn = ttk.Button(
+            btn_frame,
+            text="Save",
+            command=self.save_api_settings,
+            width=10
+        )
+        self.api_save_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # PTT ON Button
+        self.api_ptt_on_btn = ttk.Button(
+            btn_frame,
+            text="PTT ON",
+            command=self.api_ptt_on,
+            width=10,
+            state=tk.DISABLED
+        )
+        self.api_ptt_on_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # PTT OFF Button
+        self.api_ptt_off_btn = ttk.Button(
+            btn_frame,
+            text="PTT OFF",
+            command=self.api_ptt_off,
+            width=10,
+            state=tk.DISABLED
+        )
+        self.api_ptt_off_btn.pack(side=tk.LEFT)
+        
+        # Configure grid weights
+        api_frame.columnconfigure(1, weight=0)  # Changed to 0 to prevent expanding
+        
+        # Load saved settings
+        self.load_api_settings()
+    
+    def test_api_connection(self):
+        """Test the API connection with current settings"""
+        base_url = self.api_base_url_var.get().strip()
+        ptt_on_path = self.api_ptt_on_var.get().strip()
+        ptt_off_path = self.api_ptt_off_var.get().strip()
+        
+        if not all([base_url, ptt_on_path, ptt_off_path]):
+            messagebox.showwarning(
+                "Missing Information",
+                "Please fill in all API connection details."
+            )
+            return
+        
+        # Update status to connecting
+        self.update_api_status("connecting")
+        
+        # Test connection in a separate thread
+        import threading
+        
+        def _test_connection():
+            try:
+                # Configure API connection
+                self.api_connection.connect(
+                    base_url=base_url,
+                    ptt_on_path=ptt_on_path,
+                    ptt_off_path=ptt_off_path
+                )
+                
+                # Test connection
+                connected = self.api_connection.test_connection()
+                
+                if connected:
+                    self.after(0, self.update_api_status, "connected")
+                    self.after(0, messagebox.showinfo, 
+                             "Connection Successful", 
+                             "Successfully connected to API.")
+                    # Enable PTT buttons
+                    self.after(0, self.api_ptt_on_btn.config, {"state": tk.NORMAL})
+                    self.after(0, self.api_ptt_off_btn.config, {"state": tk.NORMAL})
+                else:
+                    self.after(0, self.update_api_status, "disconnected")
+                    self.after(0, messagebox.showerror,
+                             "Connection Failed",
+                             "Could not connect to API. Please check your settings.")
+                
+            except Exception as e:
+                self.after(0, self.update_api_status, "error")
+                self.after(0, messagebox.showerror,
+                         "Connection Error",
+                         f"An error occurred while testing the connection:\n{str(e)}")
+        
+        # Start the connection test in a separate thread
+        thread = threading.Thread(target=_test_connection, daemon=True)
+        thread.start()
+    
+    def update_api_status(self, status):
+        """Update the API connection status indicator"""
+        if status == "connected":
+            self.api_status_canvas.itemconfig(self.api_status_dot, fill="green")
+            self.api_status_var.set("Status: Connected")
+            self.api_test_btn.config(state=tk.NORMAL)
+        elif status == "connecting":
+            self.api_status_canvas.itemconfig(self.api_status_dot, fill="orange")
+            self.api_status_var.set("Status: Connecting...")
+            self.api_test_btn.config(state=tk.DISABLED)
+        elif status == "error":
+            self.api_status_canvas.itemconfig(self.api_status_dot, fill="red")
+            self.api_status_var.set("Status: Connection Error")
+            self.api_test_btn.config(state=tk.NORMAL)
+        else:  # disconnected
+            self.api_status_canvas.itemconfig(self.api_status_dot, fill="gray")
+            self.api_status_var.set("Status: Disconnected")
+            self.api_test_btn.config(state=tk.NORMAL)
+            self.api_ptt_on_btn.config(state=tk.DISABLED)
+            self.api_ptt_off_btn.config(state=tk.DISABLED)
+    
+    def save_api_settings(self):
+        """Save API settings to config"""
+        if 'api' not in self.config:
+            self.config['api'] = {}
+        
+        # Get current values
+        base_url = self.api_base_url_var.get().strip()
+        ptt_on_path = self.api_ptt_on_var.get().strip()
+        ptt_off_path = self.api_ptt_off_var.get().strip()
+        
+        # Update config
+        self.config['api'].update({
+            'base_url': base_url,
+            'ptt_on_path': ptt_on_path,
+            'ptt_off_path': ptt_off_path,
+            'enabled': self.api_enabled_var.get()
+        })
+        
+        if self.save_config():
+            # If we have a connection, reconnect with new settings
+            if hasattr(self, 'api_connection') and self.api_connection.connected:
+                self.api_connection.disconnect()
+                if base_url and ptt_on_path and ptt_off_path:
+                    try:
+                        self.api_connection.connect(
+                            base_url=base_url,
+                            ptt_on_path=ptt_on_path,
+                            ptt_off_path=ptt_off_path
+                        )
+                    except Exception as e:
+                        print(f"Error reconnecting to API: {e}")
+            
+            messagebox.showinfo("Success", "API settings saved successfully.")
+        else:
+            messagebox.showerror("Error", "Failed to save API settings.")
+    
+    def toggle_api_settings(self):
+        """Enable/disable API controls based on checkbox state"""
+        enabled = self.api_enabled_var.get()
+        
+        # Habilitar/deshabilitar controles
+        self.api_base_url_entry.config(state=tk.NORMAL if enabled else tk.DISABLED)
+        self.ptt_on_entry.config(state=tk.NORMAL if enabled else tk.DISABLED)
+        self.ptt_off_entry.config(state=tk.NORMAL if enabled else tk.DISABLED)
+        
+        # Actualizar estado de los botones
+        if enabled:
+            self.api_test_btn.config(state=tk.NORMAL)
+            self.update_api_status("disconnected")
+        else:
+            self.api_test_btn.config(state=tk.DISABLED)
+            self.update_api_status("disabled")
+    
+    def load_api_settings(self):
+        """Load API settings from config"""
+        if 'api' in self.config:
+            api_config = self.config['api']
+            
+            # Obtener valores del archivo de configuración
+            base_url = api_config.get('base_url', '')
+            ptt_on_path = api_config.get('ptt_on_path', '')
+            ptt_off_path = api_config.get('ptt_off_path', '')
+            enabled = api_config.get('enabled', True)
+            
+            # Establecer valores en los campos
+            if base_url:
+                self.api_base_url_var.set(base_url)
+                self.api_base_url_entry.config(foreground='black')
+            else:
+                self.api_base_url_var.set("http://192.168.1.50")
+                self.api_base_url_entry.config(foreground='gray')
+                
+            if ptt_on_path:
+                self.api_ptt_on_var.set(ptt_on_path)
+                self.ptt_on_entry.config(foreground='black')
+            else:
+                self.api_ptt_on_var.set("/ptt_on")
+                self.ptt_on_entry.config(foreground='gray')
+                
+            if ptt_off_path:
+                self.api_ptt_off_var.set(ptt_off_path)
+                self.ptt_off_entry.config(foreground='black')
+            else:
+                self.api_ptt_off_var.set("/ptt_off")
+                self.ptt_off_entry.config(foreground='gray')
+            
+            # Establecer estado del checkbox
+            self.api_enabled_var.set(enabled)
+            self.toggle_api_settings()
+            
+            # Actualizar estado de la conexión
+            if base_url and ptt_on_path and ptt_off_path and enabled:
+                self.update_api_status("disconnected")
+            else:
+                self.update_api_status("disabled")
+    
+    def api_ptt_on(self):
+        """Send PTT ON command to API"""
+        if not hasattr(self, 'api_connection') or not self.api_connection.connected:
+            messagebox.showwarning("Not Connected", "Not connected to API. Please test the connection first.")
+            return
+        
+        try:
+            if self.api_connection.ptt_on():
+                self.api_status_var.set("Status: PTT ON")
+                self.api_ptt_on_btn.config(state=tk.DISABLED)
+                self.api_ptt_off_btn.config(state=tk.NORMAL)
+            else:
+                messagebox.showerror("Error", "Failed to turn PTT ON")
+        except Exception as e:
+            self.update_api_status("error")
+            messagebox.showerror("Error", f"Failed to turn PTT ON: {str(e)}")
+    
+    def api_ptt_off(self):
+        """Send PTT OFF command to API"""
+        if not hasattr(self, 'api_connection') or not self.api_connection.connected:
+            messagebox.showwarning("Not Connected", "Not connected to API. Please test the connection first.")
+            return
+        
+        try:
+            if self.api_connection.ptt_off():
+                self.api_status_var.set("Status: Connected")
+                self.api_ptt_on_btn.config(state=tk.NORMAL)
+                self.api_ptt_off_btn.config(state=tk.DISABLED)
+            else:
+                messagebox.showerror("Error", "Failed to turn PTT OFF")
+        except Exception as e:
+            self.update_api_status("error")
+            messagebox.showerror("Error", f"Failed to turn PTT OFF: {str(e)}")

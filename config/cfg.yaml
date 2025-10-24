@@ -1,3 +1,14 @@
+ami:
+  enabled: true
+  host: 127.0.0.10
+  password: admin
+  port: '5038'
+  username: admin
+api:
+  base_url: http://192.168.1.37
+  enabled: true
+  ptt_off_path: /ptt_off
+  ptt_on_path: /ptt_offf
 radio:
   cm108:
     cos_bit: '0x02'
@@ -22,5 +33,5 @@ radio:
 transmitting:
   pause: 1.0
   pre_roll_delay: 0.5
-  ptt_time: 0.5
+  ptt_time: 170.0
   rewind: 0.5
