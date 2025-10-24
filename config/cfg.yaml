@@ -1,3 +1,24 @@
+radio:
+  cm108:
+    cos_bit: '0x02'
+    device: 0d8c:0012  C-Media Electronics Inc. USB Audio Device
+    invert_cos: true
+    invert_ptt: false
+    pid: '0x0012'
+    ptt_bit: '0x01'
+    vid: '0x0d8c'
+  cos_bit: '1'
+  device: 0d8c:0012  C-Media Electronics Inc. USB Audio Device
+  invert_cos: false
+  invert_ptt: false
+  pid: '0x0012'
+  ptt_bit: '0'
+  serial:
+    baudrate: 9600
+    invert_cos: false
+    invert_ptt: false
+    port: COM1 - Communications Port (COM1)
+  vid: '0x0d8c'
 transmitting:
   pause: 1.0
   pre_roll_delay: 0.5
