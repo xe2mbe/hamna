@@ -947,15 +947,30 @@ class ConfigTab(ttk.Frame):
         username_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
         
         # Password
-        ttk.Label(ami_frame, text="Password:").grid(row=4, column=0, sticky=tk.W, pady=2, padx=5)
+        ttk.Label(ami_frame, text="Contraseña:").grid(row=4, column=0, sticky=tk.W, pady=2, padx=5)
+        
+        # Frame for password entry and toggle button
+        password_frame = ttk.Frame(ami_frame)
+        password_frame.grid(row=4, column=1, sticky=tk.W, padx=5, pady=2)
+        
         self.ami_password_var = tk.StringVar()
         self.ami_password_entry = ttk.Entry(
-            ami_frame, 
+            password_frame, 
             textvariable=self.ami_password_var, 
             show="*",
-            width=30
+            width=28
         )
-        self.ami_password_entry.grid(row=4, column=1, sticky=tk.W, padx=5, pady=2)
+        self.ami_password_entry.pack(side=tk.LEFT)
+        
+        # Toggle password visibility button
+        self.show_password = False
+        self.toggle_btn = ttk.Button(
+            password_frame,
+            text="👁️",
+            width=3,
+            command=self.toggle_password_visibility
+        )
+        self.toggle_btn.pack(side=tk.LEFT, padx=(5, 0))
         
         # Status
         self.ami_status_var = tk.StringVar(value="Status: Disconnected")
@@ -1148,21 +1163,35 @@ class ConfigTab(ttk.Frame):
         """Enable/disable AMI controls based on checkbox state"""
         state = tk.NORMAL if self.ami_enabled_var.get() else tk.DISABLED
         
-        # Habilitar/deshabilitar todos los controles de AMI
+        # Habilitar/deshabilitar controles de AMI (excepto el botón de guardar)
         for widget in [
             self.ami_host_var, self.ami_port_var, 
             self.ami_username_var, self.ami_password_var,
-            self.ami_test_btn, self.ami_save_btn
+            self.ami_test_btn
         ]:
             if hasattr(widget, 'widget'):  # Si es un widget
                 widget.widget.config(state=state)
             elif hasattr(widget, 'config'):  # Si es un Entry u otro widget
                 widget.config(state=state)
         
+        # El botón de guardar siempre debe estar habilitado
+        if hasattr(self, 'ami_save_btn'):
+            self.ami_save_btn.config(state=tk.NORMAL)
+        
         # Actualizar el estado de la conexión
         if not self.ami_enabled_var.get() and hasattr(self, 'ami_connection'):
             self.disconnect_ami()
             
+    def toggle_password_visibility(self):
+        """Toggle password visibility"""
+        self.show_password = not self.show_password
+        if self.show_password:
+            self.ami_password_entry.config(show="")
+            self.toggle_btn.config(text="🔒")
+        else:
+            self.ami_password_entry.config(show="*")
+            self.toggle_btn.config(text="👁️")
+        
     def load_ami_settings(self):
         """Load AMI settings from config"""
         if 'ami' in self.config:

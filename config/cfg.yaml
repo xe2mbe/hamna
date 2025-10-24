@@ -13,7 +13,7 @@ radio:
   cm108:
     cos_bit: '0x02'
     device: 0d8c:0012  C-Media Electronics Inc. USB Audio Device
-    invert_cos: true
+    invert_cos: false
     invert_ptt: false
     pid: '0x0012'
     ptt_bit: '0x01'
