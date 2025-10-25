@@ -35,3 +35,10 @@ transmitting:
   pre_roll_delay: 0.5
   ptt_time: 170.0
   rewind: 0.5
+tts:
+  azure:
+    region: southcentralus
+  engine: Azure Speech
+  format: mp3
+  rate: 100
+  voice: AbrilNeural (es-ES) - SynthesisVoiceGender.Female [] (es-ES-AbrilNeural)

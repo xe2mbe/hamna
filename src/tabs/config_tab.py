@@ -126,7 +126,12 @@ class ConfigTab(ttk.Frame):
         # Database Settings Tab
         db_frame = ttk.Frame(config_notebook, padding="10")
         self.setup_database_settings(db_frame)
-        config_notebook.add(db_frame, text="Base de Datos")      
+        config_notebook.add(db_frame, text="Base de Datos")
+        
+        # TTS Settings Tab
+        tts_frame = ttk.Frame(config_notebook, padding="10")
+        self.setup_tts_settings(tts_frame)
+        config_notebook.add(tts_frame, text="TTS")
         
         # Save/Cancel Buttons
         btn_frame = ttk.Frame(main_frame)
@@ -885,10 +890,730 @@ class ConfigTab(ttk.Frame):
         if path:
             self.db_path_var.set(path)
     
+    def setup_tts_settings(self, parent):
+        """Set up TTS (Text-to-Speech) settings section"""
+        # Main frame with padding
+        main_frame = ttk.Frame(parent)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # TTS Settings Frame
+        tts_frame = ttk.LabelFrame(main_frame, text="TTS Configuration", padding=10)
+        tts_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Engine selection
+        ttk.Label(tts_frame, text="Engine:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=5)
+        self.tts_engine_var = tk.StringVar()
+        self.tts_engine_combo = ttk.Combobox(
+            tts_frame,
+            textvariable=self.tts_engine_var,
+            values=["Azure Speech", "gTTS", "pyttsx3", "Edge TTS"],
+            state="readonly",
+            width=20
+        )
+        self.tts_engine_combo.grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
+        self.tts_engine_combo.set("Azure Speech")  # Default value
+        
+        # Format selection
+        ttk.Label(tts_frame, text="Format:").grid(row=0, column=2, sticky=tk.W, pady=5, padx=5)
+        self.tts_format_var = tk.StringVar()
+        self.tts_format_combo = ttk.Combobox(
+            tts_frame,
+            textvariable=self.tts_format_var,
+            values=["mp3", "wav"],
+            state="readonly",
+            width=10
+        )
+        self.tts_format_combo.grid(row=0, column=3, sticky=tk.W, pady=5, padx=5)
+        self.tts_format_combo.set("mp3")  # Default value
+        
+        # Voice selection
+        ttk.Label(tts_frame, text="Voice:").grid(row=1, column=0, sticky=tk.W, pady=5, padx=5)
+        self.tts_voice_var = tk.StringVar()
+        self.tts_voice_combo = ttk.Combobox(
+            tts_frame,
+            textvariable=self.tts_voice_var,
+            state="readonly",
+            width=30
+        )
+        self.tts_voice_combo.grid(row=1, column=1, columnspan=3, sticky=tk.EW, pady=5, padx=5)
+        
+        # Language filters frame
+        filter_frame = ttk.LabelFrame(tts_frame, text="Language Filters", padding=5)
+        filter_frame.grid(row=2, column=0, columnspan=4, sticky=tk.EW, pady=5, padx=5)
+        
+        # Language filter checkboxes
+        self.tts_filter_en_var = tk.BooleanVar(value=True)
+        self.tts_filter_es_var = tk.BooleanVar(value=True)
+        self.tts_filter_all_var = tk.BooleanVar(value=False)
+        
+        ttk.Checkbutton(
+            filter_frame, 
+            text="English (EN)", 
+            variable=self.tts_filter_en_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Checkbutton(
+            filter_frame, 
+            text="Spanish (ES)", 
+            variable=self.tts_filter_es_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Checkbutton(
+            filter_frame, 
+            text="All Languages", 
+            variable=self.tts_filter_all_var,
+            command=self.toggle_language_filters
+        ).pack(side=tk.LEFT, padx=10)
+        
+        # Rate control
+        ttk.Label(tts_frame, text="Speech Rate (%):").grid(row=3, column=0, sticky=tk.W, pady=5, padx=5)
+        self.tts_rate_var = tk.IntVar(value=100)  # 100% default rate
+        ttk.Scale(
+            tts_frame,
+            from_=50,
+            to=200,
+            orient=tk.HORIZONTAL,
+            variable=self.tts_rate_var,
+            command=lambda v: self.tts_rate_var.set(round(float(v)))
+        ).grid(row=3, column=1, columnspan=3, sticky=tk.EW, pady=5, padx=5)
+        
+        # Rate value display
+        self.tts_rate_display = ttk.Label(tts_frame, text="100%")
+        self.tts_rate_display.grid(row=3, column=3, sticky=tk.E, padx=5)
+        self.tts_rate_var.trace_add("write", self.update_rate_display)
+        
+        # Text input
+        ttk.Label(tts_frame, text="Test Text:").grid(row=4, column=0, sticky=tk.NW, pady=5, padx=5)
+        self.tts_text = tk.Text(tts_frame, width=50, height=5, wrap=tk.WORD)
+        self.tts_text.grid(row=4, column=1, columnspan=3, sticky=tk.EW, pady=5, padx=5)
+        
+        # Buttons frame
+        btn_frame = ttk.Frame(tts_frame)
+        btn_frame.grid(row=5, column=0, columnspan=4, pady=10)
+        
+        ttk.Button(
+            btn_frame,
+            text="Generate TTS",
+            command=self.generate_tts,
+            width=15
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(
+            btn_frame,
+            text="Preview",
+            command=self.preview_tts,
+            width=10
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(
+            btn_frame,
+            text="Stop",
+            command=self.stop_tts,
+            width=10,
+            state=tk.DISABLED
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(
+            btn_frame,
+            text="Save",
+            command=self.save_tts_settings,
+            width=10
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Azure Speech specific settings
+        self.azure_frame = ttk.LabelFrame(main_frame, text="Azure Speech Configuration", padding=10)
+        self.azure_frame.pack(fill=tk.X, pady=5)
+        
+        # Region
+        ttk.Label(self.azure_frame, text="Region:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=5)
+        self.azure_region_var = tk.StringVar()
+        ttk.Entry(
+            self.azure_frame,
+            textvariable=self.azure_region_var,
+            width=30
+        ).grid(row=0, column=1, sticky=tk.W, pady=5, padx=5)
+        
+        # Key (password field)
+        ttk.Label(self.azure_frame, text="Key:").grid(row=1, column=0, sticky=tk.W, pady=5, padx=5)
+        self.azure_key_var = tk.StringVar()
+        self.azure_key_entry = ttk.Entry(
+            self.azure_frame,
+            textvariable=self.azure_key_var,
+            show="*",
+            width=40
+        )
+        self.azure_key_entry.grid(row=1, column=1, sticky=tk.W, pady=5, padx=5)
+        
+        # Show/Hide key button
+        self.show_key_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            self.azure_frame,
+            text="Show",
+            variable=self.show_key_var,
+            command=self.toggle_key_visibility
+        ).grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
+        
+        # Save Azure settings button
+        ttk.Button(
+            self.azure_frame,
+            text="Save Azure Settings",
+            command=self.save_azure_settings,
+            width=20
+        ).grid(row=2, column=0, columnspan=3, pady=10)
+        
+        # Load saved settings
+        self.load_tts_settings()
+        
+        # Update voice list based on selected engine
+        self.tts_engine_combo.bind("<<ComboboxSelected>>", self.on_engine_changed)
+        self.update_voice_list()
+    
+    def toggle_key_visibility(self):
+        """Toggle visibility of the Azure key"""
+        if self.show_key_var.get():
+            self.azure_key_entry.config(show="")
+        else:
+            self.azure_key_entry.config(show="*")
+    
+    def on_engine_changed(self, event=None):
+        """Handle engine change event"""
+        self.update_voice_list()
+        
+        # Show/hide Azure settings based on selected engine
+        if self.tts_engine_var.get() == "Azure Speech":
+            self.azure_frame.pack(fill=tk.X, pady=5)
+        else:
+            self.azure_frame.pack_forget()
+    
+    def update_rate_display(self, *args):
+        """Update the rate display label"""
+        self.tts_rate_display.config(text=f"{self.tts_rate_var.get()}%")
+    
+    def toggle_language_filters(self):
+        """Toggle language filters based on 'All Languages' checkbox"""
+        if self.tts_filter_all_var.get():
+            self.tts_filter_en_var.set(True)
+            self.tts_filter_es_var.set(True)
+        self.update_voice_list()
+    
+    def update_voice_list(self, event=None):
+        """Update the voice list based on selected engine and filters"""
+        engine = self.tts_engine_var.get()
+        voices = []
+        
+        print(f"\n=== Updating voice list for engine: {engine} ===")
+        
+        try:
+            if engine == "Azure Speech":
+                # Get Azure credentials from environment variables
+                from dotenv import load_dotenv
+                import os
+                from pathlib import Path
+                
+                # Load .env file from config directory
+                env_path = Path("config") / ".env"
+                if env_path.exists():
+                    load_dotenv(dotenv_path=env_path, override=True)
+                
+                speech_key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
+                speech_region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
+                
+                if not speech_key or not speech_region:
+                    print("Warning: Azure credentials not found in .env file")
+                    voices = [("", "Configure Azure credentials in Settings")]
+                else:
+                    print(f"Fetching voices from Azure region: {speech_region}")
+                    try:
+                        import azure.cognitiveservices.speech as speechsdk
+                        
+                        # Create speech config
+                        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
+                        
+                        # Create speech synthesizer
+                        speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
+                        
+                        # Get voices from Azure
+                        result = speech_synthesizer.get_voices_async().get()
+                        
+                        if result.reason == speechsdk.ResultReason.VoicesListRetrieved:
+                            print(f"Successfully retrieved {len(result.voices)} voices from Azure")
+                            for voice in result.voices:
+                                # Only include neural voices for better quality
+                                if "neural" in voice.name.lower():
+                                    # Format: "Name (Locale) - Gender [Neural]"
+                                    display_name = f"{voice.short_name.split('-')[-1]} ({voice.locale}) - {voice.gender}"
+                                    if hasattr(voice, 'style_list') and voice.style_list:
+                                        display_name += f" [{', '.join(voice.style_list)}]"
+                                    voices.append((voice.short_name, display_name))
+                            
+                            # Sort voices by locale and name
+                            voices.sort(key=lambda x: (x[0].split('-')[0], x[1]))
+                            
+                            if not voices:
+                                print("Warning: No neural voices found in Azure TTS")
+                                voices = [("", "No neural voices available")]
+                        else:
+                            print(f"Error fetching voices from Azure: {result.reason}")
+                            voices = [("", f"Error: {result.reason}")]
+                            
+                    except Exception as e:
+                        print(f"Error fetching Azure voices: {str(e)}")
+                        voices = [("", f"Error: {str(e)}")]
+            
+            elif engine == "gTTS":
+                print("Loading gTTS languages")
+                try:
+                    from gtts.lang import tts_langs
+                    langs = tts_langs()
+                    voices = [(code, f"{name} ({code})") for code, name in sorted(langs.items())]
+                    print(f"Loaded {len(voices)} gTTS languages")
+                except Exception as e:
+                    print(f"Error loading gTTS languages: {str(e)}")
+                    voices = [("en", "English"), ("es", "Spanish")]
+            
+            elif engine == "pyttsx3":
+                print("Loading pyttsx3 voices")
+                try:
+                    import pyttsx3
+                    tts_engine = pyttsx3.init()
+                    voices = [(str(i), voice.name) for i, voice in enumerate(tts_engine.getProperty('voices'))]
+                    print(f"Loaded {len(voices)} pyttsx3 voices")
+                except Exception as e:
+                    print(f"Error loading pyttsx3 voices: {str(e)}")
+                    voices = [("0", "Default Voice")]
+            
+            elif engine == "Edge TTS":
+                print("Loading Edge TTS voices")
+                try:
+                    import edge_tts
+                    import asyncio
+                    
+                    async def get_voices():
+                        return await edge_tts.list_voices()
+                        
+                    edge_voices = asyncio.run(get_voices())
+                    voices = [(v['ShortName'], f"{v['ShortName']} - {v['Gender']}") 
+                             for v in edge_voices if 'neural' in v.get('VoiceType', '').lower()]
+                    print(f"Loaded {len(voices)} Edge TTS neural voices")
+                except Exception as e:
+                    print(f"Error loading Edge TTS voices: {str(e)}")
+                    voices = [("en-US-JennyNeural", "Jenny (en-US)")]
+            
+            # Debug output
+            print(f"\nAvailable voices ({len(voices)}):")
+            for i, (voice_id, voice_name) in enumerate(voices[:5]):  # Show first 5 for brevity
+                print(f"  {i+1}. {voice_name} ({voice_id})")
+            if len(voices) > 5:
+                print(f"  ... and {len(voices)-5} more")
+            
+            # Apply language filters if not showing all languages
+            if not self.tts_filter_all_var.get():
+                filtered_voices = []
+                for voice_id, voice_name in voices:
+                    lang_code = voice_id.split('-')[0] if '-' in voice_id else voice_id
+                    if self.tts_filter_en_var.get() and lang_code.startswith("en"):
+                        filtered_voices.append((voice_id, voice_name))
+                    elif self.tts_filter_es_var.get() and lang_code.startswith("es"):
+                        filtered_voices.append((voice_id, voice_name))
+                
+                print(f"\nFiltered voices ({len(filtered_voices)}):")
+                for i, (voice_id, voice_name) in enumerate(filtered_voices[:5]):
+                    print(f"  {i+1}. {voice_name} ({voice_id})")
+                if len(filtered_voices) > 5:
+                    print(f"  ... and {len(filtered_voices)-5} more")
+                    
+                voices = filtered_voices
+            
+            # Update the combobox
+            display_values = [f"{name} ({id})" for id, name in voices]
+            current_value = self.tts_voice_var.get()
+            
+            self.tts_voice_combo['values'] = display_values
+            
+            # Try to maintain the current selection if it exists in the new list
+            if current_value in display_values:
+                self.tts_voice_combo.set(current_value)
+            elif voices:
+                self.tts_voice_combo.current(0)
+                
+            print(f"Voice list updated. Current selection: {self.tts_voice_var.get()}")
+            
+        except Exception as e:
+            print(f"Error in update_voice_list: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback to default voices
+            self.tts_voice_combo['values'] = ["Error loading voices"]
+            self.tts_voice_combo.current(0)
+    
+    def generate_tts(self):
+        """Generate TTS audio with file dialog for saving"""
+        import os
+        import azure.cognitiveservices.speech as speechsdk
+        from dotenv import load_dotenv
+        from tkinter import filedialog
+        from datetime import datetime
+        
+        text = self.tts_text.get("1.0", tk.END).strip()
+        if not text:
+            messagebox.showwarning("No Text", "Por favor ingresa un texto para convertir a voz.")
+            return
+        
+        # Get selected voice and parse it
+        selected_voice = self.tts_voice_combo.get()
+        if not selected_voice:
+            messagebox.showwarning("No Voice", "Por favor selecciona una voz.")
+            return
+        
+        # Extract voice ID from the display string (format: "Name (id)")
+        try:
+            voice_id = selected_voice.split("(")[-1].rstrip(")")
+            print(f"Generating TTS with voice ID: {voice_id}")
+        except (IndexError, AttributeError):
+            voice_id = selected_voice
+        
+        # Get other parameters
+        rate = self.tts_rate_var.get()
+        output_format = self.tts_format_var.get()
+        
+        # Load Azure configuration
+        load_dotenv()
+        speech_key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
+        speech_region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
+        
+        if not speech_key or not speech_region:
+            messagebox.showerror("Error", "No se encontraron las credenciales de Azure TTS. Por favor configura las variables de entorno AZURE_SPEECH_KEY y AZURE_SPEECH_REGION.")
+            return
+        
+        try:
+            # Ask user where to save the file
+            default_filename = f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{output_format}"
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=f".{output_format}",
+                filetypes=[("Audio Files", f"*.{output_format}"), ("All Files", "*.*")],
+                initialfile=default_filename,
+                title="Guardar archivo de audio"
+            )
+            
+            # If user cancels the dialog
+            if not file_path:
+                print("Operación cancelada por el usuario")
+                return
+                
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            print(f"Generando TTS con voz: {voice_id}, velocidad: {rate}%, formato: {output_format}")
+            print(f"Guardando en: {file_path}")
+            
+            # Configure speech synthesis
+            speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
+            speech_config.speech_synthesis_voice_name = voice_id
+            
+            # Adjust speech rate if needed
+            if rate != 100:
+                # Get language code from voice ID (first part before -)
+                lang_code = voice_id.split('-')[0]
+                
+                # Create SSML with rate adjustment
+                ssml = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang_code}'>
+                    <voice name='{voice_id}'>
+                        <prosody rate='{rate}%'>{text}</prosody>
+                    </voice>
+                </speak>"""
+                
+                audio_config = speechsdk.audio.AudioOutputConfig(filename=file_path)
+                synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+                result = synthesizer.speak_ssml_async(ssml).get()
+            else:
+                audio_config = speechsdk.audio.AudioOutputConfig(filename=file_path)
+                synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+                result = synthesizer.speak_text_async(text).get()
+            
+            # Check the result
+            if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                messagebox.showinfo("TTS Generado", f"El audio se ha generado correctamente en:\n{file_path}")
+                # Ask if user wants to play the audio
+                if messagebox.askyesno("Reproducir audio", "¿Deseas reproducir el audio generado?"):
+                    self.play_audio(file_path)
+            else:
+                error_details = result.cancellation_details
+                error_msg = f"No se pudo generar el audio.\nRazón: {error_details.reason}"
+                if error_details.error_details:
+                    error_msg += f"\nDetalles: {error_details.error_details}"
+                messagebox.showerror("Error", error_msg)
+                
+        except Exception as e:
+            error_msg = f"Ocurrió un error al generar el TTS:\n{str(e)}"
+            print(error_msg)
+            messagebox.showerror("Error", error_msg)
+            import traceback
+            traceback.print_exc()
+    
+    def play_audio(self, audio_file):
+        """Reproducir el archivo de audio generado"""
+        import os
+        import platform
+        
+        try:
+            if platform.system() == 'Windows':
+                os.startfile(audio_file)
+            elif platform.system() == 'Darwin':  # macOS
+                os.system(f'afplay "{audio_file}"')
+            else:  # Linux
+                os.system(f'aplay "{audio_file}"')
+        except Exception as e:
+            print(f"No se pudo reproducir el archivo de audio: {str(e)}")
+    
+    def preview_tts(self):
+        """Preview TTS audio"""
+        import os
+        import tempfile
+        import azure.cognitiveservices.speech as speechsdk
+        from dotenv import load_dotenv
+        
+        text = self.tts_text.get("1.0", tk.END).strip()
+        if not text:
+            messagebox.showwarning("No Text", "Por favor ingresa un texto para previsualizar.")
+            return
+        
+        # Get selected voice and parse it
+        selected_voice = self.tts_voice_combo.get()
+        if not selected_voice:
+            messagebox.showwarning("No Voice", "Por favor selecciona una voz.")
+            return
+        
+        # Extract voice ID from the display string (format: "Display Name (voice-id)")
+        try:
+            # The voice ID is the part between the last parenthesis
+            voice_id = selected_voice.split('(')[-1].rstrip(')')
+            print(f"Previewing with voice ID: {voice_id}")
+        except (IndexError, AttributeError):
+            voice_id = selected_voice
+        
+        # Get other parameters
+        rate = self.tts_rate_var.get()
+        
+        # Load Azure configuration
+        load_dotenv()
+        speech_key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
+        speech_region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
+        
+        if not speech_key or not speech_region:
+            messagebox.showerror("Error", "No se encontraron las credenciales de Azure TTS. Por favor configura las variables de entorno AZURE_SPEECH_KEY y AZURE_SPEECH_REGION.")
+            return
+        
+        try:
+            # Configure speech config
+            speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
+            speech_config.speech_synthesis_voice_name = voice_id
+            
+            # Use default speaker for preview
+            audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
+            
+            # Create speech synthesizer
+            synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+            
+            # Adjust speech rate if needed
+            if rate != 100:
+                # Get language code from voice ID (first part before -)
+                lang_code = voice_id.split('-')[0]
+                
+                # Create SSML with rate adjustment
+                ssml = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang_code}'>
+                    <voice name='{voice_id}'>
+                        <prosody rate='{rate}%'>{text}</prosody>
+                    </voice>
+                </speak>"""
+                
+                # Synthesize using SSML
+                result = synthesizer.speak_ssml_async(ssml).get()
+            else:
+                # Synthesize plain text
+                result = synthesizer.speak_text_async(text).get()
+            
+            # Check the result
+            if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+                print("TTS preview completed successfully")
+            else:
+                error_details = result.cancellation_details
+                error_message = f"No se pudo generar la vista previa. Razón: {error_details.reason}"
+                if error_details.error_details:
+                    error_message += f"\nDetalles: {error_details.error_details}"
+                messagebox.showerror("Error", error_message)
+                
+        except Exception as e:
+            error_message = f"Error al generar la vista previa: {str(e)}"
+            print(error_message)
+            messagebox.showerror("Error", error_message)
+            import traceback
+            traceback.print_exc()
+    
+    def stop_tts(self):
+        """Stop TTS playback"""
+        print("Stopping TTS...")
+        # TODO: Implement TTS stop
+    
+    def save_tts_settings(self):
+        """Save TTS settings to config"""
+        if 'tts' not in self.config:
+            self.config['tts'] = {}
+        
+        # Save general TTS settings
+        self.config['tts'].update({
+            'engine': self.tts_engine_var.get(),
+            'format': self.tts_format_var.get(),
+            'voice': self.tts_voice_var.get(),
+            'rate': self.tts_rate_var.get()
+        })
+        
+        if self.save_config():
+            messagebox.showinfo("Success", "TTS settings saved successfully.")
+        else:
+            messagebox.showerror("Error", "Failed to save TTS settings.")
+    
+    def save_azure_settings(self):
+        """Save Azure Speech settings to .env file"""
+        region = self.azure_region_var.get().strip()
+        key = self.azure_key_var.get().strip()
+        
+        if not region or not key:
+            messagebox.showwarning("Missing Information", "Please enter both region and key for Azure Speech.")
+            return
+        
+        # Create config directory if it doesn't exist
+        config_dir = Path("config")
+        config_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write to .env file
+        env_path = config_dir / ".env"
+        try:
+            # Read existing .env file if it exists
+            env_vars = {}
+            if env_path.exists():
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            try:
+                                k, v = line.split('=', 1)
+                                env_vars[k] = v.strip('\'"')
+                            except ValueError:
+                                continue
+            
+            # Update Azure settings in .env
+            env_vars['AZURE_SPEECH_REGION'] = region
+            env_vars['AZURE_SPEECH_KEY'] = key
+            
+            # Also add alternative names for backward compatibility
+            env_vars['AZURE_TTS_REGION'] = region
+            env_vars['AZURE_TTS_KEY'] = key
+            
+            # Write back to .env file
+            with open(env_path, 'w') as f:
+                for k, v in env_vars.items():
+                    f.write(f"{k}={v}\n")
+            
+            # Update config - ensure we don't store sensitive data here
+            if 'tts' not in self.config:
+                self.config['tts'] = {}
+            if 'azure' in self.config['tts']:
+                # Remove region from config since it's now in .env
+                if 'region' in self.config['tts']['azure']:
+                    del self.config['tts']['azure']['region']
+                # If azure section is empty, remove it
+                if not self.config['tts']['azure']:
+                    del self.config['tts']['azure']
+            
+            if self.save_config():
+                messagebox.showinfo("Success", "Azure Speech settings saved successfully to .env file.")
+            else:
+                messagebox.showerror("Error", "Failed to update configuration file.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save Azure settings: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def load_tts_settings(self):
+        """Load TTS settings from config and .env"""
+        # Initialize Azure settings variables if they don't exist
+        if not hasattr(self, 'azure_region_var'):
+            self.azure_region_var = tk.StringVar()
+        if not hasattr(self, 'azure_key_var'):
+            self.azure_key_var = tk.StringVar()
+        
+        # First try to load from .env file (for security, credentials should be in .env)
+        try:
+            from dotenv import load_dotenv
+            env_path = Path("config") / ".env"
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path, override=True)
+                
+                # Get region and key from environment variables
+                region = os.getenv('AZURE_SPEECH_REGION') or os.getenv('AZURE_TTS_REGION')
+                key = os.getenv('AZURE_SPEECH_KEY') or os.getenv('AZURE_TTS_KEY')
+                
+                # Update UI with the values from .env
+                if region:
+                    self.azure_region_var.set(region)
+                if key:
+                    self.azure_key_var.set(key)
+        except Exception as e:
+            print(f"Warning: Could not load Azure settings from .env: {e}")
+        
+        # Then load other TTS settings from config
+        if 'tts' in self.config:
+            tts_config = self.config['tts']
+            
+            # Load general TTS settings
+            self.tts_engine_var.set(tts_config.get('engine', 'Azure Speech'))
+            self.tts_format_var.set(tts_config.get('format', 'mp3'))
+            self.tts_voice_var.set(tts_config.get('voice', ''))
+            self.tts_rate_var.set(tts_config.get('rate', 100))
+            
+            # Only use cfg.yaml for region if not already set from .env
+            if not self.azure_region_var.get() and 'azure' in tts_config and 'region' in tts_config['azure']:
+                self.azure_region_var.set(tts_config['azure']['region'])
+        
+        # Update UI based on loaded settings
+        self.on_engine_changed()
+        
+        # Ensure the key field shows the correct visibility state
+        if hasattr(self, 'key_visible') and hasattr(self, 'azure_key_entry'):
+            self.toggle_key_visibility()
+    
     def save_settings(self):
         """Save all settings"""
-        # TODO: Implement settings save logic
-        messagebox.showinfo("Guardar", "Configuración guardada correctamente.")
+        # Save TTS settings
+        if hasattr(self, 'tts_engine_var'):  # Check if TTS settings are initialized
+            if 'tts' not in self.config:
+                self.config['tts'] = {}
+            
+            # Save general TTS settings
+            self.config['tts'].update({
+                'engine': self.tts_engine_var.get(),
+                'format': self.tts_format_var.get(),
+                'voice': self.tts_voice_var.get(),
+                'rate': self.tts_rate_var.get()
+            })
+            
+            # Save Azure settings (without the key, which is stored in .env)
+            if hasattr(self, 'azure_region_var'):
+                if 'azure' not in self.config['tts']:
+                    self.config['tts']['azure'] = {}
+                self.config['tts']['azure']['region'] = self.azure_region_var.get()
+        
+        # Save the config to file
+        if self.save_config():
+            messagebox.showinfo("Guardar", "Configuración guardada correctamente.")
+            return True
+        else:
+            messagebox.showerror("Error", "No se pudo guardar la configuración.")
+            return False
     
     def apply_changes(self):
         """Apply changes without closing"""
