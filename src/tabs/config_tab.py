@@ -1257,10 +1257,11 @@ class ConfigTab(ttk.Frame):
                             for voice in result.voices:
                                 # Only include neural voices for better quality
                                 if "neural" in voice.name.lower():
-                                    # Format: "Name (Locale) - Gender [Neural]"
-                                    display_name = f"{voice.short_name.split('-')[-1]} ({voice.locale}) - {voice.gender}"
-                                    if hasattr(voice, 'style_list') and voice.style_list:
-                                        display_name += f" [{', '.join(voice.style_list)}]"
+                                    # Format: "Name - Language - Gender"
+                                    voice_name = voice.short_name.split('-')[-1]
+                                    language = voice.locale.split('-')[0].upper()
+                                    gender = str(voice.gender).split('.')[-1].capitalize()
+                                    display_name = f"{voice_name} - {language} - {gender}"
                                     voices.append((voice.short_name, display_name))
                             
                             # Sort voices by locale and name
