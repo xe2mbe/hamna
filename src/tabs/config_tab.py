@@ -1220,66 +1220,39 @@ class ConfigTab(ttk.Frame):
         ).grid(row=0, column=0, sticky=tk.W, pady=2, columnspan=3)
         
         # Base URL
-        ttk.Label(api_frame, text="Base URL:").grid(row=1, column=0, sticky=tk.W, pady=2, padx=5)
+        url_help_frame = ttk.Frame(api_frame)
+        url_help_frame.grid(row=1, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(5,0))
+        ttk.Label(url_help_frame, text="URL Base:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT)
+        ttk.Label(url_help_frame, text=" (ej: http://192.168.1.50)", foreground='gray').pack(side=tk.LEFT)
+        
         self.api_base_url_var = tk.StringVar()
-        self.api_base_url_entry = ttk.Entry(api_frame, textvariable=self.api_base_url_var, width=30)
-        self.api_base_url_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
-        self.api_base_url_entry.insert(0, "http://192.168.1.50")
-        self.api_base_url_entry.config(foreground='gray')
-        
-        def on_entry_click(event, entry_widget, default_text):
-            current_text = entry_widget.get()
-            if current_text == default_text and entry_widget.cget('foreground') == 'gray':
-                entry_widget.delete(0, tk.END)
-                entry_widget.config(foreground='black')
-                
-        def on_focus_out(event, entry_widget, default_text):
-            current_text = entry_widget.get()
-            if not current_text or current_text == default_text:
-                entry_widget.delete(0, tk.END)
-                entry_widget.insert(0, default_text)
-                entry_widget.config(foreground='gray')
-            else:
-                entry_widget.config(foreground='black')
-        
-        # Bind events for base URL
-        self.api_base_url_entry.bind('<FocusIn>', 
-                          lambda e: on_entry_click(e, self.api_base_url_entry, "http://192.168.1.50"))
-        self.api_base_url_entry.bind('<FocusOut>', 
-                          lambda e: on_focus_out(e, self.api_base_url_entry, "http://192.168.1.50"))
+        self.api_base_url_entry = ttk.Entry(api_frame, textvariable=self.api_base_url_var, width=40)
+        self.api_base_url_entry.grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(0,10))
         
         # PTT ON Path
-        ttk.Label(api_frame, text="PTT ON Path:").grid(row=2, column=0, sticky=tk.W, pady=2, padx=5)
-        self.api_ptt_on_var = tk.StringVar()
-        self.ptt_on_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_on_var, width=30)
-        self.ptt_on_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
-        self.ptt_on_entry.insert(0, "/ptt_on")
-        self.ptt_on_entry.config(foreground='gray')
+        ptt_on_help_frame = ttk.Frame(api_frame)
+        ptt_on_help_frame.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(5,0))
+        ttk.Label(ptt_on_help_frame, text="Ruta PTT ON:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT)
+        ttk.Label(ptt_on_help_frame, text=" (ej: /encender)", foreground='gray').pack(side=tk.LEFT)
         
-        # Bind events for PTT ON path
-        self.ptt_on_entry.bind('<FocusIn>', 
-                         lambda e: on_entry_click(e, self.ptt_on_entry, "/ptt_on"))
-        self.ptt_on_entry.bind('<FocusOut>', 
-                         lambda e: on_focus_out(e, self.ptt_on_entry, "/ptt_on"))
+        self.api_ptt_on_var = tk.StringVar()
+        self.ptt_on_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_on_var, width=40)
+        self.ptt_on_entry.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(0,10))
         
         # PTT OFF Path
-        ttk.Label(api_frame, text="PTT OFF Path:").grid(row=3, column=0, sticky=tk.W, pady=2, padx=5)
-        self.api_ptt_off_var = tk.StringVar()
-        self.ptt_off_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_off_var, width=30)
-        self.ptt_off_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2)
-        self.ptt_off_entry.insert(0, "/ptt_off")
-        self.ptt_off_entry.config(foreground='gray')
+        ptt_off_help_frame = ttk.Frame(api_frame)
+        ptt_off_help_frame.grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(5,0))
+        ttk.Label(ptt_off_help_frame, text="Ruta PTT OFF:", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT)
+        ttk.Label(ptt_off_help_frame, text=" (ej: /apagar)", foreground='gray').pack(side=tk.LEFT)
         
-        # Bind events for PTT OFF path
-        self.ptt_off_entry.bind('<FocusIn>', 
-                          lambda e: on_entry_click(e, self.ptt_off_entry, "/ptt_off"))
-        self.ptt_off_entry.bind('<FocusOut>', 
-                          lambda e: on_focus_out(e, self.ptt_off_entry, "/ptt_off"))
+        self.api_ptt_off_var = tk.StringVar()
+        self.ptt_off_entry = ttk.Entry(api_frame, textvariable=self.api_ptt_off_var, width=40)
+        self.ptt_off_entry.grid(row=6, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(0,10))
         
         # Status
         self.api_status_var = tk.StringVar(value="Status: Desconectado")
         status_frame = ttk.Frame(api_frame)
-        status_frame.grid(row=4, column=0, columnspan=2, pady=(10, 5), sticky=tk.W, padx=5)
+        status_frame.grid(row=7, column=0, columnspan=2, pady=(10, 5), sticky=tk.W, padx=5)
         
         # Status indicator (dot)
         self.api_status_canvas = tk.Canvas(
@@ -1292,19 +1265,17 @@ class ConfigTab(ttk.Frame):
         self.api_status_dot = self.api_status_canvas.create_oval(
             4, 4, 12, 12, fill="gray", outline=""
         )
-        
-        # Status label with fixed width
         status_label = ttk.Label(status_frame, textvariable=self.api_status_var, width=20, anchor='w')
         status_label.pack(side=tk.LEFT)
         
         # Buttons frame
         btn_frame = ttk.Frame(api_frame)
-        btn_frame.grid(row=5, column=0, columnspan=2, pady=(5, 0), sticky=tk.W, padx=5)
+        btn_frame.grid(row=8, column=0, columnspan=2, pady=(5, 0), sticky=tk.W, padx=5)
         
         # Test Connection Button
         self.api_test_btn = ttk.Button(
             btn_frame,
-            text="Test Connection",
+            text="Probar Conexión",
             command=self.test_api_connection,
             width=15
         )
@@ -1313,7 +1284,7 @@ class ConfigTab(ttk.Frame):
         # Save Button
         self.api_save_btn = ttk.Button(
             btn_frame,
-            text="Save",
+            text="Guardar",
             command=self.save_api_settings,
             width=10
         )
@@ -1340,6 +1311,7 @@ class ConfigTab(ttk.Frame):
         self.api_ptt_off_btn.pack(side=tk.LEFT)
         
         # Configure grid weights
+        api_frame.columnconfigure(0, weight=1)
         api_frame.columnconfigure(1, weight=0)  # Changed to 0 to prevent expanding
         
         # Load saved settings
@@ -1426,10 +1398,20 @@ class ConfigTab(ttk.Frame):
         if 'api' not in self.config:
             self.config['api'] = {}
         
-        # Get current values
+        # Get current values and validate they are not empty or just whitespace
         base_url = self.api_base_url_var.get().strip()
         ptt_on_path = self.api_ptt_on_var.get().strip()
         ptt_off_path = self.api_ptt_off_var.get().strip()
+        
+        # Check if any required field is empty
+        if not base_url or not ptt_on_path or not ptt_off_path:
+            messagebox.showerror("Error", "Por favor complete todos los campos de la configuración de API.")
+            return
+            
+        # Check if any required field is empty
+        if not base_url or not ptt_on_path or not ptt_off_path:
+            messagebox.showerror("Error", "Por favor complete todos los campos de la configuración de API.")
+            return
         
         # Update config
         self.config['api'].update({
@@ -1495,17 +1477,9 @@ class ConfigTab(ttk.Frame):
                 
             if ptt_on_path:
                 self.api_ptt_on_var.set(ptt_on_path)
-                self.ptt_on_entry.config(foreground='black')
-            else:
-                self.api_ptt_on_var.set("/ptt_on")
-                self.ptt_on_entry.config(foreground='gray')
                 
             if ptt_off_path:
                 self.api_ptt_off_var.set(ptt_off_path)
-                self.ptt_off_entry.config(foreground='black')
-            else:
-                self.api_ptt_off_var.set("/ptt_off")
-                self.ptt_off_entry.config(foreground='gray')
             
             # Establecer estado del checkbox
             self.api_enabled_var.set(enabled)

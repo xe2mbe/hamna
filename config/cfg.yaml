@@ -8,7 +8,7 @@ api:
   base_url: http://192.168.1.37
   enabled: true
   ptt_off_path: /ptt_off
-  ptt_on_path: /ptt_offf
+  ptt_on_path: /ptt_on
 radio:
   cm108:
     cos_bit: '0x02'
