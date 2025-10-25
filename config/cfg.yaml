@@ -36,9 +36,11 @@ transmitting:
   ptt_time: 170.0
   rewind: 0.5
 tts:
-  azure:
-    region: southcentralus
-  engine: Azure Speech
-  format: mp3
+  engine: edge tts
+  format: wav
+  language: Afrikaans (af) (af)
+  provider: edge tts
   rate: 100
-  voice: AbrilNeural (es-ES) - SynthesisVoiceGender.Female [] (es-ES-AbrilNeural)
+  use_env_credentials: true
+  voice: Jenny (en-US) (en-US-JennyNeural)
+  voice_id: 'Error: ''ConfigTab'' object has no attribute ''tts_filter_pt_var'' ()'

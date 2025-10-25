@@ -937,35 +937,122 @@ class ConfigTab(ttk.Frame):
         )
         self.tts_voice_combo.grid(row=1, column=1, columnspan=3, sticky=tk.EW, pady=5, padx=5)
         
-        # Language filters frame
-        filter_frame = ttk.LabelFrame(tts_frame, text="Language Filters", padding=5)
-        filter_frame.grid(row=2, column=0, columnspan=4, sticky=tk.EW, pady=5, padx=5)
+        # Language filters frame (initially hidden)
+        self.filter_frame = ttk.LabelFrame(tts_frame, text="Language Filters", padding=5)
+        self.filter_frame.grid(row=2, column=0, columnspan=4, sticky=tk.EW, pady=5, padx=5)
         
         # Language filter checkboxes
+        self.tts_filter_all_var = tk.BooleanVar(value=False)
         self.tts_filter_en_var = tk.BooleanVar(value=True)
         self.tts_filter_es_var = tk.BooleanVar(value=True)
-        self.tts_filter_all_var = tk.BooleanVar(value=False)
+        self.tts_filter_pt_var = tk.BooleanVar(value=False)
+        self.tts_filter_fr_var = tk.BooleanVar(value=False)
+        self.tts_filter_de_var = tk.BooleanVar(value=False)
+        self.tts_filter_it_var = tk.BooleanVar(value=False)
+        self.tts_filter_ja_var = tk.BooleanVar(value=False)
+        self.tts_filter_ko_var = tk.BooleanVar(value=False)
+        self.tts_filter_ru_var = tk.BooleanVar(value=False)
+        self.tts_filter_zh_var = tk.BooleanVar(value=False)
         
-        ttk.Checkbutton(
-            filter_frame, 
-            text="English (EN)", 
-            variable=self.tts_filter_en_var,
-            command=self.update_voice_list
-        ).pack(side=tk.LEFT, padx=10)
+        # Create a frame for language filter checkboxes with a scrollbar
+        filter_canvas = tk.Canvas(self.filter_frame, height=30)
+        scrollbar = ttk.Scrollbar(self.filter_frame, orient="horizontal", command=filter_canvas.xview)
+        self.filter_checkboxes_frame = ttk.Frame(filter_canvas)
         
-        ttk.Checkbutton(
-            filter_frame, 
-            text="Spanish (ES)", 
-            variable=self.tts_filter_es_var,
-            command=self.update_voice_list
-        ).pack(side=tk.LEFT, padx=10)
+        filter_canvas.configure(xscrollcommand=scrollbar.set)
+        filter_canvas.create_window((0, 0), window=self.filter_checkboxes_frame, anchor='nw')
         
+        def on_frame_configure(event):
+            filter_canvas.configure(scrollregion=filter_canvas.bbox("all"))
+        
+        self.filter_checkboxes_frame.bind("<Configure>", on_frame_configure)
+        
+        # Create checkboxes for each language
         ttk.Checkbutton(
-            filter_frame, 
-            text="All Languages", 
+            self.filter_checkboxes_frame,
+            text="All Languages",
             variable=self.tts_filter_all_var,
             command=self.toggle_language_filters
-        ).pack(side=tk.LEFT, padx=10)
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Separator(self.filter_checkboxes_frame, orient='vertical').pack(side=tk.LEFT, fill='y', padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="English (EN)",
+            variable=self.tts_filter_en_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Spanish (ES)",
+            variable=self.tts_filter_es_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Portuguese (PT)",
+            variable=self.tts_filter_pt_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="French (FR)",
+            variable=self.tts_filter_fr_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="German (DE)",
+            variable=self.tts_filter_de_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Italian (IT)",
+            variable=self.tts_filter_it_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Japanese (JA)",
+            variable=self.tts_filter_ja_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Korean (KO)",
+            variable=self.tts_filter_ko_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Russian (RU)",
+            variable=self.tts_filter_ru_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Checkbutton(
+            self.filter_checkboxes_frame,
+            text="Chinese (ZH)",
+            variable=self.tts_filter_zh_var,
+            command=self.update_voice_list
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Pack the canvas and scrollbar
+        filter_canvas.pack(side=tk.TOP, fill=tk.X, expand=True)
+        scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Initially hide the filter frame
+        self.filter_frame.grid_remove()
         
         # Rate control
         ttk.Label(tts_frame, text="Speech Rate (%):").grid(row=3, column=0, sticky=tk.W, pady=5, padx=5)
@@ -1061,13 +1148,16 @@ class ConfigTab(ttk.Frame):
             text="Save Azure Settings",
             command=self.save_azure_settings,
             width=20
-        ).grid(row=2, column=0, columnspan=3, pady=10)
+        ).grid(row=1, column=3, sticky=tk.W, pady=5, padx=5)
         
         # Load saved settings
         self.load_tts_settings()
         
-        # Update voice list based on selected engine
-        self.tts_engine_combo.bind("<<ComboboxSelected>>", self.on_engine_changed)
+        # Bind engine change event
+        self.tts_engine_combo.bind('<<ComboboxSelected>>', self.on_engine_changed)
+        
+        # Initial update of UI based on default engine
+        self.on_engine_changed()
         self.update_voice_list()
     
     def toggle_key_visibility(self):
@@ -1079,13 +1169,30 @@ class ConfigTab(ttk.Frame):
     
     def on_engine_changed(self, event=None):
         """Handle engine change event"""
-        self.update_voice_list()
+        engine = self.tts_engine_var.get()
         
-        # Show/hide Azure settings based on selected engine
-        if self.tts_engine_var.get() == "Azure Speech":
+        # Show/hide language filters based on selected engine
+        if engine == 'Azure Speech':
+            self.filter_frame.grid()
             self.azure_frame.pack(fill=tk.X, pady=5)
+            # Reset to a default Azure voice if needed
+            current_voice = self.tts_voice_var.get()
+            if not current_voice or '-' not in current_voice:
+                self.tts_voice_var.set("es-ES-AbrilNeural")
         else:
+            self.filter_frame.grid_remove()
             self.azure_frame.pack_forget()
+            # Reset to a default voice for other engines if current voice is not compatible
+            current_voice = self.tts_voice_var.get()
+            if engine == 'gTTS' and (not current_voice or len(current_voice) > 5):
+                self.tts_voice_var.set("es")
+            elif engine == 'Edge TTS' and (not current_voice or len(current_voice.split('-')) < 3):
+                self.tts_voice_var.set("es-ES-ElviraNeural")
+            elif engine == 'pyttsx3' and (not current_voice or current_voice.isupper()):
+                self.tts_voice_var.set("spanish")
+        
+        # Update the voice list with the new engine
+        self.update_voice_list()
     
     def update_rate_display(self, *args):
         """Update the rate display label"""
@@ -1093,9 +1200,17 @@ class ConfigTab(ttk.Frame):
     
     def toggle_language_filters(self):
         """Toggle language filters based on 'All Languages' checkbox"""
-        if self.tts_filter_all_var.get():
-            self.tts_filter_en_var.set(True)
-            self.tts_filter_es_var.set(True)
+        all_selected = self.tts_filter_all_var.get()
+        self.tts_filter_en_var.set(all_selected)
+        self.tts_filter_es_var.set(all_selected)
+        self.tts_filter_pt_var.set(all_selected)
+        self.tts_filter_fr_var.set(all_selected)
+        self.tts_filter_de_var.set(all_selected)
+        self.tts_filter_it_var.set(all_selected)
+        self.tts_filter_ja_var.set(all_selected)
+        self.tts_filter_ko_var.set(all_selected)
+        self.tts_filter_ru_var.set(all_selected)
+        self.tts_filter_zh_var.set(all_selected)
         self.update_voice_list()
     
     def update_voice_list(self, event=None):
@@ -1151,6 +1266,35 @@ class ConfigTab(ttk.Frame):
                             # Sort voices by locale and name
                             voices.sort(key=lambda x: (x[0].split('-')[0], x[1]))
                             
+                            # Apply language filters if not showing all languages
+                            if not self.tts_filter_all_var.get():
+                                filtered_voices = []
+                                for voice_id, voice_name in voices:
+                                    # Extract language code (first part of voice_id)
+                                    lang_code = voice_id.split('-')[0] if '-' in voice_id else voice_id
+                                    
+                                    # Check if voice matches any of the selected filters
+                                    if (self.tts_filter_en_var.get() and lang_code.startswith("en")) or \
+                                       (self.tts_filter_es_var.get() and lang_code.startswith("es")) or \
+                                       (self.tts_filter_pt_var.get() and lang_code.startswith("pt")) or \
+                                       (self.tts_filter_fr_var.get() and lang_code.startswith("fr")) or \
+                                       (self.tts_filter_de_var.get() and lang_code.startswith("de")) or \
+                                       (self.tts_filter_it_var.get() and lang_code.startswith("it")) or \
+                                       (self.tts_filter_ja_var.get() and lang_code.startswith("ja")) or \
+                                       (self.tts_filter_ko_var.get() and lang_code.startswith("ko")) or \
+                                       (self.tts_filter_ru_var.get() and lang_code.startswith("ru")) or \
+                                       (self.tts_filter_zh_var.get() and (lang_code.startswith("zh") or lang_code.startswith("cmn"))):
+                                        filtered_voices.append((voice_id, voice_name))
+                                
+                                if filtered_voices:  # Only apply filters if we have matches
+                                    print(f"\nFiltered voices ({len(filtered_voices)}):")
+                                    for i, (voice_id, voice_name) in enumerate(filtered_voices[:5]):
+                                        print(f"  {i+1}. {voice_name} ({voice_id})")
+                                    if len(filtered_voices) > 5:
+                                        print(f"  ... and {len(filtered_voices)-5} more")
+                                    
+                                    voices = filtered_voices
+                            
                             if not voices:
                                 print("Warning: No neural voices found in Azure TTS")
                                 voices = [("", "No neural voices available")]
@@ -1197,6 +1341,36 @@ class ConfigTab(ttk.Frame):
                     voices = [(v['ShortName'], f"{v['ShortName']} - {v['Gender']}") 
                              for v in edge_voices if 'neural' in v.get('VoiceType', '').lower()]
                     print(f"Loaded {len(voices)} Edge TTS neural voices")
+                    
+                    # Apply language filters for Edge TTS if not showing all languages
+                    if not self.tts_filter_all_var.get():
+                        filtered_voices = []
+                        for voice_id, voice_name in voices:
+                            # Extract language code (first part of voice_id)
+                            lang_code = voice_id.split('-')[0] if '-' in voice_id else voice_id
+                            
+                            # Check if voice matches any of the selected filters
+                            if (self.tts_filter_en_var.get() and lang_code.startswith("en")) or \
+                               (self.tts_filter_es_var.get() and lang_code.startswith("es")) or \
+                               (self.tts_filter_pt_var.get() and lang_code.startswith("pt")) or \
+                               (self.tts_filter_fr_var.get() and lang_code.startswith("fr")) or \
+                               (self.tts_filter_de_var.get() and lang_code.startswith("de")) or \
+                               (self.tts_filter_it_var.get() and lang_code.startswith("it")) or \
+                               (self.tts_filter_ja_var.get() and lang_code.startswith("ja")) or \
+                               (self.tts_filter_ko_var.get() and lang_code.startswith("ko")) or \
+                               (self.tts_filter_ru_var.get() and lang_code.startswith("ru")) or \
+                               (self.tts_filter_zh_var.get() and (lang_code.startswith("zh") or lang_code.startswith("cmn"))):
+                                filtered_voices.append((voice_id, voice_name))
+                        
+                        if filtered_voices:  # Only apply filters if we have matches
+                            print(f"\nFiltered voices ({len(filtered_voices)}):")
+                            for i, (voice_id, voice_name) in enumerate(filtered_voices[:5]):
+                                print(f"  {i+1}. {voice_name} ({voice_id})")
+                            if len(filtered_voices) > 5:
+                                print(f"  ... and {len(filtered_voices)-5} more")
+                            
+                            voices = filtered_voices
+                            
                 except Exception as e:
                     print(f"Error loading Edge TTS voices: {str(e)}")
                     voices = [("en-US-JennyNeural", "Jenny (en-US)")]
@@ -1207,24 +1381,6 @@ class ConfigTab(ttk.Frame):
                 print(f"  {i+1}. {voice_name} ({voice_id})")
             if len(voices) > 5:
                 print(f"  ... and {len(voices)-5} more")
-            
-            # Apply language filters if not showing all languages
-            if not self.tts_filter_all_var.get():
-                filtered_voices = []
-                for voice_id, voice_name in voices:
-                    lang_code = voice_id.split('-')[0] if '-' in voice_id else voice_id
-                    if self.tts_filter_en_var.get() and lang_code.startswith("en"):
-                        filtered_voices.append((voice_id, voice_name))
-                    elif self.tts_filter_es_var.get() and lang_code.startswith("es"):
-                        filtered_voices.append((voice_id, voice_name))
-                
-                print(f"\nFiltered voices ({len(filtered_voices)}):")
-                for i, (voice_id, voice_name) in enumerate(filtered_voices[:5]):
-                    print(f"  {i+1}. {voice_name} ({voice_id})")
-                if len(filtered_voices) > 5:
-                    print(f"  ... and {len(filtered_voices)-5} more")
-                    
-                voices = filtered_voices
             
             # Update the combobox
             display_values = [f"{name} ({id})" for id, name in voices]
@@ -1237,14 +1393,30 @@ class ConfigTab(ttk.Frame):
                 self.tts_voice_combo.set(current_value)
             elif voices:
                 self.tts_voice_combo.current(0)
-                
-            print(f"Voice list updated. Current selection: {self.tts_voice_var.get()}")
-            
+                    
         except Exception as e:
             print(f"Error in update_voice_list: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            
+            # Fallback to default voices
+            self.tts_voice_combo['values'] = ["Error loading voices"]
+            self.tts_voice_combo.current(0)
+        
+        # Debug output
+        print(f"\nAvailable voices ({len(voices)}):")
+        for i, (voice_id, voice_name) in enumerate(voices[:5]):  # Show first 5 for brevity
+            print(f"  {i+1}. {voice_name} ({voice_id})")
+        if len(voices) > 5:
+            print(f"  ... and {len(voices)-5} more")
+        
+        # Update the combobox
+        display_values = [f"{name} ({id})" for id, name in voices]
+        current_value = self.tts_voice_var.get()
+        
+        self.tts_voice_combo['values'] = display_values
+        
+        # Try to maintain the current selection if it exists in the new list
+        if current_value in display_values:
+            self.tts_voice_combo.set(current_value)
+        elif voices:
             # Fallback to default voices
             self.tts_voice_combo['values'] = ["Error loading voices"]
             self.tts_voice_combo.current(0)
@@ -1462,13 +1634,38 @@ class ConfigTab(ttk.Frame):
         if 'tts' not in self.config:
             self.config['tts'] = {}
         
+        engine = self.tts_engine_var.get().lower()
+        
         # Save general TTS settings
         self.config['tts'].update({
-            'engine': self.tts_engine_var.get(),
+            'provider': engine,  # Keep 'provider' for backward compatibility
+            'engine': engine,
             'format': self.tts_format_var.get(),
-            'voice': self.tts_voice_var.get(),
             'rate': self.tts_rate_var.get()
         })
+        
+        # Save engine-specific settings
+        if engine == 'azure speech':
+            # For Azure, we only save the voice_id in cfg.yaml
+            # Credentials are handled separately in .env
+            self.config['tts'].update({
+                'voice_id': self.tts_voice_var.get(),
+                # Add a marker that we're using .env for credentials
+                'use_env_credentials': True
+            })
+            
+        elif engine == 'gtts':
+            self.config['tts'].update({
+                'language': self.tts_voice_var.get()
+            })
+        elif engine == 'pyttsx3':
+            self.config['tts'].update({
+                'voice': self.tts_voice_var.get()
+            })
+        elif engine == 'edge tts':
+            self.config['tts'].update({
+                'voice': self.tts_voice_var.get()
+            })
         
         if self.save_config():
             messagebox.showinfo("Success", "TTS settings saved successfully.")
@@ -1494,7 +1691,7 @@ class ConfigTab(ttk.Frame):
             # Read existing .env file if it exists
             env_vars = {}
             if env_path.exists():
-                with open(env_path, 'r') as f:
+                with open(env_path, 'r', encoding='utf-8') as f:
                     for line in f:
                         line = line.strip()
                         if line and not line.startswith('#'):
@@ -1512,26 +1709,24 @@ class ConfigTab(ttk.Frame):
             env_vars['AZURE_TTS_REGION'] = region
             env_vars['AZURE_TTS_KEY'] = key
             
-            # Write back to .env file
-            with open(env_path, 'w') as f:
+            # Write back to .env file with UTF-8 encoding
+            with open(env_path, 'w', encoding='utf-8') as f:
                 for k, v in env_vars.items():
-                    f.write(f"{k}={v}\n")
+                    # Skip any Azure settings that might be in the config file
+                    if k not in ['azure_region', 'azure_key', 'azure']:
+                        f.write(f"{k}={v}\n")
             
-            # Update config - ensure we don't store sensitive data here
-            if 'tts' not in self.config:
-                self.config['tts'] = {}
-            if 'azure' in self.config['tts']:
-                # Remove region from config since it's now in .env
-                if 'region' in self.config['tts']['azure']:
-                    del self.config['tts']['azure']['region']
-                # If azure section is empty, remove it
-                if not self.config['tts']['azure']:
-                    del self.config['tts']['azure']
+            # Clean up any Azure credentials from config file
+            if 'tts' in self.config:
+                # Remove any Azure credentials from config
+                for key in ['azure_region', 'azure_key', 'azure']:
+                    if key in self.config['tts']:
+                        del self.config['tts'][key]
+                
+                # Save the cleaned config
+                self.save_config()
             
-            if self.save_config():
-                messagebox.showinfo("Success", "Azure Speech settings saved successfully to .env file.")
-            else:
-                messagebox.showerror("Error", "Failed to update configuration file.")
+            messagebox.showinfo("Success", "Azure Speech settings saved successfully to .env file.")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save Azure settings: {str(e)}")
@@ -1546,7 +1741,7 @@ class ConfigTab(ttk.Frame):
         if not hasattr(self, 'azure_key_var'):
             self.azure_key_var = tk.StringVar()
         
-        # First try to load from .env file (for security, credentials should be in .env)
+        # Load Azure credentials from .env
         try:
             from dotenv import load_dotenv
             env_path = Path("config") / ".env"
@@ -1569,10 +1764,31 @@ class ConfigTab(ttk.Frame):
         if 'tts' in self.config:
             tts_config = self.config['tts']
             
-            # Load general TTS settings
-            self.tts_engine_var.set(tts_config.get('engine', 'Azure Speech'))
+            # Load general TTS settings with backward compatibility
+            engine = tts_config.get('engine', tts_config.get('provider', 'Azure Speech'))
+            self.tts_engine_var.set(engine)
             self.tts_format_var.set(tts_config.get('format', 'mp3'))
-            self.tts_voice_var.set(tts_config.get('voice', ''))
+            self.tts_rate_var.set(tts_config.get('rate', 100))
+            
+            # Load engine-specific voice settings
+            if engine.lower() == 'azure speech':
+                self.tts_voice_var.set(tts_config.get('voice_id', 'es-ES-AbrilNeural'))
+                
+                # If we have Azure credentials in .env, ensure they're not in config
+                if self.azure_region_var.get() and self.azure_key_var.get():
+                    # Remove any credentials that might be in the config
+                    for key in ['azure_region', 'azure_key', 'azure']:
+                        if key in tts_config:
+                            del tts_config[key]
+                
+            elif engine.lower() == 'gtts':
+                self.tts_voice_var.set(tts_config.get('language', 'es'))
+            elif engine.lower() == 'pyttsx3':
+                self.tts_voice_var.set(tts_config.get('voice', 'spanish'))
+            elif engine.lower() == 'edge tts':
+                self.tts_voice_var.set(tts_config.get('voice', 'es-ES-ElviraNeural'))
+            else:
+                self.tts_voice_var.set(tts_config.get('voice', ''))
             self.tts_rate_var.set(tts_config.get('rate', 100))
             
             # Only use cfg.yaml for region if not already set from .env
