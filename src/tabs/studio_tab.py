@@ -182,43 +182,105 @@ class StudioTab(ttk.Frame):
     def setup_ui(self):
         """Set up the studio tab UI"""
         # Main container with padding
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         
-        # Left panel - Eventos section
-        left_panel = ttk.LabelFrame(main_frame, text="Sección Eventos", padding="10")
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=False, padx=(0, 10), anchor='n')
+        # Create paned window for resizable panels
+        paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
+        paned.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
         
-        # Configure grid weights for left panel
-        left_panel.columnconfigure(1, weight=1)
+        # Left panel - Event list
+        left_panel = ttk.Frame(paned, padding="5")
+        paned.add(left_panel, weight=1)
+        
+        # Right panel - Event details and sections
+        right_panel = ttk.Frame(paned)
+        paned.add(right_panel, weight=3)
+        
+        # Configure right panel grid
+        right_panel.grid_columnconfigure(0, weight=1)
+        right_panel.grid_rowconfigure(1, weight=1)
+        
+        # Top section - Event details
+        event_frame = ttk.LabelFrame(right_panel, text="Detalles del Evento", padding="5")
+        event_frame.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
+        
+        # Event name
+        ttk.Label(event_frame, text="Nombre:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        self.event_name_var = tk.StringVar()
+        ttk.Entry(event_frame, textvariable=self.event_name_var, width=40).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        
+        # Event type
+        ttk.Label(event_frame, text="Tipo:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        self.event_type_combo = ttk.Combobox(event_frame, state='readonly', width=37)
+        self.event_type_combo.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+        self.load_event_types()
+        
+        # Buttons frame
+        btn_frame = ttk.Frame(event_frame)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(btn_frame, text="Nuevo", command=self.clear_event_form).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Guardar", command=self.save_event).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Eliminar", command=self.delete_selected_event).pack(side=tk.LEFT, padx=5)
+        
+        # Configure columns to expand
+        event_frame.columnconfigure(1, weight=1)
+        
+        # Bottom section - Sections notebook
+        self.sections_notebook = ttk.Notebook(right_panel)
+        self.sections_notebook.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        
+        # TTS Tab
+        self.tts_tab = ttk.Frame(self.sections_notebook)
+        self.sections_notebook.add(self.tts_tab, text='TTS')
+        self.setup_tts_tab()
+        
+        # Audio Tab
+        self.audio_tab = ttk.Frame(self.sections_notebook)
+        self.sections_notebook.add(self.audio_tab, text='Audio')
+        self.setup_audio_tab()
+        
+        # Efectos Tab
+        self.effects_tab = ttk.Frame(self.sections_notebook)
+        self.sections_notebook.add(self.effects_tab, text='Efectos')
+        self.setup_effects_tab()
+        
+        # Create ID Evento frame
+        id_frame = ttk.LabelFrame(left_panel, text="ID Evento", padding="5")
+        id_frame.grid(row=0, column=0, columnspan=4, sticky='ew', padx=5, pady=5)
         
         # Event ID
-        ttk.Label(left_panel, text="ID Evento:").grid(row=0, column=0, sticky=tk.W, pady=2)
+        ttk.Label(id_frame, text="ID:").grid(row=0, column=0, sticky='w', pady=2, padx=5)
         self.event_id_var = tk.StringVar()
-        ttk.Entry(left_panel, textvariable=self.event_id_var, state='readonly', width=10).grid(row=0, column=1, sticky=tk.W, pady=2, padx=5)
+        ttk.Entry(id_frame, textvariable=self.event_id_var, state='readonly', width=10).grid(row=0, column=1, sticky='w', pady=2)
+        
+        # Create Event Details frame
+        event_details_frame = ttk.LabelFrame(left_panel, text="Detalles del Evento", padding="5")
+        event_details_frame.grid(row=1, column=0, columnspan=4, sticky='ew', padx=5, pady=5)
         
         # Event Name
-        ttk.Label(left_panel, text="Nombre Evento:").grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(event_details_frame, text="Nombre:").grid(row=0, column=0, sticky='w', pady=2, padx=5)
         self.event_name_var = tk.StringVar()
-        ttk.Entry(left_panel, textvariable=self.event_name_var, width=30).grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=2, padx=5)
+        ttk.Entry(event_details_frame, textvariable=self.event_name_var, width=30).grid(row=0, column=1, columnspan=3, sticky='w', pady=2)
         
         # Event Type
-        ttk.Label(left_panel, text="Tipo Evento:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(event_details_frame, text="Tipo:").grid(row=1, column=0, sticky='w', pady=2, padx=5)
         self.event_type_var = tk.StringVar()
         self.event_type_combo = ttk.Combobox(
-            left_panel, 
+            event_details_frame, 
             textvariable=self.event_type_var,
             state='readonly',
             width=27
         )
-        self.event_type_combo.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=2, padx=5)
+        self.event_type_combo.grid(row=1, column=1, columnspan=3, sticky='w', pady=2)
         
         # Load event types
         self.load_event_types()
         
         # Buttons frame
-        button_frame = ttk.Frame(left_panel)
-        button_frame.grid(row=3, column=0, columnspan=3, pady=5, sticky='ew')
+        button_frame = ttk.Frame(event_details_frame)
+        button_frame.grid(row=2, column=0, columnspan=4, pady=5, sticky='ew')
         
         # Save button
         ttk.Button(
@@ -237,15 +299,15 @@ class StudioTab(ttk.Frame):
         ).pack(side=tk.LEFT, padx=2)
         
         # Events list
-        ttk.Label(left_panel, text="Eventos:").grid(row=4, column=0, columnspan=3, sticky='w', pady=(10, 5))
+        ttk.Label(left_panel, text="Eventos:").grid(row=2, column=0, columnspan=4, sticky='w', pady=(10, 5), padx=5)
         
         # Create a frame for the listbox and scrollbar
         list_frame = ttk.Frame(left_panel)
-        list_frame.grid(row=5, column=0, columnspan=3, sticky='nsew')
+        list_frame.grid(row=3, column=0, columnspan=4, sticky='nsew', padx=5)
         
         # Add scrollbar
         scrollbar = ttk.Scrollbar(list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar.grid(row=0, column=1, sticky='ns')
         
         # Create listbox
         self.events_listbox = tk.Listbox(
@@ -254,8 +316,12 @@ class StudioTab(ttk.Frame):
             height=10,
             width=40
         )
-        self.events_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.events_listbox.grid(row=0, column=0, sticky='nsew')
         scrollbar.config(command=self.events_listbox.yview)
+        
+        # Configure grid weights
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
         
         # Bind double click to edit
         self.events_listbox.bind('<Double-1>', self.on_event_select)
@@ -269,48 +335,69 @@ class StudioTab(ttk.Frame):
             text="Editar",
             command=self.edit_selected_event,
             width=10
-        ).pack(side=tk.LEFT, padx=2)
+        ).grid(row=0, column=0, padx=2)
         
         ttk.Button(
             btn_frame,
             text="Eliminar",
             command=self.delete_selected_event,
             width=10
-        ).pack(side=tk.LEFT, padx=2)
+        ).grid(row=0, column=1, padx=2)
+        
+        # Configure button frame grid
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
         
         # Right panel - Audio controls
-        right_panel = ttk.Frame(main_frame)
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
+        right_panel = ttk.Frame(self)
+        right_panel.grid(row=0, column=1, sticky='nsew', padx=(10, 0))
+        
+        # Configure grid weights for the main container
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
         
         # Audio waveform display (moved to right panel)
         waveform_frame = ttk.LabelFrame(right_panel, text="Onda de audio", padding="5")
-        waveform_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        waveform_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 10))
         
         # Placeholder for waveform visualization
         self.waveform_canvas = tk.Canvas(waveform_frame, bg='#f0f0f0', height=150)
-        self.waveform_canvas.pack(fill=tk.BOTH, expand=True)
+        self.waveform_canvas.grid(row=0, column=0, sticky='nsew')
+        
+        # Configure grid weights for waveform frame
+        waveform_frame.grid_rowconfigure(0, weight=1)
+        waveform_frame.grid_columnconfigure(0, weight=1)
+        
         self.draw_waveform_placeholder(self.waveform_canvas)
         
         # Transport controls (moved to right panel)
         transport_frame = ttk.Frame(right_panel)
-        transport_frame.pack(fill=tk.X, pady=(0, 10))
+        transport_frame.grid(row=1, column=0, sticky='ew', pady=(0, 10))
+        
+        # Configure grid weights for right panel
+        right_panel.grid_rowconfigure(0, weight=1)
+        right_panel.grid_rowconfigure(1, weight=0)
+        right_panel.grid_columnconfigure(0, weight=1)
         
         # Transport buttons
-        ttk.Button(transport_frame, text="|◀", width=5, command=self.skip_backward).pack(side=tk.LEFT, padx=2)
-        ttk.Button(transport_frame, text="◀▶", width=5, command=self.play).pack(side=tk.LEFT, padx=2)
-        ttk.Button(transport_frame, text="■", width=5, command=self.stop).pack(side=tk.LEFT, padx=2)
-        ttk.Button(transport_frame, text="▶▶", width=5, command=self.record).pack(side=tk.LEFT, padx=2)
-        ttk.Button(transport_frame, text="▶|", width=5, command=self.skip_forward).pack(side=tk.LEFT, padx=2)
+        ttk.Button(transport_frame, text="|◀", width=5, command=self.skip_backward).grid(row=0, column=0, padx=2)
+        ttk.Button(transport_frame, text="◀▶", width=5, command=self.play).grid(row=0, column=1, padx=2)
+        ttk.Button(transport_frame, text="■", width=5, command=self.stop).grid(row=0, column=2, padx=2)
+        ttk.Button(transport_frame, text="▶▶", width=5, command=self.record).grid(row=0, column=3, padx=2)
+        ttk.Button(transport_frame, text="▶|", width=5, command=self.skip_forward).grid(row=0, column=4, padx=2)
         
         # Time display
         self.time_var = tk.StringVar(value="00:00.000 / 00:00.000")
-        ttk.Label(transport_frame, textvariable=self.time_var).pack(side=tk.LEFT, padx=10)
+        ttk.Label(transport_frame, textvariable=self.time_var).grid(row=0, column=5, padx=10)
+        
+        # Configure transport frame columns
+        transport_frame.grid_columnconfigure(5, weight=1)
         
         # Volume control - moved to right panel
         volume_frame = ttk.Frame(right_panel)
-        volume_frame.pack(fill=tk.X, pady=(0, 10))
+        volume_frame.grid(row=2, column=0, sticky='ew', pady=(0, 10))
         
-        ttk.Label(volume_frame, text="Volumen:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(volume_frame, text="Volumen:").grid(row=0, column=0, padx=(0, 5))
         self.volume_scale = ttk.Scale(
             volume_frame, 
             from_=0, 
@@ -318,48 +405,62 @@ class StudioTab(ttk.Frame):
             orient=tk.HORIZONTAL,
             value=80
         )
-        self.volume_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.volume_scale.grid(row=0, column=1, sticky='ew')
+        
+        # Configure volume frame columns
+        volume_frame.grid_columnconfigure(1, weight=1)
         
         # Right panel - Tracks and mixer
-        right_panel = ttk.Frame(main_frame, width=250)
-        right_panel.pack(side=tk.RIGHT, fill=tk.Y)
+        right_panel = ttk.Frame(self, width=250)
+        right_panel.grid(row=0, column=2, sticky='nsew', padx=(10, 0))
+        
+        # Configure grid weights for right panel
+        self.grid_columnconfigure(2, weight=0)  # Fixed width for right panel
         
         # Tracks list
         tracks_frame = ttk.LabelFrame(right_panel, text="Pistas", padding="5")
-        tracks_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        tracks_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 10))
+        
+        # Configure grid weights for tracks frame
+        right_panel.grid_rowconfigure(0, weight=1)
+        right_panel.grid_columnconfigure(0, weight=1)
         
         # Track list with scrollbar
         track_list_frame = ttk.Frame(tracks_frame)
-        track_list_frame.pack(fill=tk.BOTH, expand=True)
+        track_list_frame.grid(row=0, column=0, sticky='nsew')
         
         scrollbar = ttk.Scrollbar(track_list_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar.grid(row=0, column=1, sticky='ns')
         
-        self.track_list = tk.Listbox(
-            track_list_frame, 
+        self.track_listbox = tk.Listbox(
+            track_list_frame,
             yscrollcommand=scrollbar.set,
-            selectmode=tk.SINGLE,
-            height=8
+            height=10,
+            selectmode=tk.SINGLE
         )
-        self.track_list.pack(fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.track_list.yview)
+        self.track_listbox.grid(row=0, column=0, sticky='nsew')
+        scrollbar.config(command=self.track_listbox.yview)
         
-        # Add some sample tracks
-        for i in range(1, 6):
-            self.track_list.insert(tk.END, f"Pista {i}")
+        # Configure grid weights for track list frame
+        track_list_frame.grid_rowconfigure(0, weight=1)
+        track_list_frame.grid_columnconfigure(0, weight=1)
         
         # Track controls
-        track_buttons = ttk.Frame(tracks_frame)
-        track_buttons.pack(fill=tk.X, pady=(5, 0))
+        track_controls = ttk.Frame(tracks_frame)
+        track_controls.grid(row=1, column=0, sticky='ew', pady=(5, 0))
         
-        ttk.Button(track_buttons, text="+", width=3, command=self.add_track).pack(side=tk.LEFT, padx=2)
-        ttk.Button(track_buttons, text="-", width=3, command=self.remove_track).pack(side=tk.LEFT, padx=2)
-        ttk.Button(track_buttons, text="M", width=3, command=self.mute_track).pack(side=tk.LEFT, padx=2)
-        ttk.Button(track_buttons, text="S", width=3, command=self.solo_track).pack(side=tk.LEFT, padx=2)
+        ttk.Button(track_controls, text="+", width=3, command=self.add_track).grid(row=0, column=0, padx=2)
+        ttk.Button(track_controls, text="-", width=3, command=self.remove_track).grid(row=0, column=1, padx=2)
+        ttk.Button(track_controls, text="M", width=3, command=self.mute_track).grid(row=0, column=2, padx=2)
+        ttk.Button(track_controls, text="S", width=3, command=self.solo_track).grid(row=0, column=3, padx=2)
+        
+        # Configure track controls grid
+        for i in range(4):
+            track_controls.grid_columnconfigure(i, weight=1)
         
         # Effects panel
-        effects_frame = ttk.LabelFrame(right_panel, text="Efectos", padding="5")
-        effects_frame.pack(fill=tk.X, pady=(0, 10))
+        effects_frame = ttk.Frame(right_panel)
+        effects_frame.grid(row=1, column=0, sticky='nsew', pady=(0, 10))
         
         effects_list = ttk.Combobox(
             effects_frame,
@@ -367,33 +468,38 @@ class StudioTab(ttk.Frame):
             state="readonly"
         )
         effects_list.current(0)
-        effects_list.pack(fill=tk.X, pady=5)
+        effects_list.grid(row=0, column=0, sticky='ew', pady=5)
+        effects_frame.grid_columnconfigure(0, weight=1)
         
         # Recording settings
         record_frame = ttk.LabelFrame(right_panel, text="Grabación", padding="5")
-        record_frame.pack(fill=tk.X)
+        record_frame.grid(row=2, column=0, sticky='ew')
         
         self.record_source = tk.StringVar(value="Micrófono")
+        
         ttk.Radiobutton(
             record_frame, 
             text="Micrófono", 
             variable=self.record_source, 
             value="Micrófono"
-        ).pack(anchor=tk.W)
+        ).grid(row=0, column=0, sticky='w', pady=2)
         
         ttk.Radiobutton(
             record_frame, 
             text="Entrada de línea", 
             variable=self.record_source, 
             value="Línea"
-        ).pack(anchor=tk.W)
+        ).grid(row=1, column=0, sticky='w', pady=2)
         
         ttk.Radiobutton(
             record_frame, 
             text="Reproducción estéreo", 
             variable=self.record_source, 
             value="Estéreo"
-        ).pack(anchor=tk.W)
+        ).grid(row=2, column=0, sticky='w', pady=2)
+        
+        # Configure record frame grid
+        record_frame.grid_columnconfigure(0, weight=1)
     
     def draw_waveform_placeholder(self, canvas):
         """Draw a placeholder waveform on the canvas"""
@@ -469,4 +575,209 @@ class StudioTab(ttk.Frame):
         """Solo selected track"""
         selection = self.track_list.curselection()
         if selection:
+            print(f"Solo track {selection[0] + 1}")
+            
+    # ===== TTS Tab Methods =====
+    def setup_tts_tab(self):
+        """Set up the TTS tab"""
+        # Configure grid
+        self.tts_tab.columnconfigure(0, weight=1)
+        self.tts_tab.rowconfigure(1, weight=1)
+        
+        # Toolbar
+        toolbar = ttk.Frame(self.tts_tab)
+        toolbar.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        
+        ttk.Button(toolbar, text="Agregar TTS", command=self.add_tts_section).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Eliminar", command=self.remove_tts_section).pack(side=tk.LEFT, padx=2)
+        
+        # TTS List
+        tts_frame = ttk.LabelFrame(self.tts_tab, text="Secciones de TTS")
+        tts_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        tts_frame.columnconfigure(0, weight=1)
+        tts_frame.rowconfigure(0, weight=1)
+        
+        # Treeview for TTS sections
+        columns = ('id', 'texto', 'voz', 'idioma', 'duracion')
+        self.tts_tree = ttk.Treeview(
+            tts_frame, 
+            columns=columns[1:], 
+            show='headings',
+            selectmode='browse'
+        )
+        
+        # Define headings
+        self.tts_tree.heading('texto', text='Texto')
+        self.tts_tree.heading('voz', text='Voz')
+        self.tts_tree.heading('idioma', text='Idioma')
+        self.tts_tree.heading('duracion', text='Duración')
+        
+        # Configure column widths
+        self.tts_tree.column('texto', width=300)
+        self.tts_tree.column('voz', width=100, anchor='center')
+        self.tts_tree.column('idioma', width=80, anchor='center')
+        self.tts_tree.column('duracion', width=80, anchor='center')
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(tts_frame, orient=tk.VERTICAL, command=self.tts_tree.yview)
+        self.tts_tree.configure(yscroll=scrollbar.set)
+        
+        # Grid the tree and scrollbar
+        self.tts_tree.grid(row=0, column=0, sticky='nsew')
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        
+        # Bind double click to edit
+        self.tts_tree.bind('<Double-1>', self.edit_tts_section)
+    
+    def add_tts_section(self):
+        """Add a new TTS section"""
+        print("Adding new TTS section")
+        
+    def remove_tts_section(self):
+        """Remove selected TTS section"""
+        selection = self.tts_tree.selection()
+        if selection:
+            self.tts_tree.delete(selection[0])
+    
+    def edit_tts_section(self, event=None):
+        """Edit selected TTS section"""
+        selection = self.tts_tree.selection()
+        if selection:
+            print(f"Editing TTS section: {selection[0]}")
+    
+    # ===== Audio Tab Methods =====
+    def setup_audio_tab(self):
+        """Set up the audio tab"""
+        # Configure grid
+        self.audio_tab.columnconfigure(0, weight=1)
+        self.audio_tab.rowconfigure(1, weight=1)
+        
+        # Toolbar
+        toolbar = ttk.Frame(self.audio_tab)
+        toolbar.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        
+        ttk.Button(toolbar, text="Agregar Audio", command=self.add_audio_section).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Eliminar", command=self.remove_audio_section).pack(side=tk.LEFT, padx=2)
+        
+        # Audio List
+        audio_frame = ttk.LabelFrame(self.audio_tab, text="Archivos de Audio")
+        audio_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        audio_frame.columnconfigure(0, weight=1)
+        audio_frame.rowconfigure(0, weight=1)
+        
+        # Treeview for audio sections
+        columns = ('id', 'nombre', 'archivo', 'duracion', 'formato')
+        self.audio_tree = ttk.Treeview(
+            audio_frame, 
+            columns=columns[1:], 
+            show='headings',
+            selectmode='browse'
+        )
+        
+        # Define headings
+        self.audio_tree.heading('nombre', text='Nombre')
+        self.audio_tree.heading('archivo', text='Archivo')
+        self.audio_tree.heading('duracion', text='Duración')
+        self.audio_tree.heading('formato', text='Formato')
+        
+        # Configure column widths
+        self.audio_tree.column('nombre', width=150)
+        self.audio_tree.column('archivo', width=250)
+        self.audio_tree.column('duracion', width=80, anchor='center')
+        self.audio_tree.column('formato', width=80, anchor='center')
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(audio_frame, orient=tk.VERTICAL, command=self.audio_tree.yview)
+        self.audio_tree.configure(yscroll=scrollbar.set)
+        
+        # Grid the tree and scrollbar
+        self.audio_tree.grid(row=0, column=0, sticky='nsew')
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        
+        # Bind double click to play/select
+        self.audio_tree.bind('<Double-1>', self.play_audio_section)
+    
+    def add_audio_section(self):
+        """Add a new audio section"""
+        print("Adding new audio section")
+        
+    def remove_audio_section(self):
+        """Remove selected audio section"""
+        selection = self.audio_tree.selection()
+        if selection:
+            self.audio_tree.delete(selection[0])
+    
+    def play_audio_section(self, event=None):
+        """Play selected audio section"""
+        selection = self.audio_tree.selection()
+        if selection:
+            print(f"Playing audio section: {selection[0]}")
+    
+    # ===== Effects Tab Methods =====
+    def setup_effects_tab(self):
+        """Set up the sound effects tab"""
+        # Configure grid
+        self.effects_tab.columnconfigure(0, weight=1)
+        self.effects_tab.rowconfigure(1, weight=1)
+        
+        # Toolbar
+        toolbar = ttk.Frame(self.effects_tab)
+        toolbar.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        
+        ttk.Button(toolbar, text="Agregar Efecto", command=self.add_effect_section).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Eliminar", command=self.remove_effect_section).pack(side=tk.LEFT, padx=2)
+        
+        # Effects List
+        effects_frame = ttk.LabelFrame(self.effects_tab, text="Efectos de Sonido")
+        effects_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        effects_frame.columnconfigure(0, weight=1)
+        effects_frame.rowconfigure(0, weight=1)
+        
+        # Treeview for effect sections
+        columns = ('id', 'nombre', 'efecto', 'duracion', 'archivo')
+        self.effects_tree = ttk.Treeview(
+            effects_frame, 
+            columns=columns[1:], 
+            show='headings',
+            selectmode='browse'
+        )
+        
+        # Define headings
+        self.effects_tree.heading('nombre', text='Nombre')
+        self.effects_tree.heading('efecto', text='Tipo de Efecto')
+        self.effects_tree.heading('duracion', text='Duración')
+        self.effects_tree.heading('archivo', text='Archivo')
+        
+        # Configure column widths
+        self.effects_tree.column('nombre', width=150)
+        self.effects_tree.column('efecto', width=150)
+        self.effects_tree.column('duracion', width=80, anchor='center')
+        self.effects_tree.column('archivo', width=200)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(effects_frame, orient=tk.VERTICAL, command=self.effects_tree.yview)
+        self.effects_tree.configure(yscroll=scrollbar.set)
+        
+        # Grid the tree and scrollbar
+        self.effects_tree.grid(row=0, column=0, sticky='nsew')
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        
+        # Bind double click to play/select
+        self.effects_tree.bind('<Double-1>', self.play_effect_section)
+    
+    def add_effect_section(self):
+        """Add a new effect section"""
+        print("Adding new effect section")
+        
+    def remove_effect_section(self):
+        """Remove selected effect section"""
+        selection = self.effects_tree.selection()
+        if selection:
+            self.effects_tree.delete(selection[0])
+    
+    def play_effect_section(self, event=None):
+        """Play selected effect section"""
+        selection = self.effects_tree.selection()
+        if selection:
+            print(f"Playing effect section: {selection[0]}")
             print(f"Solo track {selection[0] + 1}")
