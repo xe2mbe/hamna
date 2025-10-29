@@ -98,8 +98,42 @@ class StudioTab(ttk.Frame):
                             break
                             
         except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar el evento: {e}")
+            messagebox.showerror("Error", f"Error al cargar el evento: {str(e)}")
+            logger.error(f"Error loading event: {str(e)}", exc_info=True)
             
+    def edit_details(self):
+        """Abre el diálogo para editar los detalles del evento seleccionado"""
+        event_id = self.get_selected_event_id()
+        if event_id is None:
+            messagebox.showwarning("Selección requerida", "Por favor selecciona un evento primero")
+            return
+            
+        try:
+            # Obtener los detalles completos del evento
+            event = get_event(event_id)
+            if not event:
+                messagebox.showerror("Error", "No se pudo cargar la información del evento")
+                return
+                
+            # Aquí podrías abrir un diálogo o ventana para editar los detalles adicionales
+            # Por ahora, mostramos un mensaje informativo
+            messagebox.showinfo("Editar Detalles", 
+                              f"Editando detalles del evento: {event[1]}\n\n"
+                              f"ID: {event[0]}\n"
+                              f"Esta función permitirá editar los detalles adicionales del evento.")
+                              
+            # TODO: Implementar la lógica de edición de detalles aquí
+            # Por ejemplo, podrías abrir un diálogo modal con campos para editar:
+            # - Descripción
+            # - Fechas importantes
+            # - Ubicación
+            # - Notas adicionales
+            # - etc.
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar los detalles del evento: {str(e)}")
+            logger.error(f"Error loading event details: {str(e)}", exc_info=True)
+
     def delete_selected_event(self):
         """Delete the selected event"""
         event_id = self.get_selected_event_id()
@@ -210,19 +244,11 @@ class StudioTab(ttk.Frame):
         self.event_name_var = tk.StringVar()
         ttk.Entry(event_frame, textvariable=self.event_name_var, width=40).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
         
-        # Event type
-        ttk.Label(event_frame, text="Tipo:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-        self.event_type_combo = ttk.Combobox(event_frame, state='readonly', width=37)
-        self.event_type_combo.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
-        self.load_event_types()
-        
-        # Buttons frame
+        # Buttons frame - Solo el botón Guardar
         btn_frame = ttk.Frame(event_frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=1, column=0, columnspan=2, pady=10)
         
-        ttk.Button(btn_frame, text="Nuevo", command=self.clear_event_form).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Guardar", command=self.save_event).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Eliminar", command=self.delete_selected_event).pack(side=tk.LEFT, padx=5)
         
         # Configure columns to expand
         event_frame.columnconfigure(1, weight=1)
@@ -328,25 +354,36 @@ class StudioTab(ttk.Frame):
         
         # Buttons frame for edit/delete
         btn_frame = ttk.Frame(left_panel)
-        btn_frame.grid(row=6, column=0, columnspan=3, pady=5, sticky='ew')
+        btn_frame.grid(row=4, column=0, columnspan=4, pady=(10, 5), sticky='ew')
         
-        ttk.Button(
-            btn_frame,
-            text="Editar",
-            command=self.edit_selected_event,
-            width=10
-        ).grid(row=0, column=0, padx=2)
-        
+        # Delete button
         ttk.Button(
             btn_frame,
             text="Eliminar",
             command=self.delete_selected_event,
-            width=10
-        ).grid(row=0, column=1, padx=2)
+            width=15
+        ).pack(side=tk.LEFT, padx=5, expand=True)
+        
+        # Edit Event button
+        ttk.Button(
+            btn_frame,
+            text="Editar Evento",
+            command=self.edit_selected_event,
+            width=15
+        ).pack(side=tk.LEFT, padx=5, expand=True)
+        
+        # Edit Details button
+        ttk.Button(
+            btn_frame,
+            text="Editar Detalles",
+            command=self.edit_details,  # Nueva función a implementar
+            width=15
+        ).pack(side=tk.LEFT, padx=5, expand=True)
         
         # Configure button frame grid
-        btn_frame.grid_columnconfigure(0, weight=1)
-        btn_frame.grid_columnconfigure(1, weight=1)
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
+        btn_frame.columnconfigure(2, weight=1)
         
         # Right panel - Audio controls
         right_panel = ttk.Frame(self)
