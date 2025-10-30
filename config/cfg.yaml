@@ -36,11 +36,13 @@ transmitting:
   ptt_time: 170.0
   rewind: 0.5
 tts:
-  engine: azure speech
-  format: wav
+  azure:
+    region: southcentralus
+  engine: Azure Speech
+  format: mp3
   language: Afrikaans (af) (af)
   provider: azure speech
   rate: 100
   use_env_credentials: true
-  voice: Jenny (en-US) (en-US-JennyNeural)
+  voice: AbrilNeural - ES - Female (es-ES-AbrilNeural)
   voice_id: AbrilNeural - ES - Female (es-ES-AbrilNeural)

@@ -18,6 +18,9 @@ class StudioTab(ttk.Frame):
         self.current_event_id = None
         # Dictionary to map listbox indices to event IDs
         self.event_id_map = {}
+        # Referencias a los frames
+        self.event_frame = None
+        self.right_panel = None
         self.setup_ui()
         self.load_events()
         
@@ -65,9 +68,22 @@ class StudioTab(ttk.Frame):
         return self.event_id_map.get(index)
             
     def clear_event_form(self):
-        """Clear the event form"""
+        """Clear the event form and reset fields to default state"""
         self.current_event_id = None
         self.event_id_var.set("")
+        self.event_name_var.set("")
+        
+        # Resetear el estado de los campos
+        self.event_id_entry.config(state='normal')
+        self.event_name_entry.config(state='normal')
+        
+        # Limpiar los campos
+        self.event_id_entry.delete(0, tk.END)
+        self.event_name_entry.delete(0, tk.END)
+        
+        # Configurar el estado inicial
+        self.event_id_entry.config(state='readonly')
+        self.event_name_entry.config(state='normal')
         self.event_name_var.set("")
         if self.event_type_combo['values']:
             self.event_type_combo.current(0)
@@ -102,37 +118,84 @@ class StudioTab(ttk.Frame):
             logger.error(f"Error loading event: {str(e)}", exc_info=True)
             
     def edit_details(self):
-        """Abre el diálogo para editar los detalles del evento seleccionado"""
-        event_id = self.get_selected_event_id()
-        if event_id is None:
+        """Copia el ID y nombre del evento seleccionado a la sección de detalles en el panel derecho"""
+        # Obtener el evento seleccionado en la lista
+        selection = self.events_listbox.curselection()
+        if not selection:
             messagebox.showwarning("Selección requerida", "Por favor selecciona un evento primero")
             return
             
         try:
-            # Obtener los detalles completos del evento
-            event = get_event(event_id)
-            if not event:
-                messagebox.showerror("Error", "No se pudo cargar la información del evento")
+            # Obtener el texto completo del evento seleccionado
+            event_text = self.events_listbox.get(selection[0])
+            
+            # Extraer el ID del evento del diccionario de mapeo
+            event_id = self.event_id_map.get(selection[0])
+            if not event_id:
+                messagebox.showerror("Error", "No se pudo identificar el evento seleccionado")
                 return
-                
-            # Aquí podrías abrir un diálogo o ventana para editar los detalles adicionales
-            # Por ahora, mostramos un mensaje informativo
-            messagebox.showinfo("Editar Detalles", 
-                              f"Editando detalles del evento: {event[1]}\n\n"
-                              f"ID: {event[0]}\n"
-                              f"Esta función permitirá editar los detalles adicionales del evento.")
-                              
-            # TODO: Implementar la lógica de edición de detalles aquí
-            # Por ejemplo, podrías abrir un diálogo modal con campos para editar:
-            # - Descripción
-            # - Fechas importantes
-            # - Ubicación
-            # - Notas adicionales
-            # - etc.
+            
+            # Extraer el nombre del evento (eliminando el tipo si existe)
+            if '(' in event_text and ')' in event_text:
+                event_name = event_text.split('(')[0].strip()
+            else:
+                event_name = event_text.strip()
+            
+            # Imprimir valores para depuración
+            print(f"ID del evento: {event_id}")
+            print(f"Nombre del evento: {event_name}")
+            
+            # Actualizar los campos del panel derecho
+            # Actualizar las variables primero
+            self.event_id_var.set(str(event_id))
+            self.event_name_var.set(event_name)
+            
+            # Forzar la actualización de los widgets
+            self.event_id_entry.config(state='normal')
+            self.event_name_entry.config(state='normal')
+            
+            # Actualizar manualmente los campos
+            self.event_id_entry.delete(0, tk.END)
+            self.event_id_entry.insert(0, str(event_id))
+            self.event_name_entry.delete(0, tk.END)
+            self.event_name_entry.insert(0, event_name)
+            
+            # Forzar la actualización de la interfaz
+            self.event_id_entry.update_idletasks()
+            self.event_name_entry.update_idletasks()
+            
+            # Mostrar los datos en la consola para depuración
+            print(f"Panel derecho - ID: {self.event_id_var.get()}")
+            print(f"Panel derecho - Nombre: {self.event_name_var.get()}")
+            
+            # Poner los campos en modo de solo lectura
+            self.event_id_entry.config(state='readonly')
+            self.event_name_entry.config(state='readonly')
+            
+            # Forzar un redibujado completo
+            self.event_frame.update_idletasks()
+            self.right_panel.update_idletasks()
+            
+            # Actualizar el ID actual
+            self.current_event_id = event_id
+            
+            # Mostrar mensaje de depuración
+            print("Valores establecidos en los campos:")
+            print(f"ID: {self.event_id_var.get()}")
+            print(f"Nombre: {self.event_name_var.get()}")
+            
+            # Actualizar la interfaz
+            self.update_idletasks()
             
         except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar los detalles del evento: {str(e)}")
-            logger.error(f"Error loading event details: {str(e)}", exc_info=True)
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error en edit_details: {error_details}")
+            messagebox.showerror("Error", f"Error al cargar los detalles del evento: {str(e)}\n\nDetalles:\n{error_details}")
+        finally:
+            # Asegurarse de que los campos vuelvan a su estado original
+            self.event_id_entry.config(state='readonly')
+            self.event_name_entry.config(state='readonly')
 
     def delete_selected_event(self):
         """Delete the selected event"""
@@ -228,33 +291,46 @@ class StudioTab(ttk.Frame):
         paned.add(left_panel, weight=1)
         
         # Right panel - Event details and sections
-        right_panel = ttk.Frame(paned)
-        paned.add(right_panel, weight=3)
+        self.right_panel = ttk.Frame(paned)
+        paned.add(self.right_panel, weight=3)
         
         # Configure right panel grid
-        right_panel.grid_columnconfigure(0, weight=1)
-        right_panel.grid_rowconfigure(1, weight=1)
+        self.right_panel.grid_columnconfigure(0, weight=1)
+        self.right_panel.grid_rowconfigure(1, weight=1)
         
         # Top section - Event details
-        event_frame = ttk.LabelFrame(right_panel, text="Detalles del Evento", padding="5")
-        event_frame.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
+        self.event_frame = ttk.LabelFrame(self.right_panel, text="Detalles del Evento", padding="5")
+        self.event_frame.grid(row=0, column=0, sticky='ew', padx=5, pady=5)
         
-        # Event name
-        ttk.Label(event_frame, text="Nombre:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        # Campos para mostrar los detalles del evento
+        row = 0
+        
+        # ID del evento
+        ttk.Label(self.event_frame, text="ID:").grid(row=row, column=0, sticky='w', padx=5, pady=2)
+        self.event_id_var = tk.StringVar()
+        self.event_id_entry = ttk.Entry(self.event_frame, textvariable=self.event_id_var, width=40, state='readonly')
+        self.event_id_entry.grid(row=row, column=1, sticky='ew', padx=5, pady=2)
+        row += 1
+        
+        # Nombre del evento
+        ttk.Label(self.event_frame, text="Nombre:").grid(row=row, column=0, sticky='w', padx=5, pady=2)
         self.event_name_var = tk.StringVar()
-        ttk.Entry(event_frame, textvariable=self.event_name_var, width=40).grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        self.event_name_entry = ttk.Entry(self.event_frame, textvariable=self.event_name_var, width=40, state='readonly')
+        self.event_name_entry.grid(row=row, column=1, sticky='ew', padx=5, pady=2)
+        row += 1
         
         # Buttons frame - Solo el botón Guardar
-        btn_frame = ttk.Frame(event_frame)
-        btn_frame.grid(row=1, column=0, columnspan=2, pady=10)
+        btn_frame = ttk.Frame(self.event_frame)
+        btn_frame.grid(row=row, column=0, columnspan=2, pady=10)
+        row += 1
         
         ttk.Button(btn_frame, text="Guardar", command=self.save_event).pack(side=tk.LEFT, padx=5)
         
         # Configure columns to expand
-        event_frame.columnconfigure(1, weight=1)
+        self.event_frame.columnconfigure(1, weight=1)
         
         # Bottom section - Sections notebook
-        self.sections_notebook = ttk.Notebook(right_panel)
+        self.sections_notebook = ttk.Notebook(self.right_panel)
         self.sections_notebook.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
         
         # TTS Tab
@@ -262,51 +338,56 @@ class StudioTab(ttk.Frame):
         self.sections_notebook.add(self.tts_tab, text='TTS')
         self.setup_tts_tab()
         
-        # Audio Tab
+        # Audio Tab - Cambiado de 'Audio' a 'Audios'
         self.audio_tab = ttk.Frame(self.sections_notebook)
-        self.sections_notebook.add(self.audio_tab, text='Audio')
+        self.sections_notebook.add(self.audio_tab, text='Audios')
         self.setup_audio_tab()
         
-        # Efectos Tab
+        # Efectos Tab - Cambiado de 'Efectos' a 'Sonidos'
         self.effects_tab = ttk.Frame(self.sections_notebook)
-        self.sections_notebook.add(self.effects_tab, text='Efectos')
+        self.sections_notebook.add(self.effects_tab, text='Sonidos')
         self.setup_effects_tab()
         
-        # Create ID Evento frame
-        id_frame = ttk.LabelFrame(left_panel, text="ID Evento", padding="5")
+        # Nueva pestaña de Efectos
+        self.sounds_tab = ttk.Frame(self.sections_notebook)
+        self.sections_notebook.add(self.sounds_tab, text='Efectos')
+        # Aquí puedes agregar la configuración inicial para la pestaña de Efectos
+        ttk.Label(self.sounds_tab, text="Configuración de Efectos").pack(pady=10)
+        
+        # Create Evento frame
+        id_frame = ttk.LabelFrame(left_panel, text="Evento", padding="10")
         id_frame.grid(row=0, column=0, columnspan=4, sticky='ew', padx=5, pady=5)
         
-        # Event ID
-        ttk.Label(id_frame, text="ID:").grid(row=0, column=0, sticky='w', pady=2, padx=5)
-        self.event_id_var = tk.StringVar()
-        ttk.Entry(id_frame, textvariable=self.event_id_var, state='readonly', width=10).grid(row=0, column=1, sticky='w', pady=2)
+        # Configurar grid del frame principal
+        id_frame.columnconfigure(1, weight=1)
         
-        # Create Event Details frame
-        event_details_frame = ttk.LabelFrame(left_panel, text="Detalles del Evento", padding="5")
-        event_details_frame.grid(row=1, column=0, columnspan=4, sticky='ew', padx=5, pady=5)
-        
-        # Event Name
-        ttk.Label(event_details_frame, text="Nombre:").grid(row=0, column=0, sticky='w', pady=2, padx=5)
-        self.event_name_var = tk.StringVar()
-        ttk.Entry(event_details_frame, textvariable=self.event_name_var, width=30).grid(row=0, column=1, columnspan=3, sticky='w', pady=2)
-        
-        # Event Type
-        ttk.Label(event_details_frame, text="Tipo:").grid(row=1, column=0, sticky='w', pady=2, padx=5)
+        # Fila 0: Tipo (ocupa todo el ancho)
+        ttk.Label(id_frame, text="Tipo:").grid(row=0, column=0, sticky='w', pady=2, padx=5)
         self.event_type_var = tk.StringVar()
         self.event_type_combo = ttk.Combobox(
-            event_details_frame, 
+            id_frame, 
             textvariable=self.event_type_var,
             state='readonly',
-            width=27
+            width=40
         )
-        self.event_type_combo.grid(row=1, column=1, columnspan=3, sticky='w', pady=2)
+        self.event_type_combo.grid(row=0, column=1, columnspan=3, sticky='ew', pady=2, padx=(0, 10))
+        
+        # Fila 1: ID
+        ttk.Label(id_frame, text="ID:").grid(row=1, column=0, sticky='w', pady=2, padx=5)
+        self.event_id_var = tk.StringVar()
+        ttk.Entry(id_frame, textvariable=self.event_id_var, state='readonly').grid(row=1, column=1, columnspan=3, sticky='ew', pady=2, padx=(0, 10))
+        
+        # Fila 2: Nombre (ocupa todo el ancho)
+        ttk.Label(id_frame, text="Nombre:").grid(row=2, column=0, sticky='w', pady=2, padx=5)
+        self.event_name_var = tk.StringVar()
+        ttk.Entry(id_frame, textvariable=self.event_name_var).grid(row=2, column=1, columnspan=3, sticky='ew', pady=2, padx=(0, 10))
         
         # Load event types
         self.load_event_types()
         
-        # Buttons frame
-        button_frame = ttk.Frame(event_details_frame)
-        button_frame.grid(row=2, column=0, columnspan=4, pady=5, sticky='ew')
+        # Buttons frame (fila 3)
+        button_frame = ttk.Frame(id_frame)
+        button_frame.grid(row=3, column=0, columnspan=4, pady=(10, 0), sticky='e')
         
         # Save button
         ttk.Button(
@@ -614,73 +695,474 @@ class StudioTab(ttk.Frame):
         if selection:
             print(f"Solo track {selection[0] + 1}")
             
-    # ===== TTS Tab Methods =====
     def setup_tts_tab(self):
         """Set up the TTS tab"""
-        # Configure grid
-        self.tts_tab.columnconfigure(0, weight=1)
-        self.tts_tab.rowconfigure(1, weight=1)
+        # Add TTS section button
+        ttk.Button(
+            self.tts_tab, 
+            text="Agregar TTS", 
+            command=self.add_tts_section
+        ).pack(pady=10)
         
-        # Toolbar
-        toolbar = ttk.Frame(self.tts_tab)
-        toolbar.grid(row=0, column=0, sticky='ew', pady=(0, 5))
+        # TTS sections listbox with scrollbar
+        list_frame = ttk.Frame(self.tts_tab)
+        list_frame.pack(expand=True, fill='both', padx=5, pady=5)
         
-        ttk.Button(toolbar, text="Agregar TTS", command=self.add_tts_section).pack(side=tk.LEFT, padx=2)
-        ttk.Button(toolbar, text="Eliminar", command=self.remove_tts_section).pack(side=tk.LEFT, padx=2)
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # TTS List
-        tts_frame = ttk.LabelFrame(self.tts_tab, text="Secciones de TTS")
-        tts_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
-        tts_frame.columnconfigure(0, weight=1)
-        tts_frame.rowconfigure(0, weight=1)
-        
-        # Treeview for TTS sections
-        columns = ('id', 'texto', 'voz', 'idioma', 'duracion')
-        self.tts_tree = ttk.Treeview(
-            tts_frame, 
-            columns=columns[1:], 
-            show='headings',
-            selectmode='browse'
+        self.tts_listbox = tk.Listbox(
+            list_frame, 
+            yscrollcommand=scrollbar.set,
+            height=10
         )
+        self.tts_listbox.pack(expand=True, fill='both')
+        scrollbar.config(command=self.tts_listbox.yview)
         
-        # Define headings
-        self.tts_tree.heading('texto', text='Texto')
-        self.tts_tree.heading('voz', text='Voz')
-        self.tts_tree.heading('idioma', text='Idioma')
-        self.tts_tree.heading('duracion', text='Duración')
+        self.tts_listbox.bind('<<ListboxSelect>>', self.edit_tts_section)
         
-        # Configure column widths
-        self.tts_tree.column('texto', width=300)
-        self.tts_tree.column('voz', width=100, anchor='center')
-        self.tts_tree.column('idioma', width=80, anchor='center')
-        self.tts_tree.column('duracion', width=80, anchor='center')
+        # Frame para botones de acción
+        btn_frame = ttk.Frame(self.tts_tab)
+        btn_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(tts_frame, orient=tk.VERTICAL, command=self.tts_tree.yview)
-        self.tts_tree.configure(yscroll=scrollbar.set)
+        ttk.Button(
+            btn_frame, 
+            text="Eliminar", 
+            command=self.remove_tts_section
+        ).pack(side=tk.LEFT, padx=5)
         
-        # Grid the tree and scrollbar
-        self.tts_tree.grid(row=0, column=0, sticky='nsew')
-        scrollbar.grid(row=0, column=1, sticky='ns')
+    def show_add_tts_dialog(self, section_data=None):
+        """Muestra el diálogo para agregar o editar una sección TTS
         
-        # Bind double click to edit
-        self.tts_tree.bind('<Double-1>', self.edit_tts_section)
-    
+        Args:
+            section_data (dict, optional): Datos de la sección a editar. Si es None, se crea una nueva.
+        """
+        # Crear ventana emergente
+        dialog = tk.Toplevel(self)
+        dialog.title("Agregar/Editar Sección TTS")
+        dialog.transient(self)  # Hacer que la ventana sea modal
+        dialog.grab_set()
+        
+        # Configurar grid
+        dialog.columnconfigure(1, weight=1)
+        
+        # Variables
+        name_var = tk.StringVar()
+        voice_var = tk.StringVar()
+        
+        # Cargar datos de la sección si se está editando
+        if section_data:
+            name_var.set(section_data.get('name', ''))
+            voice_var.set(section_data.get('voice_display', ''))
+        
+        # Frame principal para mejor organización
+        main_frame = ttk.Frame(dialog, padding=10)
+        main_frame.grid(row=0, column=0, sticky='nsew')
+        main_frame.columnconfigure(1, weight=1)
+        
+        # Campo: Nombre de la sección
+        ttk.Label(main_frame, text="Nombre de la sección:").grid(
+            row=0, column=0, sticky='w', padx=5, pady=5)
+        name_entry = ttk.Entry(main_frame, textvariable=name_var, width=40)
+        name_entry.grid(row=0, column=1, sticky='ew', padx=5, pady=5, columnspan=2)
+        
+        # Configurar el grid para el frame de texto
+        text_preview_frame = ttk.Frame(main_frame)
+        text_preview_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
+        text_preview_frame.columnconfigure(0, weight=1)
+        
+        # Campo: Texto
+        text_frame = ttk.LabelFrame(text_preview_frame, text="Texto", padding=5)
+        text_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 5))
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        
+        text_entry = tk.Text(text_frame, wrap=tk.WORD, width=40, height=10)
+        text_entry.grid(row=0, column=0, sticky='nsew')
+        
+        # Scrollbar para el área de texto
+        text_scroll = ttk.Scrollbar(text_frame, orient='vertical', command=text_entry.yview)
+        text_scroll.grid(row=0, column=1, sticky='ns')
+        text_entry['yscrollcommand'] = text_scroll.set
+        
+        # Botón de escuchar
+        listen_btn = ttk.Button(
+            text_preview_frame,
+            text="Escuchar",
+            command=lambda: self._preview_tts(
+                text_entry.get("1.0", tk.END).strip(), 
+                voice_codes.get(voice_var.get())
+            )
+        )
+        listen_btn.grid(row=1, column=0, pady=(5, 0), sticky='w')
+        
+        # Campo: Voz
+        ttk.Label(main_frame, text="Voz:").grid(
+            row=2, column=0, sticky='w', padx=5, pady=5)
+        
+        # Obtener configuración del motor TTS
+        from func.tts_config import get_tts_config, get_filtered_voices
+        
+        try:
+            # Obtener configuración actual
+            tts_config = get_tts_config()
+            engine = tts_config.get('engine', 'azure')
+            
+            # Inicializar variables
+            voices = []
+            max_retries = 2
+            error_message = None
+            
+            for attempt in range(max_retries):
+                try:
+                    # Obtener voces filtradas
+                    voices = get_filtered_voices(engine)
+                    
+                    if not voices and attempt < max_retries - 1:
+                        # Intentar recargar las voces una sola vez
+                        from func.azure_tts import refresh_voices_cache
+                        refresh_voices_cache()
+                        continue
+                        
+                    if not voices:
+                        error_message = (
+                            "Advertencia",
+                            f"No se encontraron voces para el motor {engine}.\n\n"
+                            "Por favor verifica que:\n"
+                            "1. Tienes conexión a internet\n"
+                            "2. Los filtros de idioma están configurados correctamente\n"
+                            "3. El motor TTS está correctamente configurado"
+                        )
+                        break
+                        
+                    # Si llegamos aquí, todo está bien
+                    break
+                    
+                except Exception as e:
+                    if attempt == max_retries - 1:  # Último intento
+                        error_message = (
+                            "Error",
+                            f"No se pudieron cargar las voces después de {max_retries} intentos.\n\n"
+                            f"Error: {str(e)}\n\n"
+                            "Por favor verifica tu conexión a internet y la configuración del motor TTS."
+                        )
+                    continue
+            
+            # Mostrar mensaje de error si es necesario
+            if error_message:
+                dialog.destroy()
+                self.after(100, lambda: messagebox.showwarning(*error_message) if error_message[0] == "Advertencia" 
+                              else messagebox.showerror(*error_message))
+                return
+            
+            # Preparar datos para el combobox
+            voice_names = [v['display_name'] for v in voices]
+            voice_codes = {v['display_name']: v['id'] for v in voices}
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar las voces: {str(e)}")
+            dialog.destroy()
+            return
+        
+        # Frame para los controles de voz
+        voice_frame = ttk.Frame(main_frame)
+        voice_frame.grid(row=2, column=1, sticky='ew', padx=5, pady=5, columnspan=3)
+        voice_frame.columnconfigure(1, weight=1)
+        
+        # Combo de voces
+        voice_combo = ttk.Combobox(
+            voice_frame, 
+            textvariable=voice_var,
+            values=voice_names,
+            state='readonly',
+            width=40
+        )
+        voice_combo.grid(row=0, column=0, sticky='ew')
+        
+        # Botón para actualizar voces
+        refresh_btn = ttk.Button(
+            voice_frame,
+            text="↻",
+            width=3,
+            command=self._refresh_tts_voices
+        )
+        refresh_btn.grid(row=0, column=1, padx=(5, 0), sticky='e')
+        
+        # Configurar el grid para que el combo se expanda
+        voice_frame.columnconfigure(0, weight=1)
+        
+        # Botones
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(row=3, column=0, columnspan=3, pady=(10, 0), sticky='e')
+        
+        def on_ok():
+            # Validar campos
+            if not name_var.get().strip():
+                messagebox.showerror("Error", "El nombre de la sección es requerido")
+                return
+                
+            text = text_entry.get("1.0", tk.END).strip()
+            if not text:
+                messagebox.showerror("Error", "El texto es requerido")
+                return
+                
+            selected_voice_name = voice_var.get()
+            if not selected_voice_name:
+                messagebox.showerror("Error", "Debe seleccionar una voz")
+                return
+                
+            # Obtener el código de voz seleccionado
+            selected_voice_code = voice_codes.get(selected_voice_name)
+            if not selected_voice_code:
+                messagebox.showerror("Error", "No se pudo determinar la voz seleccionada")
+                return
+            
+            # Crear diccionario con los datos de la sección
+            section_data = {
+                'name': name_var.get().strip(),
+                'text': text,
+                'voice': selected_voice_code,
+                'voice_display': selected_voice_name
+            }
+            
+            # Si estamos editando, agregar el ID si existe
+            if hasattr(self, 'editing_tts_id') and self.editing_tts_id is not None:
+                section_data['id'] = self.editing_tts_id
+            
+            # Llamar al método para guardar la sección
+            self._save_tts_section(section_data)
+            
+            # Cerrar el diálogo
+            dialog.destroy()
+            
+            # Limpiar el ID de edición
+            if hasattr(self, 'editing_tts_id'):
+                del self.editing_tts_id
+        
+        # Si estamos editando, cargar los datos en los campos
+        if section_data:
+            name_var.set(section_data.get('name', ''))
+            text_entry.delete('1.0', tk.END)
+            text_entry.insert('1.0', section_data.get('text', ''))
+            voice_var.set(section_data.get('voice_display', ''))
+            
+            # Guardar el ID de la sección que se está editando
+            if 'id' in section_data:
+                self.editing_tts_id = section_data['id']
+        
+        ttk.Button(btn_frame, text="Aceptar", command=on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        
+        # Configurar estilos
+        style = ttk.Style()
+        style.configure('Play.TButton', font=('Arial', 10, 'bold'))
+        style.configure('Small.TLabel', font=('Arial', 9))
+        
+        # Mostrar información del motor actual
+        engine_label = ttk.Label(
+            main_frame,
+            text=f"Motor TTS: {engine.upper()}",
+            style='Small.TLabel'
+        )
+        engine_label.grid(row=4, column=0, columnspan=3, pady=(10, 0), sticky='w')
+        
+        # Agregar nota sobre cómo cambiar el motor
+        note_label = ttk.Label(
+            main_frame,
+            text="Puedes cambiar el motor TTS en Configuración > TTS",
+            style='Small.TLabel',
+            foreground='gray'
+        )
+        note_label.grid(row=5, column=0, columnspan=3, pady=(0, 10), sticky='w')
+        
+        # Configurar el peso de las filas y columnas para que se expandan
+        dialog.rowconfigure(0, weight=1)
+        dialog.columnconfigure(0, weight=1)
+        text_preview_frame.rowconfigure(0, weight=1)
+        text_preview_frame.columnconfigure(0, weight=1, weight_=1)
+        text_preview_frame.columnconfigure(1, weight=1, weight_=1)
+        
+        # Hacer que la ventana sea redimensionable
+        dialog.resizable(True, True)
+        
+        # Ajustar el tamaño de la ventana
+        dialog.update_idletasks()
+        width = max(800, dialog.winfo_reqwidth())
+        height = max(500, dialog.winfo_reqheight())
+        
+        # Centrar la ventana en la pantalla
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Enfocar el campo de nombre
+        name_entry.focus_set()
+        
     def add_tts_section(self):
-        """Add a new TTS section"""
-        print("Adding new TTS section")
+        """Maneja el evento de agregar una nueva sección TTS"""
+        if hasattr(self, 'editing_tts_id'):
+            del self.editing_tts_id
+        self.show_add_tts_dialog()
         
     def remove_tts_section(self):
-        """Remove selected TTS section"""
-        selection = self.tts_tree.selection()
-        if selection:
-            self.tts_tree.delete(selection[0])
-    
+        """Elimina la sección TTS seleccionada"""
+        selection = self.tts_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Advertencia", "Por favor seleccione una sección TTS para eliminar")
+            return
+            
+        # Aquí iría la lógica para eliminar la sección TTS
+        self.tts_listbox.delete(selection[0])
+        
     def edit_tts_section(self, event=None):
-        """Edit selected TTS section"""
-        selection = self.tts_tree.selection()
-        if selection:
-            print(f"Editing TTS section: {selection[0]}")
+        """Edita la sección TTS seleccionada"""
+        selection = self.tts_listbox.curselection()
+        if not selection:
+            return
+            
+        # Obtener los datos de la sección seleccionada
+        selected_item = self.tts_listbox.get(selection[0])
+        # Aquí deberías obtener los datos completos de la sección seleccionada
+        # Por ahora, pasamos un diccionario vacío como ejemplo
+        section_data = {
+            'name': selected_item,  # Esto es solo un ejemplo, ajusta según tu estructura de datos
+            'text': '',  # Aquí deberías obtener el texto real
+            'voice': '',  # Aquí deberías obtener la voz real
+            'voice_display': selected_item  # Esto es solo un ejemplo
+        }
+        
+        self.show_add_tts_dialog(section_data)
+    
+    # ===== TTS Helper Methods =====
+    def _preview_tts(self, text, voice_code):
+        """Reproduce una vista previa del texto con la voz seleccionada"""
+        if not text or not voice_code:
+            messagebox.showwarning("Advertencia", "Texto o voz no válidos para la vista previa")
+            return
+            
+        # Deshabilitar el botón de reproducción mientras se procesa
+        for widget in self.winfo_children():
+            if isinstance(widget, ttk.Button) and widget['text'] == '▶':
+                widget.config(state='disabled')
+        
+        def play_tts():
+            try:
+                from func.tts_config import get_tts_config
+                from func.azure_tts import synthesize_text as azure_synthesize, speech_config
+                
+                print(f"Iniciando vista previa con voz: {voice_code}")
+                
+                # Configurar la voz
+                speech_config.speech_synthesis_voice_name = voice_code
+                
+                # Llamar a la función de síntesis
+                success, message = azure_synthesize(text)
+                if not success:
+                    raise Exception(f"Azure TTS: {message}")
+                
+                print("Vista previa completada exitosamente")
+                
+            except Exception as e:
+                error_msg = f"Error al reproducir la vista previa: {str(e)}"
+                print(error_msg)
+                self.after(0, lambda: messagebox.showerror("Error", error_msg))
+            finally:
+                # Re-habilitar el botón de reproducción
+                self.after(0, self._enable_play_button)
+        
+        # Iniciar la reproducción en un hilo separado
+        import threading
+        tts_thread = threading.Thread(target=play_tts, daemon=True)
+        tts_thread.start()
+    
+    def _enable_play_button(self):
+        """Habilita el botón de reproducción"""
+        for widget in self.winfo_children():
+            if isinstance(widget, ttk.Button) and widget['text'] == '▶':
+                widget.config(state='normal')
+    
+    def _refresh_tts_voices(self):
+        """Actualiza la lista de voces disponibles"""
+        try:
+            # Mostrar indicador de carga
+            self._show_loading(True, "Actualizando voces...")
+            
+            # Usar after para ejecutar en el hilo principal
+            self.after(100, self._do_refresh_voices)
+            
+        except Exception as e:
+            self._show_loading(False)
+            self.after(0, lambda: messagebox.showerror(
+                "Error", 
+                f"Error al iniciar la actualización de voces: {str(e)}"
+            ))
+    
+    def _do_refresh_voices(self):
+        """Método auxiliar para actualizar las voces en segundo plano"""
+        from func.azure_tts import refresh_voices_cache
+        import threading
+        
+        def refresh_task():
+            try:
+                refresh_voices_cache()
+                self.after(0, self._on_voices_refreshed, True, None)
+            except Exception as e:
+                self.after(0, self._on_voices_refreshed, False, str(e))
+        
+        # Iniciar la tarea en segundo plano
+        threading.Thread(target=refresh_task, daemon=True).start()
+    
+    def _on_voices_refreshed(self, success, error_msg=None):
+        """Maneja la finalización de la actualización de voces"""
+        self._show_loading(False)
+        
+        if success:
+            messagebox.showinfo("Éxito", "Lista de voces actualizada correctamente")
+            # Volver a abrir el diálogo para actualizar la lista
+            self.after(100, self.show_add_tts_dialog)
+        else:
+            messagebox.showerror(
+                "Error", 
+                f"No se pudieron actualizar las voces: {error_msg or 'Error desconocido'}"
+            )
+    
+    def _show_loading(self, show, message=""):
+        """Muestra u oculta el indicador de carga"""
+        if hasattr(self, '_loading_label'):
+            self._loading_label.destroy()
+            
+        if show:
+            self._loading_label = ttk.Label(
+                self, 
+                text=message,
+                style='Info.TLabel'
+            )
+            self._loading_label.pack(pady=10)
+            self.update()
+    
+    def _save_tts_section(self, section_data):
+        """Guarda la sección TTS en la lista"""
+        try:
+            # Aquí deberías implementar la lógica para guardar la sección TTS
+            # Por ahora, solo mostramos un mensaje de ejemplo
+            print(f"Guardando sección TTS: {section_data}")
+            
+            # Si es una edición, actualizamos el ítem existente
+            if hasattr(self, 'editing_tts_id') and self.editing_tts_id is not None:
+                # Lógica para actualizar la sección existente
+                print(f"Actualizando sección TTS con ID: {self.editing_tts_id}")
+                messagebox.showinfo("Éxito", "Sección TTS actualizada correctamente")
+            else:
+                # Lógica para agregar una nueva sección
+                print("Agregando nueva sección TTS")
+                messagebox.showinfo("Éxito", "Sección TTS agregada correctamente")
+                
+            # Aquí deberías actualizar la interfaz de usuario para reflejar los cambios
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al guardar la sección TTS: {str(e)}")
     
     # ===== Audio Tab Methods =====
     def setup_audio_tab(self):
