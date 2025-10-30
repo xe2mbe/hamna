@@ -70,6 +70,9 @@ class StudioTab(ttk.Frame):
     def clear_event_form(self):
         """Clear the event form and reset fields to default state"""
         self.current_event_id = None
+        # Disable TTS button when form is cleared
+        if hasattr(self, 'tts_button'):
+            self.tts_button['state'] = 'disabled'
         self.event_id_var.set("")
         self.event_name_var.set("")
         
@@ -89,13 +92,34 @@ class StudioTab(ttk.Frame):
             self.event_type_combo.current(0)
             
     def on_event_select(self, event):
-        """Handle event selection from list"""
+        """Handle single click event selection from list"""
+        print("[DEBUG] on_event_select called")
+        # Update the TTS button state based on selection
+        selection = self.events_listbox.curselection()
+        if selection and hasattr(self, 'tts_button'):
+            print("[DEBUG] Enabling TTS button from on_event_select")
+            self.tts_button['state'] = 'normal'
+        return 'break'  # Prevent default behavior
+    
+    def on_event_double_click(self, event):
+        """Handle double click event from list"""
+        print("[DEBUG] on_event_double_click called")
         self.edit_selected_event()
+        # Enable TTS button when an event is selected
+        if hasattr(self, 'tts_button'):
+            print("[DEBUG] Enabling TTS button from on_event_double_click")
+            self.tts_button['state'] = 'normal'
         
     def edit_selected_event(self):
         """Load selected event for editing"""
+        print("[DEBUG] edit_selected_event called")
         event_id = self.get_selected_event_id()
         if event_id is None:
+            print("[DEBUG] No event ID found, disabling TTS button")
+            # Disable TTS button if no event is selected
+            if hasattr(self, 'tts_button'):
+                print("[DEBUG] Disabling TTS button in edit_selected_event")
+                self.tts_button['state'] = 'disabled'
             return
             
         try:
@@ -112,6 +136,14 @@ class StudioTab(ttk.Frame):
                         if name == event[3]:
                             self.event_type_combo.current(i)
                             break
+                
+                # Enable TTS button when an event is successfully loaded
+                if hasattr(self, 'tts_button'):
+                    print(f"[DEBUG] Setting TTS button state to 'normal' after loading event")
+                    self.tts_button['state'] = 'normal'
+                    print(f"[DEBUG] TTS button state after setting: {self.tts_button['state']}")
+                else:
+                    print("[DEBUG] tts_button attribute not found after loading event")
                             
         except Exception as e:
             messagebox.showerror("Error", f"Error al cargar el evento: {str(e)}")
@@ -430,8 +462,9 @@ class StudioTab(ttk.Frame):
         list_frame.grid_rowconfigure(0, weight=1)
         list_frame.grid_columnconfigure(0, weight=1)
         
-        # Bind double click to edit
-        self.events_listbox.bind('<Double-1>', self.on_event_select)
+        # Bind both single and double click to handle event selection
+        self.events_listbox.bind('<<ListboxSelect>>', self.on_event_select)
+        self.events_listbox.bind('<Double-1>', self.on_event_double_click)
         
         # Buttons frame for edit/delete
         btn_frame = ttk.Frame(left_panel)
@@ -697,12 +730,16 @@ class StudioTab(ttk.Frame):
             
     def setup_tts_tab(self):
         """Set up the TTS tab"""
+        print("[DEBUG] Setting up TTS tab")
         # Add TTS section button
-        ttk.Button(
+        self.tts_button = ttk.Button(
             self.tts_tab, 
             text="Agregar TTS", 
-            command=self.add_tts_section
-        ).pack(pady=10)
+            command=self.add_tts_section,
+            state='disabled'  # Initially disabled
+        )
+        self.tts_button.pack(pady=10)
+        print(f"[DEBUG] TTS button created, initial state: {self.tts_button['state']}")
         
         # TTS sections listbox with scrollbar
         list_frame = ttk.Frame(self.tts_tab)
