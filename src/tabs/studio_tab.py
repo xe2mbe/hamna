@@ -2,6 +2,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
 import sys
+import os
+import json
+import wave
+import contextlib
+from datetime import datetime
 
 # Add the src directory to the Python path
 src_path = str(Path(__file__).parent.parent)
@@ -9,6 +14,16 @@ if src_path not in sys.path:
     sys.path.append(src_path)
 
 from func.events import get_event_types, get_event, save_event, get_db_connection
+from func.tts import (
+    synthesize,
+    save_tts_section,
+    update_tts_section,
+    get_tts_section,
+    generate_audio_filename,
+    get_audio_duration,
+    get_tts_sections_by_event,
+    delete_tts_section
+)
 
 class StudioTab(ttk.Frame):
     def __init__(self, parent):
@@ -179,6 +194,9 @@ class StudioTab(ttk.Frame):
             else:
                 event_name = event_text.strip()
             
+            # Actualizar el ID del evento actual
+            self.current_event_id = event_id
+            
             # Imprimir valores para depuración
             print(f"ID del evento: {event_id}")
             print(f"Nombre del evento: {event_name}")
@@ -197,6 +215,10 @@ class StudioTab(ttk.Frame):
             self.event_id_entry.insert(0, str(event_id))
             self.event_name_entry.delete(0, tk.END)
             self.event_name_entry.insert(0, event_name)
+            
+            # Cargar las secciones TTS del evento
+            if hasattr(self, 'tts_listbox'):
+                self._load_tts_sections()
             
             # Forzar la actualización de la interfaz
             self.event_id_entry.update_idletasks()
@@ -828,26 +850,6 @@ class StudioTab(ttk.Frame):
         text_entry = tk.Text(text_frame, wrap=tk.WORD, width=40, height=10)
         text_entry.grid(row=0, column=0, sticky='nsew')
         
-        # Scrollbar para el área de texto
-        text_scroll = ttk.Scrollbar(text_frame, orient='vertical', command=text_entry.yview)
-        text_scroll.grid(row=0, column=1, sticky='ns')
-        text_entry['yscrollcommand'] = text_scroll.set
-        
-        # Botón de escuchar
-        listen_btn = ttk.Button(
-            text_preview_frame,
-            text="Escuchar",
-            command=lambda: self._preview_tts(
-                text_entry.get("1.0", tk.END).strip(), 
-                voice_codes.get(voice_var.get())
-            )
-        )
-        listen_btn.grid(row=1, column=0, pady=(5, 0), sticky='w')
-        
-        # Campo: Voz
-        ttk.Label(main_frame, text="Voz:").grid(
-            row=2, column=0, sticky='w', padx=5, pady=5)
-        
         # Obtener configuración del motor TTS
         from func.tts_config import get_tts_config, get_filtered_voices
         
@@ -939,9 +941,28 @@ class StudioTab(ttk.Frame):
         # Configurar el grid para que el combo se expanda
         voice_frame.columnconfigure(0, weight=1)
         
+        # Botón de escuchar
+        self.preview_btn = ttk.Button(
+            text_preview_frame,
+            text="Escuchar",
+            command=self._preview_tts,
+            style='Play.TButton'
+        )
+        self.preview_btn.grid(row=1, column=0, pady=(5, 0), sticky='w')
+        
+        # Guardar referencias a los widgets necesarios
+        self.text_entry = text_entry
+        self.voice_var = voice_var
+        self.voice_codes = voice_codes
+        
+        # Configurar el diálogo para que se cierre correctamente
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        
         # Botones
         btn_frame = ttk.Frame(main_frame)
         btn_frame.grid(row=3, column=0, columnspan=3, pady=(10, 0), sticky='e')
+        
+        # Botón de vista previa ya está definido arriba
         
         def on_ok():
             # Validar campos
@@ -1048,6 +1069,31 @@ class StudioTab(ttk.Frame):
         # Enfocar el campo de nombre
         name_entry.focus_set()
         
+    def edit_tts_section(self, event=None):
+        """Maneja la selección de una sección TTS para edición"""
+        try:
+            # Obtener la selección actual
+            selection = self.tts_listbox.curselection()
+            if not selection:
+                return
+                
+            # Obtener el nombre de la sección seleccionada
+            section_name = self.tts_listbox.get(selection[0])
+            
+            # Obtener los detalles completos de la sección
+            sections = get_tts_sections_by_event(self.current_event_id)
+            section_data = next((s for s in sections if s['name'] == section_name), None)
+            
+            if section_data:
+                # Guardar el ID de la sección que se está editando
+                self.editing_tts_id = section_data['id']
+                # Mostrar el diálogo de edición
+                self.show_add_tts_dialog(section_data)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al editar la sección TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
     def add_tts_section(self):
         """Maneja el evento de agregar una nueva sección TTS"""
         if hasattr(self, 'editing_tts_id'):
@@ -1056,161 +1102,351 @@ class StudioTab(ttk.Frame):
         
     def remove_tts_section(self):
         """Elimina la sección TTS seleccionada"""
-        selection = self.tts_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Advertencia", "Por favor seleccione una sección TTS para eliminar")
-            return
+        try:
+            # Obtener la selección actual
+            selection = self.tts_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("Selección requerida", "Por favor selecciona una sección TTS para eliminar")
+                return
+                
+            # Obtener el nombre de la sección seleccionada
+            section_name = self.tts_listbox.get(selection[0])
             
-        # Aquí iría la lógica para eliminar la sección TTS
-        self.tts_listbox.delete(selection[0])
-        
-    def edit_tts_section(self, event=None):
-        """Edita la sección TTS seleccionada"""
-        selection = self.tts_listbox.curselection()
-        if not selection:
-            return
+            # Confirmar eliminación
+            if not messagebox.askyesno("Confirmar eliminación", 
+                                     f"¿Estás seguro de que deseas eliminar la sección '{section_name}'?"):
+                return
             
-        # Obtener los datos de la sección seleccionada
-        selected_item = self.tts_listbox.get(selection[0])
-        # Aquí deberías obtener los datos completos de la sección seleccionada
-        # Por ahora, pasamos un diccionario vacío como ejemplo
-        section_data = {
-            'name': selected_item,  # Esto es solo un ejemplo, ajusta según tu estructura de datos
-            'text': '',  # Aquí deberías obtener el texto real
-            'voice': '',  # Aquí deberías obtener la voz real
-            'voice_display': selected_item  # Esto es solo un ejemplo
-        }
-        
-        self.show_add_tts_dialog(section_data)
-    
-    # ===== TTS Helper Methods =====
-    def _preview_tts(self, text, voice_code):
-        """Reproduce una vista previa del texto con la voz seleccionada"""
-        if not text or not voice_code:
-            messagebox.showwarning("Advertencia", "Texto o voz no válidos para la vista previa")
-            return
+            # Obtener los detalles completos de la sección
+            sections = get_tts_sections_by_event(self.current_event_id)
+            section_data = next((s for s in sections if s['name'] == section_name), None)
             
-        # Deshabilitar el botón de reproducción mientras se procesa
-        for widget in self.winfo_children():
-            if isinstance(widget, ttk.Button) and widget['text'] == '▶':
-                widget.config(state='disabled')
-        
-        def play_tts():
-            try:
-                from func.tts_config import get_tts_config
-                from func.azure_tts import synthesize_text as azure_synthesize, speech_config
-                
-                print(f"Iniciando vista previa con voz: {voice_code}")
-                
-                # Configurar la voz
-                speech_config.speech_synthesis_voice_name = voice_code
-                
-                # Llamar a la función de síntesis
-                success, message = azure_synthesize(text)
-                if not success:
-                    raise Exception(f"Azure TTS: {message}")
-                
-                print("Vista previa completada exitosamente")
-                
-            except Exception as e:
-                error_msg = f"Error al reproducir la vista previa: {str(e)}"
-                print(error_msg)
-                self.after(0, lambda: messagebox.showerror("Error", error_msg))
-            finally:
-                # Re-habilitar el botón de reproducción
-                self.after(0, self._enable_play_button)
-        
-        # Iniciar la reproducción en un hilo separado
-        import threading
-        tts_thread = threading.Thread(target=play_tts, daemon=True)
-        tts_thread.start()
-    
-    def _enable_play_button(self):
-        """Habilita el botón de reproducción"""
-        for widget in self.winfo_children():
-            if isinstance(widget, ttk.Button) and widget['text'] == '▶':
-                widget.config(state='normal')
-    
+            if section_data:
+                # Eliminar la sección de la base de datos
+                from func.tts import delete_tts_section
+                if delete_tts_section(section_data['id']):
+                    # Actualizar la lista de secciones
+                    self._load_tts_sections()
+                    messagebox.showinfo("Éxito", "Sección TTS eliminada correctamente")
+                else:
+                    messagebox.showerror("Error", "No se pudo eliminar la sección TTS")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al eliminar la sección TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
     def _refresh_tts_voices(self):
         """Actualiza la lista de voces disponibles"""
         try:
-            # Mostrar indicador de carga
-            self._show_loading(True, "Actualizando voces...")
+            from func.tts import list_voices
             
-            # Usar after para ejecutar en el hilo principal
-            self.after(100, self._do_refresh_voices)
+            # Obtener las voces disponibles
+            voices = list_voices(provider='azure')  # O el proveedor que estés usando
+            
+            # Actualizar el combo de voces en el diálogo si existe
+            if hasattr(self, 'voice_combo'):
+                voice_names = [f"{v['id']} - {v.get('name', '')}" for v in voices]
+                self.voice_combo['values'] = voice_names
+                if voice_names:
+                    self.voice_combo.current(0)
+                    
+            return voices
             
         except Exception as e:
-            self._show_loading(False)
-            self.after(0, lambda: messagebox.showerror(
-                "Error", 
-                f"Error al iniciar la actualización de voces: {str(e)}"
-            ))
-    
-    def _do_refresh_voices(self):
-        """Método auxiliar para actualizar las voces en segundo plano"""
-        from func.azure_tts import refresh_voices_cache
-        import threading
-        
-        def refresh_task():
-            try:
-                refresh_voices_cache()
-                self.after(0, self._on_voices_refreshed, True, None)
-            except Exception as e:
-                self.after(0, self._on_voices_refreshed, False, str(e))
-        
-        # Iniciar la tarea en segundo plano
-        threading.Thread(target=refresh_task, daemon=True).start()
-    
-    def _on_voices_refreshed(self, success, error_msg=None):
-        """Maneja la finalización de la actualización de voces"""
-        self._show_loading(False)
-        
-        if success:
-            messagebox.showinfo("Éxito", "Lista de voces actualizada correctamente")
-            # Volver a abrir el diálogo para actualizar la lista
-            self.after(100, self.show_add_tts_dialog)
-        else:
-            messagebox.showerror(
-                "Error", 
-                f"No se pudieron actualizar las voces: {error_msg or 'Error desconocido'}"
-            )
-    
-    def _show_loading(self, show, message=""):
-        """Muestra u oculta el indicador de carga"""
-        if hasattr(self, '_loading_label'):
-            self._loading_label.destroy()
+            messagebox.showerror("Error", f"No se pudieron cargar las voces: {str(e)}")
+            return []
             
-        if show:
-            self._loading_label = ttk.Label(
-                self, 
-                text=message,
-                style='Info.TLabel'
-            )
-            self._loading_label.pack(pady=10)
-            self.update()
-    
-    def _save_tts_section(self, section_data):
-        """Guarda la sección TTS en la lista"""
+    def _preview_tts(self, text_widget=None, voice_id=None, save_to_file=False, filename=None):
+        """Previsualiza el texto con la voz seleccionada
+        
+        Args:
+            text_widget: Widget de texto que contiene el texto a sintetizar
+            voice_id: ID de la voz a utilizar (opcional)
+            save_to_file: Si es True, guarda el audio en un archivo
+            filename: Nombre del archivo para guardar (solo si save_to_file es True)
+            
+        Returns:
+            str: Ruta del archivo de audio si se guardó, None en caso contrario
+        """
         try:
-            # Aquí deberías implementar la lógica para guardar la sección TTS
-            # Por ahora, solo mostramos un mensaje de ejemplo
-            print(f"Guardando sección TTS: {section_data}")
+            # Si no se proporciona el widget de texto, usar el del diálogo
+            if text_widget is None:
+                if not hasattr(self, 'text_entry'):
+                    messagebox.showerror("Error", "No se pudo acceder al campo de texto")
+                    return None
+                text_widget = self.text_entry
             
-            # Si es una edición, actualizamos el ítem existente
-            if hasattr(self, 'editing_tts_id') and self.editing_tts_id is not None:
-                # Lógica para actualizar la sección existente
-                print(f"Actualizando sección TTS con ID: {self.editing_tts_id}")
-                messagebox.showinfo("Éxito", "Sección TTS actualizada correctamente")
-            else:
-                # Lógica para agregar una nueva sección
-                print("Agregando nueva sección TTS")
-                messagebox.showinfo("Éxito", "Sección TTS agregada correctamente")
+            # Obtener el texto
+            text = text_widget.get("1.0", tk.END).strip()
+            if not text:
+                messagebox.showwarning("Advertencia", "No hay texto para previsualizar")
+                return None
+            
+            # Obtener el ID de la voz
+            if voice_id is None:
+                if not hasattr(self, 'voice_var') or not hasattr(self, 'voice_codes'):
+                    messagebox.showerror("Error", "No se pudo acceder a la selección de voz")
+                    return None
+                    
+                selected_voice = self.voice_var.get()
+                if not selected_voice:
+                    messagebox.showwarning("Advertencia", "Por favor selecciona una voz")
+                    return None
                 
-            # Aquí deberías actualizar la interfaz de usuario para reflejar los cambios
+                # Extraer el ID de la voz completo del formato "Display Name (locale) (voice_id)"
+                # Ejemplo: "Abril (es-ES) (es-ES-AbrilNeural)" -> "es-ES-AbrilNeural"
+                print(f"Raw selected voice: {selected_voice}")
+                
+                # Buscar el último par de paréntesis que debería contener el voice_id completo
+                start_idx = selected_voice.rfind('(')
+                end_idx = selected_voice.rfind(')')
+                
+                if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                    # Extraer el contenido del último par de paréntesis
+                    voice_id = selected_voice[start_idx + 1:end_idx].strip()
+                    print(f"Extracted voice ID: {voice_id}")
+                    
+                    # Si el ID extraído no tiene el formato correcto, intentar obtenerlo de otra manera
+                    if '-' not in voice_id and ' ' in selected_voice:
+                        # Intentar obtener el ID del formato "Name (es-ES)"
+                        parts = selected_voice.split('(')
+                        if len(parts) > 1 and ')' in parts[-1]:
+                            voice_id = parts[-1].split(')')[0].strip()
+                            print(f"Alternative extracted voice ID: {voice_id}")
+                else:
+                    # Si no se pudo extraer, usar el valor tal cual
+                    voice_id = selected_voice
+                    print(f"Using raw voice ID: {voice_id}")
+                
+                # Verificar que el voice_id tenga el formato correcto
+                if '-' not in voice_id:
+                    error_msg = f"Error: Formato de ID de voz no válido: '{voice_id}'. Se esperaba formato: 'es-ES-NombreVoz'"
+                    print(error_msg)
+                    messagebox.showerror("Error", error_msg)
+                    return None
+                
+                print(f"Using voice ID: {voice_id}")
             
+            # Importar el módulo de TTS
+            try:
+                from func.test_seccion_TTY import speech
+            except ImportError as e:
+                messagebox.showerror("Error", f"No se pudo importar el módulo de TTS: {str(e)}")
+                return None
+            
+            # Mostrar mensaje de espera
+            if hasattr(self, 'preview_btn'):
+                self.preview_btn.config(state=tk.DISABLED, text="Procesando...")
+                self.update_idletasks()
+            
+            try:
+                # Llamar a la función de síntesis
+                output_path = speech(
+                    text,
+                    voice_id=voice_id,
+                    save_to_file=save_to_file,
+                    filename=filename
+                )
+                
+                if output_path and save_to_file:
+                    messagebox.showinfo("Éxito", f"Audio guardado en:\n{output_path}")
+                    return output_path
+                elif not save_to_file:
+                    print("Reproducción completada")
+                    return None
+                else:
+                    messagebox.showerror("Error", "No se pudo generar el audio")
+                    return None
+                    
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al generar el audio: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                return None
+                
+            finally:
+                # Restaurar el botón
+                if hasattr(self, 'preview_btn'):
+                    self.preview_btn.config(state=tk.NORMAL, text="Escuchar")
+                    self.update_idletasks()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Error inesperado: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _save_tts_section(self, section_data):
+        """Guarda o actualiza una sección TTS
+        
+        Args:
+            section_data (dict): Datos de la sección a guardar
+            
+        Returns:
+            bool: True si se guardó correctamente, False en caso contrario
+        """
+        try:
+            # Primero, generar el archivo de audio
+            if 'text' in section_data and 'voice' in section_data:
+                # Generar un nombre de archivo basado en el nombre de la sección
+                import re
+                from datetime import datetime
+                
+                # Crear un nombre de archivo válido
+                safe_name = re.sub(r'[^\w\-_\.]', '_', section_data.get('name', 'audio'))
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{safe_name}_{timestamp}"
+                
+                # Crear un widget de texto temporal para pasar a _preview_tts
+                from tkinter import Text
+                text_widget = Text()
+                text_widget.insert("1.0", section_data['text'])
+                
+                # Generar el archivo de audio
+                audio_path = self._preview_tts(
+                    text_widget=text_widget,
+                    voice_id=section_data['voice'],
+                    save_to_file=True,
+                    filename=filename
+                )
+                
+                if not audio_path:
+                    messagebox.showerror("Error", "No se pudo generar el archivo de audio")
+                    return False
+                    
+                # Agregar la ruta del archivo a los datos de la sección
+                section_data['audio_path'] = audio_path
+            
+            # Importar las funciones de TTS
+            from func.tts import save_tts_section, update_tts_section
+            
+            # Determinar si es una actualización o creación
+            if 'id' in section_data and section_data['id'] is not None:
+                # Actualizar sección existente
+                success = update_tts_section(**section_data)
+                action = 'actualizada'
+            else:
+                # Crear nueva sección
+                tts_id = save_tts_section(
+                    name=section_data.get('name', 'Sin nombre'),
+                    text=section_data.get('text', ''),
+                    voice=section_data.get('voice', ''),
+                    audio_path=section_data.get('audio_path', ''),
+                    event_id=self.current_event_id
+                )
+                success = tts_id is not None
+                action = 'creada'
+            
+            if success:
+                messagebox.showinfo("Éxito", f"Sección TTS {action} correctamente")
+                # Actualizar la lista de secciones
+                self._load_tts_sections()
+                return True
+            else:
+                messagebox.showerror("Error", "No se pudo guardar la sección TTS")
+                return False
+                
         except Exception as e:
             messagebox.showerror("Error", f"Error al guardar la sección TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _load_tts_sections(self):
+        """Carga las secciones TTS del evento actual"""
+        if not hasattr(self, 'tts_listbox') or not self.current_event_id:
+            return
+            
+        try:
+            from func.tts import get_tts_sections_by_event
+            import os
+            from pathlib import Path
+            
+            # Limpiar la lista actual
+            self.tts_listbox.delete(0, tk.END)
+            
+            # Obtener las secciones del evento actual
+            sections = get_tts_sections_by_event(self.current_event_id)
+            
+            # Limpiar el diccionario de mapeo de índices
+            if not hasattr(self, 'tts_section_map'):
+                self.tts_section_map = {}
+            else:
+                self.tts_section_map.clear()
+            
+            # Agregar las secciones a la lista
+            for idx, section in enumerate(sections):
+                # Verificar si el archivo de audio existe
+                audio_exists = False
+                if 'audio_path' in section and section['audio_path']:
+                    audio_path = Path(section['audio_path'])
+                    audio_exists = audio_path.exists()
+                
+                # Formatear la entrada de la lista
+                status = "✓" if audio_exists else "✗"
+                display_text = f"{status} {section['name']} ({section['voice']})"
+                
+                # Agregar a la lista
+                self.tts_listbox.insert(tk.END, display_text)
+                
+                # Almacenar los datos completos en el mapeo
+                self.tts_section_map[idx] = section
+            
+            # Configurar el evento de doble clic para reproducir
+            if not hasattr(self, '_tts_listbox_click_bound'):
+                self.tts_listbox.bind('<Double-1>', self._on_tts_section_click)
+                self._tts_listbox_click_bound = True
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar las secciones TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def _on_tts_section_click(self, event):
+        """Maneja el evento de clic en una sección TTS"""
+        try:
+            # Obtener el índice del elemento seleccionado
+            selection = self.tts_listbox.curselection()
+            if not selection:
+                return
+                
+            idx = selection[0]
+            if idx not in self.tts_section_map:
+                return
+                
+            section = self.tts_section_map[idx]
+            
+            # Verificar si hay un archivo de audio
+            if 'audio_path' in section and section['audio_path']:
+                audio_path = Path(section['audio_path'])
+                if audio_path.exists():
+                    # Reproducir el archivo de audio
+                    if os.name == 'nt':  # Windows
+                        import winsound
+                        winsound.PlaySound(str(audio_path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    else:  # Linux/Mac
+                        import subprocess
+                        subprocess.Popen(['aplay', str(audio_path)])
+                    return
+            
+            # Si no hay archivo de audio o no existe, generar uno nuevo
+            if 'text' in section and 'voice' in section:
+                # Crear un widget de texto temporal
+                from tkinter import Text
+                text_widget = Text()
+                text_widget.insert("1.0", section['text'])
+                
+                # Generar y reproducir el audio
+                self._preview_tts(
+                    text_widget=text_widget,
+                    voice_id=section['voice']
+                )
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al reproducir la sección TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     # ===== Audio Tab Methods =====
     def setup_audio_tab(self):
@@ -1263,7 +1499,7 @@ class StudioTab(ttk.Frame):
         
         # Bind double click to play/select
         self.audio_tree.bind('<Double-1>', self.play_audio_section)
-    
+
     def add_audio_section(self):
         """Add a new audio section"""
         print("Adding new audio section")
@@ -1279,7 +1515,7 @@ class StudioTab(ttk.Frame):
         selection = self.audio_tree.selection()
         if selection:
             print(f"Playing audio section: {selection[0]}")
-    
+
     # ===== Effects Tab Methods =====
     def setup_effects_tab(self):
         """Set up the sound effects tab"""

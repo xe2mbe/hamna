@@ -123,7 +123,7 @@ def get_default_voice_config():
 speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
 speech_config.speech_synthesis_voice_name = get_default_voice_config()['voice']
 
-def synthesize_text(text, voice_name=None, rate=None, pitch=None, volume=None):
+def synthesize_text(text, voice_name=None, rate=None, pitch=None, volume=None, return_audio=False):
     """
     Sintetiza texto a voz usando Azure TTS
     
@@ -133,6 +133,7 @@ def synthesize_text(text, voice_name=None, rate=None, pitch=None, volume=None):
         rate (str, optional): Velocidad de habla (ej: "+10%", "-10%").
         pitch (str, optional): Tono de voz (ej: "+10%", "-10%").
         volume (str, optional): Volumen (ej: "80%").
+        return_audio (bool, optional): Si es True, retorna los datos de audio junto con el estado.
     """
     try:
         # Configurar voz si se especifica
@@ -148,13 +149,24 @@ def synthesize_text(text, voice_name=None, rate=None, pitch=None, volume=None):
                 "</prosody></voice></speak>")
         
         # Configurar salida de audio
-        audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
+        if return_audio:
+            # Usar un stream en memoria para capturar el audio
+            audio_stream = speechsdk.audio.PullAudioOutputStream()
+            audio_config = speechsdk.audio.AudioOutputConfig(stream=audio_stream)
+        else:
+            # Usar el altavoz por defecto
+            audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
+            
         synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
         
         # Sintetizar voz
         result = synthesizer.speak_ssml_async(ssml).get()
         
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+            if return_audio:
+                # Obtener los datos de audio del stream
+                audio_data = result.audio_data
+                return True, audio_data
             return True, "Voz generada correctamente"
         else:
             error_msg = f"Error en la síntesis de voz: {result.cancellation_details.reason}"

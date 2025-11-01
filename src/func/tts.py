@@ -1,3 +1,4 @@
+import sqlite3
 try:
     import pyttsx3
 except Exception:
@@ -671,6 +672,276 @@ def tts(text, output_file, velocidad):
         synthesize(text, output_file, voice_id=voice_id, rate=velocidad, provider='windows')
     except Exception:
         synthesize(text, output_file, voice_id=None, rate=velocidad, provider='windows')
+
+# Configuración de rutas para archivos de audio TTS
+AUDIO_BASE_DIR = os.path.join('media', 'audios', 'TTS')
+
+def get_db_connection():
+    """Obtiene una conexión a la base de datos."""
+    db_path = os.path.join('database', 'hamna.db')
+    return sqlite3.connect(db_path)
+
+def create_tts_section_table():
+    """Crea la tabla section_tts si no existe."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS section_tts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            text TEXT NOT NULL,
+            voice_id TEXT NOT NULL,
+            language TEXT NOT NULL,
+            audio_path TEXT NOT NULL,
+            duration_seconds REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE
+        )
+        ''')
+        conn.commit()
+    finally:
+        conn.close()
+
+def save_tts_section(
+    event_id: int,
+    name: str,
+    text: str,
+    voice_id: str,
+    language: str,
+    audio_path: str,
+    duration_seconds: float
+) -> int:
+    """
+    Guarda una nueva sección TTS en la base de datos.
+    
+    Args:
+        event_id: ID del evento al que pertenece la sección
+        name: Nombre de la sección
+        text: Texto a convertir a voz
+        voice_id: ID de la voz seleccionada
+        language: Idioma de la voz (ej: 'es-ES', 'en-US')
+        audio_path: Ruta relativa al archivo de audio generado
+        duration_seconds: Duración del audio en segundos
+        
+    Returns:
+        int: ID de la sección creada
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+        INSERT INTO section_tts 
+        (event_id, name, text, voice_id, language, audio_path, duration_seconds)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (event_id, name, text, voice_id, language, audio_path, duration_seconds))
+        
+        section_id = cursor.lastrowid
+        conn.commit()
+        return section_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def update_tts_section(
+    id: int,
+    name: Optional[str] = None,
+    text: Optional[str] = None,
+    voice_id: Optional[str] = None,
+    language: Optional[str] = None,
+    audio_path: Optional[str] = None,
+    duration_seconds: Optional[float] = None
+) -> bool:
+    """
+    Actualiza una sección TTS existente.
+    
+    Args:
+        id: ID de la sección a actualizar
+        name: Nuevo nombre (opcional)
+        text: Nuevo texto (opcional)
+        voice_id: Nueva voz (opcional)
+        language: Nuevo idioma (opcional)
+        audio_path: Nueva ruta de audio (opcional)
+        duration_seconds: Nueva duración (opcional)
+        
+    Returns:
+        bool: True si la actualización fue exitosa, False en caso contrario
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        
+        # Construir la consulta dinámicamente basada en los parámetros proporcionados
+        update_fields = []
+        params = []
+        
+        if name is not None:
+            update_fields.append("name = ?")
+            params.append(name)
+        if text is not None:
+            update_fields.append("text = ?")
+            params.append(text)
+        if voice_id is not None:
+            update_fields.append("voice_id = ?")
+            params.append(voice_id)
+        if language is not None:
+            update_fields.append("language = ?")
+            params.append(language)
+        if audio_path is not None:
+            update_fields.append("audio_path = ?")
+            params.append(audio_path)
+        if duration_seconds is not None:
+            update_fields.append("duration_seconds = ?")
+            params.append(duration_seconds)
+            
+        # Si no hay campos para actualizar, retornar False
+        if not update_fields:
+            return False
+            
+        # Agregar la actualización de updated_at
+        update_fields.append("updated_at = ?")
+        params.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # Construir la consulta final
+        query = f"""
+        UPDATE section_tts 
+        SET {', '.join(update_fields)}
+        WHERE id = ?"""
+        
+        # Agregar el ID al final de los parámetros
+        params.append(id)
+        
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def delete_tts_section(section_id: int) -> bool:
+    """
+    Elimina una sección TTS de la base de datos.
+    
+    Args:
+        section_id: ID de la sección a eliminar
+        
+    Returns:
+        bool: True si la eliminación fue exitosa, False en caso contrario
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM section_tts WHERE id = ?', (section_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+def get_tts_section(section_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Obtiene los detalles de una sección TTS por su ID.
+    
+    Args:
+        section_id: ID de la sección a obtener
+        
+    Returns:
+        Optional[Dict]: Diccionario con los detalles de la sección o None si no se encuentra
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM section_tts WHERE id = ?', (section_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            return None
+            
+        # Convertir la fila a un diccionario
+        columns = [column[0] for column in cursor.description]
+        return dict(zip(columns, row))
+    finally:
+        conn.close()
+
+def get_tts_sections_by_event(event_id: int) -> List[Dict[str, Any]]:
+    """
+    Obtiene todas las secciones TTS de un evento específico.
+    
+    Args:
+        event_id: ID del evento
+        
+    Returns:
+        List[Dict]: Lista de diccionarios con los detalles de las secciones
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM section_tts WHERE event_id = ? ORDER BY name', (event_id,))
+        
+        # Convertir las filas a una lista de diccionarios
+        columns = [column[0] for column in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+def get_audio_duration(audio_path: str) -> float:
+    """
+    Obtiene la duración de un archivo de audio en segundos.
+    
+    Args:
+        audio_path: Ruta al archivo de audio
+        
+    Returns:
+        float: Duración en segundos
+    """
+    try:
+        with contextlib.closing(wave.open(audio_path, 'r')) as f:
+            frames = f.getnframes()
+            rate = f.getframerate()
+            return frames / float(rate)
+    except Exception as e:
+        logger.error(f"Error al obtener la duración del audio {audio_path}: {str(e)}")
+        return 0.0
+
+def generate_audio_filename(event_id: int, section_name: str) -> str:
+    """
+    Genera un nombre de archivo único para el audio de una sección.
+    
+    Args:
+        event_id: ID del evento
+        section_name: Nombre de la sección
+        
+    Returns:
+        str: Ruta relativa del archivo de audio
+    """
+    # Crear directorio si no existe
+    event_dir = os.path.join(AUDIO_BASE_DIR, str(event_id))
+    os.makedirs(event_dir, exist_ok=True)
+    
+    # Generar nombre de archivo seguro
+    safe_name = "".join(c if c.isalnum() else "_" for c in section_name)
+    base_name = f"{safe_name}.mp3"
+    
+    # Si el archivo ya existe, agregar un sufijo numérico
+    counter = 1
+    output_file = os.path.join(event_dir, base_name)
+    while os.path.exists(output_file):
+        name, ext = os.path.splitext(base_name)
+        output_file = os.path.join(event_dir, f"{name}_{counter}{ext}")
+        counter += 1
+    
+    return output_file
+
+# Crear la tabla al importar el módulo
+create_tts_section_table()
 
 # Ejemplo de uso
 texto = "Bienvenidos al boletín dominical de la Federación Mexicana de Radio Experimentadores A.C."
