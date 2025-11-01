@@ -1157,7 +1157,7 @@ class StudioTab(ttk.Frame):
             messagebox.showerror("Error", f"No se pudieron cargar las voces: {str(e)}")
             return []
             
-    def _preview_tts(self, text_widget=None, voice_id=None, save_to_file=False, filename=None):
+    def _preview_tts(self, text_widget=None, voice_id=None, save_to_file=False, filename=None, output_dir=None):
         """Previsualiza el texto con la voz seleccionada
         
         Args:
@@ -1165,6 +1165,7 @@ class StudioTab(ttk.Frame):
             voice_id: ID de la voz a utilizar (opcional)
             save_to_file: Si es True, guarda el audio en un archivo
             filename: Nombre del archivo para guardar (solo si save_to_file es True)
+            output_dir: Directorio donde se guardará el archivo (opcional)
             
         Returns:
             str: Ruta del archivo de audio si se guardó, None en caso contrario
@@ -1194,43 +1195,27 @@ class StudioTab(ttk.Frame):
                     messagebox.showwarning("Advertencia", "Por favor selecciona una voz")
                     return None
                 
-                # Extraer el ID de la voz completo del formato "Display Name (locale) (voice_id)"
-                # Ejemplo: "Abril (es-ES) (es-ES-AbrilNeural)" -> "es-ES-AbrilNeural"
-                print(f"Raw selected voice: {selected_voice}")
-                
-                # Buscar el último par de paréntesis que debería contener el voice_id completo
-                start_idx = selected_voice.rfind('(')
-                end_idx = selected_voice.rfind(')')
-                
-                if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
-                    # Extraer el contenido del último par de paréntesis
-                    voice_id = selected_voice[start_idx + 1:end_idx].strip()
-                    print(f"Extracted voice ID: {voice_id}")
-                    
-                    # Si el ID extraído no tiene el formato correcto, intentar obtenerlo de otra manera
-                    if '-' not in voice_id and ' ' in selected_voice:
-                        # Intentar obtener el ID del formato "Name (es-ES)"
-                        parts = selected_voice.split('(')
-                        if len(parts) > 1 and ')' in parts[-1]:
-                            voice_id = parts[-1].split(')')[0].strip()
-                            print(f"Alternative extracted voice ID: {voice_id}")
+                # Obtener el ID de la voz del diccionario voice_codes
+                if hasattr(self, 'voice_codes') and selected_voice in self.voice_codes:
+                    voice_id = self.voice_codes[selected_voice]
+                    print(f"Using voice ID from voice_codes: {voice_id}")
                 else:
-                    # Si no se pudo extraer, usar el valor tal cual
+                    # Si no está en voice_codes, asumir que ya está en el formato correcto
                     voice_id = selected_voice
-                    print(f"Using raw voice ID: {voice_id}")
+                    print(f"Using raw selected voice as ID: {voice_id}")
                 
                 # Verificar que el voice_id tenga el formato correcto
-                if '-' not in voice_id:
+                if not isinstance(voice_id, str) or voice_id.count('-') < 2:
                     error_msg = f"Error: Formato de ID de voz no válido: '{voice_id}'. Se esperaba formato: 'es-ES-NombreVoz'"
                     print(error_msg)
                     messagebox.showerror("Error", error_msg)
                     return None
                 
-                print(f"Using voice ID: {voice_id}")
+                print(f"Final voice ID to use: {voice_id}")
             
             # Importar el módulo de TTS
             try:
-                from func.test_seccion_TTY import speech
+                from func.test_seccion_tts import speech
             except ImportError as e:
                 messagebox.showerror("Error", f"No se pudo importar el módulo de TTS: {str(e)}")
                 return None
@@ -1246,15 +1231,16 @@ class StudioTab(ttk.Frame):
                     text,
                     voice_id=voice_id,
                     save_to_file=save_to_file,
-                    filename=filename
+                    filename=filename,
+                    output_dir=output_dir
                 )
                 
                 if output_path and save_to_file:
                     messagebox.showinfo("Éxito", f"Audio guardado en:\n{output_path}")
                     return output_path
-                elif not save_to_file:
+                elif not save_to_file and output_path is not None:
                     print("Reproducción completada")
-                    return None
+                    return output_path  # Devolver la ruta del archivo temporal si se reprodujo
                 else:
                     messagebox.showerror("Error", "No se pudo generar el audio")
                     return None
@@ -1266,13 +1252,13 @@ class StudioTab(ttk.Frame):
                 return None
                 
             finally:
-                # Restaurar el botón
+                # Restaurar el botón de vista previa
                 if hasattr(self, 'preview_btn'):
                     self.preview_btn.config(state=tk.NORMAL, text="Escuchar")
                     self.update_idletasks()
-            
+                    
         except Exception as e:
-            messagebox.showerror("Error", f"Error inesperado: {str(e)}")
+            messagebox.showerror("Error", f"Error al generar la vista previa: {str(e)}")
             import traceback
             traceback.print_exc()
             return None
@@ -1281,42 +1267,70 @@ class StudioTab(ttk.Frame):
         """Guarda o actualiza una sección TTS
         
         Args:
-            section_data (dict): Datos de la sección a guardar
-            
+            section_data (dict): Datos de la sección a guardar con las claves:
+                - name: Nombre de la sección
+                - text: Texto a convertir a voz
+                - voice: ID de la voz a utilizar
+                - voice_display: Nombre para mostrar de la voz
+                - id: ID de la sección (opcional, para actualización)
+                
         Returns:
             bool: True si se guardó correctamente, False en caso contrario
         """
         try:
-            # Primero, generar el archivo de audio
-            if 'text' in section_data and 'voice' in section_data:
-                # Generar un nombre de archivo basado en el nombre de la sección
-                import re
-                from datetime import datetime
+            # Validar datos requeridos
+            if not all(key in section_data for key in ['name', 'text', 'voice']):
+                messagebox.showerror("Error", "Faltan datos requeridos para guardar la sección TTS")
+                return False
                 
-                # Crear un nombre de archivo válido
-                safe_name = re.sub(r'[^\w\-_\.]', '_', section_data.get('name', 'audio'))
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"{safe_name}_{timestamp}"
+            # Configurar directorio de salida para los archivos de audio
+            project_root = Path(__file__).parent.parent.parent
+            output_dir = project_root / 'media' / 'audios' / 'tts'
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generar un nombre de archivo seguro basado en el nombre de la sección
+            import re
+            from datetime import datetime
+            
+            # Crear un nombre de archivo válido
+            safe_name = re.sub(r'[^\w\-_\.]', '_', section_data.get('name', 'audio'))
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{safe_name}_{timestamp}.mp3"
+            
+            # Crear un widget de texto temporal para pasar a _preview_tts
+            from tkinter import Text
+            text_widget = Text()
+            text_widget.insert("1.0", section_data['text'])
+            
+            # Generar el archivo de audio
+            audio_path = self._preview_tts(
+                text_widget=text_widget,
+                voice_id=section_data['voice'],
+                save_to_file=True,
+                filename=filename,
+                output_dir=str(output_dir)
+            )
+            
+            if not audio_path:
+                messagebox.showerror("Error", "No se pudo generar el archivo de audio")
+                return False
                 
-                # Crear un widget de texto temporal para pasar a _preview_tts
-                from tkinter import Text
-                text_widget = Text()
-                text_widget.insert("1.0", section_data['text'])
-                
-                # Generar el archivo de audio
-                audio_path = self._preview_tts(
-                    text_widget=text_widget,
-                    voice_id=section_data['voice'],
-                    save_to_file=True,
-                    filename=filename
-                )
-                
-                if not audio_path:
-                    messagebox.showerror("Error", "No se pudo generar el archivo de audio")
-                    return False
-                    
-                # Agregar la ruta del archivo a los datos de la sección
-                section_data['audio_path'] = audio_path
+            # Obtener la duración del audio
+            import wave
+            import contextlib
+            
+            try:
+                with contextlib.closing(wave.open(audio_path, 'r')) as f:
+                    frames = f.getnframes()
+                    rate = f.getframerate()
+                    duration = frames / float(rate)
+            except Exception as e:
+                print(f"Error al obtener duración del audio: {e}")
+                duration = 0
+            
+            # Extraer el idioma del ID de la voz (los primeros 5 caracteres, ej: 'es-ES')
+            voice_id = section_data['voice']
+            language = voice_id[:5] if len(voice_id) >= 5 else 'es-ES'  # Valor por defecto
             
             # Importar las funciones de TTS
             from func.tts import save_tts_section, update_tts_section
@@ -1324,16 +1338,26 @@ class StudioTab(ttk.Frame):
             # Determinar si es una actualización o creación
             if 'id' in section_data and section_data['id'] is not None:
                 # Actualizar sección existente
-                success = update_tts_section(**section_data)
+                success = update_tts_section(
+                    section_id=section_data['id'],
+                    name=section_data.get('name', 'Sin nombre'),
+                    text=section_data.get('text', ''),
+                    archivo=str(audio_path),
+                    duracion_seg=int(duration),
+                    idioma=language,
+                    voz=voice_id
+                )
                 action = 'actualizada'
             else:
                 # Crear nueva sección
                 tts_id = save_tts_section(
                     name=section_data.get('name', 'Sin nombre'),
                     text=section_data.get('text', ''),
-                    voice=section_data.get('voice', ''),
-                    audio_path=section_data.get('audio_path', ''),
-                    event_id=self.current_event_id
+                    archivo=str(audio_path),
+                    duracion_seg=int(duration),
+                    idioma=language,
+                    voz=voice_id,
+                    evento_id=self.current_event_id
                 )
                 success = tts_id is not None
                 action = 'creada'
@@ -1344,7 +1368,7 @@ class StudioTab(ttk.Frame):
                 self._load_tts_sections()
                 return True
             else:
-                messagebox.showerror("Error", "No se pudo guardar la sección TTS")
+                messagebox.showerror("Error", "No se pudo guardar la sección TTS en la base de datos")
                 return False
                 
         except Exception as e:
