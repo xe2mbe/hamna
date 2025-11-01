@@ -70,9 +70,11 @@ class StudioTab(ttk.Frame):
     def clear_event_form(self):
         """Clear the event form and reset fields to default state"""
         self.current_event_id = None
-        # Disable TTS button when form is cleared
+        # Deshabilitar el botón TTS cuando se borran los detalles del evento
         if hasattr(self, 'tts_button'):
             self.tts_button['state'] = 'disabled'
+            print("[DEBUG] TTS button disabled in clear_event_form")
+            
         self.event_id_var.set("")
         self.event_name_var.set("")
         
@@ -90,6 +92,10 @@ class StudioTab(ttk.Frame):
         self.event_name_var.set("")
         if self.event_type_combo['values']:
             self.event_type_combo.current(0)
+            
+        # Asegurarse de que el botón TTS esté deshabilitado
+        if hasattr(self, 'tts_button') and self.tts_button['state'] != 'disabled':
+            self.tts_button['state'] = 'disabled'
             
     def on_event_select(self, event):
         """Handle single click event selection from list"""
@@ -203,6 +209,11 @@ class StudioTab(ttk.Frame):
             # Poner los campos en modo de solo lectura
             self.event_id_entry.config(state='readonly')
             self.event_name_entry.config(state='readonly')
+            
+            # Habilitar el botón de Agregar TTS ya que hay un evento cargado en los detalles
+            if hasattr(self, 'tts_button'):
+                self.tts_button['state'] = 'normal'
+                print("[DEBUG] TTS button enabled in edit_details")
             
             # Forzar un redibujado completo
             self.event_frame.update_idletasks()
