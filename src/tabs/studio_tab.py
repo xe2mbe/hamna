@@ -1333,7 +1333,8 @@ class StudioTab(ttk.Frame):
             language = voice_id[:5] if len(voice_id) >= 5 else 'es-ES'  # Valor por defecto
             
             # Importar las funciones de TTS
-            from func.tts import save_tts_section, update_tts_section
+            from func.db_utils import save_tts_section
+            from func.tts import update_tts_section
             
             # Determinar si es una actualización o creación
             if 'id' in section_data and section_data['id'] is not None:
@@ -1342,10 +1343,10 @@ class StudioTab(ttk.Frame):
                     section_id=section_data['id'],
                     name=section_data.get('name', 'Sin nombre'),
                     text=section_data.get('text', ''),
-                    archivo=str(audio_path),
-                    duracion_seg=int(duration),
-                    idioma=language,
-                    voz=voice_id
+                    audio_file=str(audio_path),
+                    duration=int(duration),
+                    language=language,
+                    voice=voice_id
                 )
                 action = 'actualizada'
             else:
@@ -1353,11 +1354,11 @@ class StudioTab(ttk.Frame):
                 tts_id = save_tts_section(
                     name=section_data.get('name', 'Sin nombre'),
                     text=section_data.get('text', ''),
-                    archivo=str(audio_path),
-                    duracion_seg=int(duration),
-                    idioma=language,
-                    voz=voice_id,
-                    evento_id=self.current_event_id
+                    audio_file=str(audio_path),
+                    duration=int(duration),
+                    language=language,
+                    voice=voice_id,
+                    event_id=self.current_event_id
                 )
                 success = tts_id is not None
                 action = 'creada'
