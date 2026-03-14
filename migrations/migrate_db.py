@@ -74,8 +74,30 @@ def migrate_database():
             )
             ''')
             print("[MIGRACIÓN] Tabla 'secciones' creada exitosamente")
+            
+        # 3. Crear tabla seccion_tts si no existe
+        if not check_table_exists(cursor, 'seccion_tts'):
+            cursor.execute('''
+            CREATE TABLE seccion_tts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seccion_id INTEGER NOT NULL,
+                texto TEXT NOT NULL,
+                voz TEXT NOT NULL,
+                idioma TEXT NOT NULL,
+                velocidad REAL DEFAULT 1.0,
+                tono REAL DEFAULT 0.0,
+                archivo_audio TEXT,
+                duracion_seg REAL,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                usuario_creacion TEXT DEFAULT 'sistema',
+                usuario_actualizacion TEXT DEFAULT 'sistema',
+                FOREIGN KEY (seccion_id) REFERENCES secciones(id) ON DELETE CASCADE
+            )
+            ''')
+            print("[MIGRACIÓN] Tabla 'seccion_tts' creada exitosamente")
         
-        # 3. Actualizar la tabla eventos para incluir ON UPDATE CASCADE en la clave foránea
+        # 4. Actualizar la tabla eventos para incluir ON UPDATE CASCADE en la clave foránea
         # Esto requiere recrear la tabla con la nueva restricción
         cursor.execute("PRAGMA foreign_keys = OFF")
         

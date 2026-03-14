@@ -1019,7 +1019,7 @@ class StudioTab(ttk.Frame):
             if 'id' in section_data:
                 self.editing_tts_id = section_data['id']
         
-        ttk.Button(btn_frame, text="Aceptar", command=on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Guardar", command=on_ok).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
         
         # Configurar estilos
@@ -1277,122 +1277,204 @@ class StudioTab(ttk.Frame):
         Returns:
             bool: True si se guardó correctamente, False en caso contrario
         """
-        try:
-            # Validar datos requeridos
-            if not all(key in section_data for key in ['name', 'text', 'voice']):
-                messagebox.showerror("Error", "Faltan datos requeridos para guardar la sección TTS")
-                return False
-                
-            # Configurar directorio de salida para los archivos de audio
-            project_root = Path(__file__).parent.parent.parent
-            output_dir = project_root / 'media' / 'audios' / 'tts'
-            output_dir.mkdir(parents=True, exist_ok=True)
+        conn = None
+        # Validar datos requeridos
+        if not all(key in section_data for key in ['name', 'text', 'voice']):
+            messagebox.showerror("Error", "Faltan datos requeridos para guardar la sección TTS")
+            return False
             
-            # Generar un nombre de archivo seguro basado en el nombre de la sección
-            import re
-            from datetime import datetime
-            
-            # Crear un nombre de archivo válido
-            safe_name = re.sub(r'[^\w\-_\.]', '_', section_data.get('name', 'audio'))
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{safe_name}_{timestamp}.mp3"
-            
-            # Crear un widget de texto temporal para pasar a _preview_tts
-            from tkinter import Text
-            text_widget = Text()
-            text_widget.insert("1.0", section_data['text'])
-            
-            # Generar el archivo de audio
-            audio_path = self._preview_tts(
-                text_widget=text_widget,
-                voice_id=section_data['voice'],
-                save_to_file=True,
-                filename=filename,
-                output_dir=str(output_dir)
-            )
-            
-            if not audio_path:
-                messagebox.showerror("Error", "No se pudo generar el archivo de audio")
-                return False
-                
-            # Obtener la duración del audio
-            import wave
-            import contextlib
-            
-            try:
-                with contextlib.closing(wave.open(audio_path, 'r')) as f:
-                    frames = f.getnframes()
-                    rate = f.getframerate()
-                    duration = frames / float(rate)
-            except Exception as e:
-                print(f"Error al obtener duración del audio: {e}")
-                duration = 0
-            
-            # Extraer el idioma del ID de la voz (los primeros 5 caracteres, ej: 'es-ES')
-            voice_id = section_data['voice']
-            language = voice_id[:5] if len(voice_id) >= 5 else 'es-ES'  # Valor por defecto
-            
-            # Importar las funciones de TTS
-            from func.db_utils import save_tts_section
-            from func.tts import update_tts_section
-            
-            # Determinar si es una actualización o creación
-            if 'id' in section_data and section_data['id'] is not None:
-                # Actualizar sección existente
-                success = update_tts_section(
-                    section_id=section_data['id'],
-                    name=section_data.get('name', 'Sin nombre'),
-                    text=section_data.get('text', ''),
-                    audio_file=str(audio_path),
-                    duration=int(duration),
-                    language=language,
-                    voice=voice_id
-                )
-                action = 'actualizada'
-            else:
-                # Crear nueva sección
-                tts_id = save_tts_section(
-                    name=section_data.get('name', 'Sin nombre'),
-                    text=section_data.get('text', ''),
-                    audio_file=str(audio_path),
-                    duration=int(duration),
-                    language=language,
-                    voice=voice_id,
-                    event_id=self.current_event_id
-                )
-                success = tts_id is not None
-                action = 'creada'
-            
-            if success:
-                messagebox.showinfo("Éxito", f"Sección TTS {action} correctamente")
-                # Actualizar la lista de secciones
-                self._load_tts_sections()
-                return True
-            else:
-                messagebox.showerror("Error", "No se pudo guardar la sección TTS en la base de datos")
-                return False
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al guardar la sección TTS: {str(e)}")
-            import traceback
-            traceback.print_exc()
+        # Configurar directorio de salida para los archivos de audio
+        project_root = Path(__file__).parent.parent.parent
+        output_dir = project_root / 'media' / 'audios' / 'tts'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generar un nombre de archivo seguro basado en el nombre de la sección
+        import re
+        from datetime import datetime
+        
+        # Crear un nombre de archivo válido
+        safe_name = re.sub(r'[^\w\-_\.]', '_', section_data.get('name', 'audio'))
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{safe_name}_{timestamp}.mp3"
+        
+        # Crear un widget de texto temporal para pasar a _preview_tts
+        from tkinter import Text
+        text_widget = Text()
+        text_widget.insert("1.0", section_data['text'])
+        
+        print(f"[DEBUG] Generando archivo de audio para: {section_data.get('name')}")
+        print(f"[DEBUG] Texto: {section_data['text'][:50]}...")
+        print(f"[DEBUG] Voz: {section_data['voice']}")
+        
+        # Generate the audio file
+        audio_path = self._preview_tts(
+            text_widget=text_widget,
+            voice_id=section_data['voice'],
+            save_to_file=True,
+            filename=filename,
+            output_dir=str(output_dir)
+        )
+        
+        if not audio_path or not os.path.exists(audio_path):
+            print(f"[ERROR] No se pudo generar el archivo de audio en: {audio_path}")
             return False
     
+        print(f"[DEBUG] Archivo de audio generado: {audio_path}")
+    
+        print(f"[DEBUG] Guardando en el evento ID: {event_id}")
+        
+        # Extraer el idioma del ID de la voz (los primeros 5 caracteres, ej: 'es-ES')
+        voice_id = section_data['voice']
+        language = voice_id[:5] if len(voice_id) >= 5 else 'es-ES'  # Valor por defecto
+        
+        print(f"[DEBUG] Idioma detectado: {language}")
+        
+        # Obtener el ID del evento actual
+        event_id = self.current_event_id
+        if not event_id:
+            from func.db_utils import get_active_event
+            active_event = get_active_event()
+            if active_event:
+                event_id = active_event['id']
+            else:
+                messagebox.showerror("Error", "No hay ningún evento activo")
+                return False
+        
+        print(f"[DEBUG] Guardando en el evento ID: {event_id}")
+        
+        # Obtener la duración del audio
+        try:
+            import wave
+            import contextlib
+            with contextlib.closing(wave.open(audio_path, 'r')) as f:
+                frames = f.getnframes()
+                rate = f.getframerate()
+                duration = frames / float(rate)
+                print(f"[DEBUG] Duración del audio: {duration} segundos")
+        except Exception as e:
+            print(f"[ERROR] Error al obtener duración del audio: {e}")
+            duration = 0
+        
+        # Guardar en la base de datos
+        try:
+            result = save_tts_section(
+                name=section_data.get('name', 'Sin nombre'),
+                text=section_data.get('text', ''),
+                audio_file=str(audio_path),
+                duration=int(duration),
+                language=language,
+                voice=voice_id,
+                event_id=event_id
+            )
+            
+            # Check the return value (could be a tuple (success, message) or just tts_id)
+            if isinstance(result, tuple):
+                success, message = result
+                if success:
+                    tts_id = message  # On success, message contains the ID
+                    print(f"[DEBUG] Sección TTS guardada con ID: {tts_id}")
+                    messagebox.showinfo("Éxito", "Sección TTS guardada correctamente")
+                    
+                    # Actualizar la lista de secciones
+                    if hasattr(self, '_load_tts_sections'):
+                        self._load_tts_sections()
+                    
+                    return True
+                else:
+                    error_msg = message or "No se pudo guardar la sección TTS en la base de datos"
+                    print(f"[ERROR] {error_msg}")
+                    messagebox.showerror("Error", error_msg)
+                    return False
+            elif result:  # For backward compatibility if function returns just the ID
+                messagebox.showinfo("Éxito", "Sección TTS guardada correctamente")
+                
+                # Actualizar la lista de secciones
+                if hasattr(self, '_load_tts_sections'):
+                    self._load_tts_sections()
+                
+                return True
+            else:
+                error_msg = message or "No se pudo guardar la sección TTS en la base de datos"
+                print(f"[ERROR] {error_msg}")
+                messagebox.showerror("Error", error_msg)
+                return False
+
+        except Exception as e:
+            print(f"[ERROR] Error al guardar la sección TTS: {str(e)}")
+            messagebox.showerror("Error", f"Error al guardar: {str(e)}")
+            return False
+        finally:
+            if 'conn' in locals() and conn:
+                try:
+                    conn.close()
+                except Exception as e:
+                    print(f"[WARNING] Error al cerrar la conexión: {e}")
+        
     def _load_tts_sections(self):
-        """Carga las secciones TTS del evento actual"""
+        """Carga las secciones TTS del evento actual desde la base de datos"""
         if not hasattr(self, 'tts_listbox') or not self.current_event_id:
             return
             
         try:
-            from func.tts import get_tts_sections_by_event
-            import os
-            from pathlib import Path
+            print(f"[DEBUG] Cargando secciones TTS para el evento ID: {self.current_event_id}")
             
             # Limpiar la lista actual
             self.tts_listbox.delete(0, tk.END)
             
-            # Obtener las secciones del evento actual
-            sections = get_tts_sections_by_event(self.current_event_id)
+            # Obtener conexión a la base de datos
+            from func.db_utils import get_db_connection
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # First, get the structure of the seccion_tts table to determine which columns exist
+            cursor.execute("PRAGMA table_info(seccion_tts)")
+            columns = [col[1] for col in cursor.fetchall()]
+            print(f"[DEBUG] Available columns in seccion_tts: {columns}")
+            
+            # Build the query based on available columns
+            select_columns = [
+                "s.id", 
+                "COALESCE(st.nombre, s.nombre) as nombre",  # Usar el nombre de seccion_tts si existe, si no, usar el de secciones
+                "st.duracion_seg", 
+                "st.voz",
+                "st.texto"
+            ]
+            
+            # Add archivo_audio or archivo column based on what exists
+            if 'archivo_audio' in columns:
+                select_columns.append("st.archivo_audio as archivo_audio")
+            elif 'archivo' in columns:
+                select_columns.append("st.archivo as archivo_audio")
+                
+            # Add other optional columns if they exist
+            if 'idioma' in columns:
+                select_columns.append("st.idioma")
+            
+            # Build the ORDER BY clause safely
+            order_by = []
+            cursor.execute("PRAGMA table_info(secciones)")
+            seccion_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'fecha_creacion' in seccion_columns:
+                order_by.append("COALESCE(s.fecha_creacion, 0)")
+            order_by.append("s.nombre")
+            
+            query = f"""
+                SELECT {', '.join(select_columns)}
+                FROM secciones s
+                JOIN seccion_tts st ON s.id = st.seccion_id
+                WHERE s.evento_id = ? AND s.tipo_id = (SELECT id FROM tipos_seccion WHERE LOWER(nombre) = 'tts' LIMIT 1)
+                ORDER BY {', '.join(order_by)}
+            """
+            
+            print(f"[DEBUG] Using query: {query}")
+            
+            # Ejecutar la consulta
+            print(f"[DEBUG] Ejecutando consulta: {query}")
+            cursor.execute(query, (self.current_event_id,))
+            sections = cursor.fetchall()
+            
+            print(f"[DEBUG] Se encontraron {len(sections)} secciones TTS")
             
             # Limpiar el diccionario de mapeo de índices
             if not hasattr(self, 'tts_section_map'):
@@ -1400,33 +1482,133 @@ class StudioTab(ttk.Frame):
             else:
                 self.tts_section_map.clear()
             
-            # Agregar las secciones a la lista
-            for idx, section in enumerate(sections):
-                # Verificar si el archivo de audio existe
-                audio_exists = False
-                if 'audio_path' in section and section['audio_path']:
-                    audio_path = Path(section['audio_path'])
-                    audio_exists = audio_path.exists()
-                
-                # Formatear la entrada de la lista
-                status = "✓" if audio_exists else "✗"
-                display_text = f"{status} {section['name']} ({section['voice']})"
-                
-                # Agregar a la lista
-                self.tts_listbox.insert(tk.END, display_text)
-                
-                # Almacenar los datos completos en el mapeo
-                self.tts_section_map[idx] = section
+            # Si no hay secciones, mostrar mensaje y salir
+            if not sections:
+                print("[INFO] No hay secciones TTS para mostrar")
+                self.tts_listbox.insert(tk.END, "No hay secciones TTS para este evento")
+                return
             
+            # Agregar las secciones a la lista
+            for idx, section_data in enumerate(sections):
+                try:
+                    section_id = section_data[0]
+                    nombre = section_data[1] or "Sin nombre"
+                    duracion = section_data[2] or 0
+                    voz = section_data[3] or "Desconocida"
+                    archivo_audio = section_data[4]
+                    texto = section_data[5] or ""
+                    
+                    print(f"[DEBUG] Procesando sección {idx + 1}: ID={section_id}, Nombre='{nombre}'")
+                    
+                    # Formatear la duración (segundos a MM:SS)
+                    minutos = int(duracion // 60) if duracion else 0
+                    segundos = int(duracion % 60) if duracion else 0
+                    duracion_str = f"{minutos:02d}:{segundos:02d}"
+                    
+                    # Extraer el nombre de la voz (última parte después del último guión)
+                    voz_nombre = voz.split('-')[-1] if voz and '-' in voz else voz
+                    
+                    # Crear el texto a mostrar en la lista
+                    display_text = f"{nombre} ({duracion_str}) - {voz_nombre}"
+                    
+                    # Verificar si el archivo de audio existe
+                    audio_exists = False
+                    audio_path = None
+                    if archivo_audio:
+                        # Obtener la ruta base del proyecto
+                        project_root = Path(__file__).parent.parent.parent
+                        media_dir = project_root / 'media'
+                        
+                        # Lista de posibles ubicaciones para buscar el archivo
+                        possible_paths = []
+                        
+                        # 1. Ruta absoluta directa (si se guardó como absoluta)
+                        possible_paths.append(Path(archivo_audio))
+                        
+                        # 2. Ruta relativa desde el directorio media
+                        possible_paths.append(media_dir / 'audios' / 'tts' / archivo_audio)
+                        
+                        # 3. Si la ruta contiene '..' o './', intentar normalizarla
+                        if '..' in str(archivo_audio) or './' in str(archivo_audio):
+                            try:
+                                normalized = os.path.normpath(media_dir / archivo_audio)
+                                possible_paths.append(Path(normalized))
+                            except Exception as e:
+                                print(f"[WARNING] Error al normalizar la ruta {archivo_audio}: {e}")
+                        
+                        # 4. Intentar con la ruta relativa desde el directorio actual
+                        possible_paths.append(Path(archivo_audio))
+                        
+                        # Verificar cada ruta posible
+                        for path in possible_paths:
+                            try:
+                                path = path.resolve()  # Resuelve cualquier . o .. en la ruta
+                                if path.exists() and path.is_file():
+                                    audio_path = path
+                                    audio_exists = True
+                                    print(f"[DEBUG] Archivo de audio encontrado en: {audio_path}")
+                                    break
+                            except Exception as e:
+                                print(f"[DEBUG] Error al verificar ruta {path}: {e}")
+                        
+                        if not audio_exists:
+                            print(f"[WARNING] No se encontró el archivo de audio. Rutas probadas:")
+                            for i, p in enumerate(possible_paths, 1):
+                                print(f"  {i}. {p}")
+                            display_text += " (archivo no encontrado)"
+                    
+                    # Agregar la sección al listbox
+                    index = self.tts_listbox.size()
+                    self.tts_listbox.insert(tk.END, display_text)
+                    
+                    # Guardar la información en el diccionario
+                    self.tts_section_map[index] = {
+                        'id': section_id,
+                        'nombre': nombre,
+                        'duracion': duracion,
+                        'voz': voz,
+                        'archivo_audio': str(audio_path) if audio_path else archivo_audio,
+                        'audio_exists': audio_exists,
+                        'texto': texto
+                    }
+                except Exception as e:
+                    print(f"[ERROR] Error al procesar la sección {idx + 1}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
+            print(f"[DEBUG] Mapa de secciones TTS actualizado con {len(self.tts_section_map)} entradas")
+            
+            # Configurar el color de los elementos en el listbox
+            for idx in range(self.tts_listbox.size()):
+                section_data = self.tts_section_map.get(idx, {})
+                if not section_data.get('audio_exists', False) and section_data.get('archivo_audio'):
+                    self.tts_listbox.itemconfig(idx, {'fg': 'red'})
+                else:
+                    self.tts_listbox.itemconfig(idx, {'fg': 'black'})
+            
+            # Ajustar el ancho del listbox al contenido más largo
+            if self.tts_listbox.size() > 0:
+                max_width = max(len(self.tts_listbox.get(i)) for i in range(self.tts_listbox.size()))
+                self.tts_listbox.config(width=min(max_width + 2, 80))  # Máximo 80 caracteres de ancho
+                
+        except Exception as e:
+            print(f"[ERROR] Error al cargar las secciones TTS: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"No se pudieron cargar las secciones TTS: {str(e)}")
+            
+        finally:
+            # Cerrar la conexión a la base de datos
+            if 'conn' in locals() and conn:
+                try:
+                    conn.close()
+                except Exception as e:
+                    print(f"[WARNING] Error al cerrar la conexión: {e}")
+                
             # Configurar el evento de doble clic para reproducir
             if not hasattr(self, '_tts_listbox_click_bound'):
                 self.tts_listbox.bind('<Double-1>', self._on_tts_section_click)
                 self._tts_listbox_click_bound = True
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al cargar las secciones TTS: {str(e)}")
-            import traceback
-            traceback.print_exc()
     
     def _on_tts_section_click(self, event):
         """Maneja el evento de clic en una sección TTS"""
