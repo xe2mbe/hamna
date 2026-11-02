@@ -60,12 +60,24 @@ SECRET_KEYS = {"password_hash", "secret_key", "azure_key"}
 
 _lock = threading.Lock()
 _cache = None
+_mtime = None
+
+
+def _file_mtime():
+    try:
+        return paths.settings_file().stat().st_mtime
+    except OSError:
+        return None
 
 
 def load():
-    global _cache
+    """Ajustes en memoria; se releen si otro proceso cambió el archivo
+    (por ejemplo hamna-web-passwd)."""
+    global _cache, _mtime
     with _lock:
-        if _cache is None:
+        mt = _file_mtime()
+        if _cache is None or mt != _mtime:
+            _mtime = mt
             data = {}
             f = paths.settings_file()
             if f.is_file():
@@ -82,7 +94,7 @@ def get(key, default=None):
 
 
 def save(updates):
-    global _cache
+    global _cache, _mtime
     cfg = load()
     cfg.update(updates)
     with _lock:
@@ -95,6 +107,7 @@ def save(updates):
         except OSError:
             pass
         _cache = cfg
+        _mtime = _file_mtime()
     return dict(cfg)
 
 
