@@ -438,7 +438,14 @@ def cron_save(req):
 def programacion(req):
     out = []
     now = dt.datetime.now()
+    durs = {e["id"]: e["duracion_total"] for e in db.get_eventos()}
+    conex = {}
     for r in db.get_programacion():
+        eid = r["evento_id"]
+        if eid not in conex:
+            conex[eid] = db.get_conexiones(eid)
+        r["duracion"] = durs.get(eid) or 0
+        r["conexiones"] = conex[eid]
         nxt = engine.next_run(r, now) if r["activo"] else None
         r["proxima"] = nxt.strftime("%Y-%m-%d %H:%M") if nxt else None
         r["faltan_s"] = int((nxt - now).total_seconds()) if nxt else None

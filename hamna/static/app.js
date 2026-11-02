@@ -180,6 +180,7 @@ async function loadProg() {
   S.prog = prog; S.eventos = ev.eventos; S.tipos = ev.tipos;
   S.progLoaded = Date.now();
   renderProg();
+  loadCronEntries().then((ch) => { if (ch && S.tab === "prog") renderProg(); });
 }
 function recText(p) {
   if (p.recurrencia === "semanal") return "Cada " + DIAS[new Date(p.fecha + "T12:00").getDay()];
@@ -203,6 +204,7 @@ function renderProg() {
       <h3>${esc(p.evento_nombre)}</h3>
       <div class="meta">${esc(recText(p))}${p.evento_tipo ? " · " + esc(p.evento_tipo) : ""}</div>
       <div class="meta" data-left="${p.faltan_s ?? ""}">${p.activo ? (p.proxima ? "Próxima: " + esc(p.proxima) + " · en <b class='left'>" + fmtLeft(p.faltan_s) + "</b>" : "Sin próximas fechas") : "Desactivada"}</div>
+      ${progTimeline(p)}
       <div class="actions">
         <button class="btn sm primary" data-act="tx" data-id="${p.evento_id}" data-n="${esc(p.evento_nombre)}">📡 Transmitir ahora</button>
         <button class="btn sm" data-act="edit" data-id="${p.id}">Editar</button>
@@ -855,13 +857,18 @@ function cronDesc(s) {
 async function loadCron() {
   const el = $("#cronList");
   let r;
-  try { r = await api("/api/cron"); }
+  try {
+    const [c, prog] = await Promise.all([api("/api/cron"), api("/api/programacion").catch(() => null)]);
+    r = c; if (prog) S.prog = prog;
+  }
   catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   if (!r.disponible) {
     el.innerHTML = `<p class="empty">Este equipo no tiene el ayudante de cron. Vuelve a ejecutar <code>install.sh</code> en el nodo.</p>`;
     return;
   }
   S.cron = r.tablas;
+  S.cronEntries = cronEntries(r.tablas);
+  const rel = cronRelations(S.cronEntries, S.prog || []);
   el.innerHTML = r.tablas.map((t, ti) => {
     if (t.error) return `<div class="cron-card"><header><h2>${esc(t.titulo)}</h2></header><p class="note err">${esc(t.error)}</p></div>`;
     const lines = t.texto.split("\n").map(cronParse);
@@ -872,6 +879,7 @@ async function loadCron() {
           <span class="when"><b>${esc(cronDesc(l.sched))}</b><small>${esc(l.sched)}</small></span>
           <code>${esc(l.cmd)}</code>
           <span class="mini">${t.editable ? `<button class="btn" data-edit title="Editar">✎</button><button class="btn" data-del title="Borrar">✕</button>` : ""}</span>
+          ${cronTags(l, rel.get(t.id + ":" + li))}
         </div>`;
       if (l.kind === "comment" && l.text.trim()) return `<div class="cron-row comment"># ${esc(l.text)}</div>`;
       if (l.kind === "other") return `<div class="cron-row comment"><code>${esc(l.raw)}</code></div>`;
@@ -987,6 +995,192 @@ function cronRaw(t) {
     closeModal();
     cronSave(t, text, "Cron guardado");
   };
+}
+
+/* ── Cron ↔ programación ─────────────────────────────────────────────────── */
+// Cruza las tareas del cron con los eventos programados: qué corre antes,
+// durante y después de cada evento, y cuánto tiempo queda conectado un nodo.
+const WEEK = 7 * 1440;
+const MARGEN = 60; // minutos antes y después del evento en los que se busca
+const CRON_ALIAS = { "@hourly": "0 * * * *", "@daily": "0 0 * * *", "@midnight": "0 0 * * *", "@weekly": "0 0 * * 0" };
+const DOW_N = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+function cronSet(f, lo, hi, names) {
+  const out = new Set();
+  for (let part of f.toLowerCase().split(",")) {
+    if (names) part = part.replace(/[a-z]{3}/g, (x) => (x in names ? names[x] : x));
+    const m = part.match(/^(\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/);
+    if (!m) return null;
+    const a = m[1] === "*" ? lo : +m[2];
+    const b = m[1] === "*" ? hi : m[3] != null ? +m[3] : m[4] ? hi : a;
+    const st = m[4] ? +m[4] : 1;
+    if (!st || a < lo || b > hi || a > b) return null;
+    for (let i = a; i <= b; i += st) out.add(i);
+  }
+  return out;
+}
+// Minutos de la semana (0 = domingo 00:00) en que corre la tarea; null si no es semanal.
+function cronTimes(sched) {
+  const f = (CRON_ALIAS[sched] || sched).split(" ");
+  if (f.length !== 5 || f[2] !== "*" || f[3] !== "*") return null;
+  const mi = cronSet(f[0], 0, 59), ho = cronSet(f[1], 0, 23), dw = cronSet(f[4], 0, 7, DOW_N);
+  if (!mi || !ho || !dw) return null;
+  const out = [];
+  for (const d of new Set([...dw].map((x) => x % 7))) for (const h of ho) for (const m of mi) out.push(d * 1440 + h * 60 + m);
+  return out.sort((a, b) => a - b);
+}
+// Qué hace un comando, lo que se pueda adivinar. Lo que va después de un # no lo ejecuta el shell.
+function cronWhat(cmd) {
+  const run = cmd.replace(/(^|[\s;&|])#.*$/, "$1").trim();
+  const r = { act: "", text: "", ignorado: run.length < cmd.trim().length ? cmd.trim().slice(run.length).trim() : "" };
+  let m;
+  if ((m = run.match(/ilink\s+(\d+)(?:\s+(\d+))?/))) {
+    const c = +m[1];
+    if (c === 6) Object.assign(r, { act: "off", node: "*", text: "Desconecta todos los enlaces" });
+    else if ((c === 1 || c === 11) && m[2]) Object.assign(r, { act: "off", node: m[2], text: "Desconecta " + m[2] });
+    else if ([2, 3, 12, 13].includes(c) && m[2]) Object.assign(r, { act: "on", node: m[2], text: "Conecta a " + m[2] + (c % 10 === 2 ? " (monitor)" : "") });
+  } else if ((m = run.match(/disconnect[_-]?(?:from[_-]?|to[_-]?)?(\d{3,7})/i))) Object.assign(r, { act: "off", node: m[1], text: "Desconecta " + m[1] });
+  else if ((m = run.match(/connect[_-]?(?:to[_-]?)?(\d{3,7})/i))) Object.assign(r, { act: "on", node: m[1], text: "Conecta a " + m[1] });
+  else if ((m = run.match(/\bdecode\s+(\d{4,6})/))) Object.assign(r, { act: "on", node: "irlp", text: "IRLP: conecta a " + m[1] });
+  else if (/(^|[\/\s])end(\s|$)/.test(run) && /irlp|SCRIPT/i.test(run)) Object.assign(r, { act: "off", node: "irlp", text: "IRLP: desconecta" });
+  else if ((m = run.match(/duplex[_-]?(\d)/i))) Object.assign(r, { act: "duplex", text: "Cambia a duplex=" + m[1] });
+  else if (/saytime/i.test(run)) Object.assign(r, { act: "audio", text: "Anuncia la hora" });
+  else if (/random\.sh|playback|localplay|\.wav\b|\.ul\b|\.gsm\b|say_/i.test(run)) Object.assign(r, { act: "audio", text: "Reproduce audio" });
+  return r;
+}
+function cronEntries(tablas) {
+  const out = [];
+  for (const t of tablas || []) {
+    if (t.error || !t.texto) continue;
+    t.texto.split("\n").forEach((raw, li) => {
+      const l = cronParse(raw);
+      if (l.kind !== "entry" || !l.on) return;
+      const times = cronTimes(l.sched);
+      if (!times || !times.length) return;
+      const days = new Set(times.map((x) => Math.floor(x / 1440))).size;
+      out.push({ key: t.id + ":" + li, tabla: t.titulo, l, times, periodic: times.length / days > 3, what: cronWhat(l.cmd) });
+    });
+  }
+  return out;
+}
+async function loadCronEntries() {
+  try {
+    if (!(await getInfo()).cron) return false;
+    const r = await api("/api/cron");
+    S.cron = r.tablas; S.cronEntries = cronEntries(r.tablas);
+    return true;
+  } catch { return false; }
+}
+const hm = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+function progDays(p) {
+  if (p.recurrencia === "diaria") return [0, 1, 2, 3, 4, 5, 6];
+  if (p.recurrencia === "lun-vie") return [1, 2, 3, 4, 5];
+  return [new Date(p.fecha + "T12:00").getDay()];
+}
+const durMin = (p) => Math.round((p.duracion || 0) / 60);
+// Tareas que caen cerca de un evento: {spec: [{e, off, days}], periodic: [{e, n}]}
+function progCrons(p, entries) {
+  const dur = durMin(p), cx = p.conexiones || [];
+  const pre = Math.max(MARGEN, ...cx.filter((a) => a.momento === "antes").map((a) => +a.minutos + 15));
+  const post = Math.max(MARGEN, ...cx.filter((a) => a.momento !== "antes").map((a) => +a.minutos + 15));
+  const pd = progDays(p), spec = [], periodic = [];
+  for (const e of entries) {
+    const hits = new Map();
+    let n = 0;
+    for (const d of pd) {
+      const s = d * 1440 + hm(p.hora);
+      for (const t of e.times) {
+        let off = (((t - s) % WEEK) + WEEK) % WEEK;
+        if (off > WEEK / 2) off -= WEEK;
+        if (e.periodic) { if (off >= 0 && off <= dur) n++; }
+        else if (off >= -pre && off <= dur + post) {
+          if (!hits.has(off)) hits.set(off, new Set());
+          hits.get(off).add(d);
+        }
+      }
+    }
+    if (n) periodic.push({ e, n: Math.round(n / pd.length) || 1 });
+    hits.forEach((days, off) => spec.push({ e, off, days: days.size < pd.length ? [...days] : null }));
+  }
+  return { spec, periodic };
+}
+const p2 = (x) => String(x).padStart(2, "0");
+function clock(p, off) {
+  const t = hm(p.hora) + off, d = Math.floor(t / 1440), m = ((t % 1440) + 1440) % 1440;
+  return `${p2(Math.floor(m / 60))}:${p2(m % 60)}` + (d < 0 ? " (día anterior)" : d > 0 ? " (día siguiente)" : "");
+}
+const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h` + (m % 60 ? ` ${m % 60} min` : "") : `${m} min`);
+const diasTxt = (days) => (days ? " · solo " + days.map((d) => DIAS[d]).join(", ") : "");
+function linkAct(a) {
+  if (a.accion === "conectar") return { act: "on", node: a.sistema === "irlp" ? "irlp" : a.destino };
+  return { act: "off", node: a.sistema === "irlp" || a.accion === "desconectar_todo" ? "*" : a.destino };
+}
+function progTimeline(p) {
+  const dur = durMin(p), cx = p.conexiones || [];
+  const rel = progCrons(p, S.cronEntries || []);
+  if (!cx.length && !rel.spec.length && !rel.periodic.length) return "";
+  // rango para ordenar empates: antes → cron → inicio → fin → después
+  const items = [{ off: 0, r: 2, ico: "▶", cls: "ev", html: `Inicia «${esc(p.evento_nombre)}»` },
+    { off: dur, r: 3, ico: "⏹", cls: "ev", html: `Termina · dura ${fmt(p.duracion)} aprox.` }];
+  for (const a of cx) {
+    const antes = a.momento === "antes";
+    items.push({ off: antes ? -(+a.minutos || 0) : dur + (+a.minutos || 0), r: antes ? 0 : 4, ico: "🔗", lk: linkAct(a),
+      html: `<span class="chip ${a.sistema}">${a.sistema.toUpperCase()}</span> ${linkText(a)} <span class="muted">· del evento</span>` });
+  }
+  for (const s of rel.spec) {
+    const w = s.e.what;
+    items.push({ off: s.off, r: 1, ico: "⏰", lk: w.act === "on" || w.act === "off" ? w : null, title: s.e.l.cmd,
+      html: `<span class="chip cron">CRON</span> ${esc(w.text || s.e.l.cmd.slice(0, 60))}${diasTxt(s.days)}` });
+  }
+  items.sort((a, b) => a.off - b.off || a.r - b.r);
+  // Tramos conectados: de cada "conecta" al siguiente "desconecta" de ese nodo (o de todos)
+  const open = new Map(), spans = [];
+  for (const it of items) {
+    if (!it.lk) continue;
+    if (it.lk.act === "on" && !open.has(it.lk.node)) open.set(it.lk.node, it.off);
+    if (it.lk.act === "off") {
+      for (const [node, from] of [...open]) if (it.lk.node === "*" || it.lk.node === node) { spans.push({ node, from, to: it.off }); open.delete(node); }
+    }
+  }
+  open.forEach((from, node) => spans.push({ node, from, to: null }));
+  const nodeTxt = (n) => (n === "irlp" ? "IRLP" : n);
+  const sum = spans.map((s) => `<div class="tl-span">🔗 Conectado a <b>${esc(nodeTxt(s.node))}</b> de ${clock(p, s.from)} ` +
+    (s.to == null ? `<span class="warn-t">sin desconexión programada</span>` : `a ${clock(p, s.to)} · <b>${fmtMin(s.to - s.from)}</b>`) + `</div>`).join("");
+  const warn = rel.periodic.map((x) => `<div class="tl-warn" title="${esc(x.e.l.cmd)}">⚠ Durante el evento también corre (cron) ~${x.n} ${x.n === 1 ? "vez" : "veces"}:
+    ${esc(x.e.what.text || x.e.l.cmd.slice(0, 50))} · <span class="muted">${esc(cronDesc(x.e.l.sched))}</span></div>`).join("");
+  const rows = items.map((it) => `<div class="tl-row ${it.cls || ""}"${it.title ? ` title="${esc(it.title)}"` : ""}>
+      <span class="t">${clock(p, it.off)}</span><span>${it.ico}</span><span>${it.html}</span></div>`).join("");
+  return `<details class="tl"${spans.length || rel.periodic.length ? " open" : ""}>
+    <summary>Línea de tiempo${spans.length ? " · " + spans.map((s) => "🔗 " + esc(nodeTxt(s.node)) + (s.to == null ? "" : " " + fmtMin(s.to - s.from))).join(", ") : ""}</summary>
+    ${sum}${rows}${warn}</details>`;
+}
+// Para la pestaña Cron: clave de tarea → [{p, off, periodic, days}]
+function cronRelations(entries, prog) {
+  const out = new Map();
+  for (const p of prog) {
+    if (!p.activo) continue;
+    const rel = progCrons(p, entries);
+    const add = (k, v) => { if (!out.has(k)) out.set(k, []); out.get(k).push(v); };
+    rel.spec.forEach((s) => add(s.e.key, { p, off: s.off, days: s.days }));
+    rel.periodic.forEach((s) => add(s.e.key, { p, periodic: true, n: s.n }));
+  }
+  return out;
+}
+function cronTags(l, rels) {
+  const w = l.kind === "entry" ? cronWhat(l.cmd) : null;
+  const tags = [];
+  if (w && w.text) tags.push(`<span class="chip cron-what ${w.act}">${w.act === "on" || w.act === "off" ? "🔗 " : ""}${esc(w.text)}</span>`);
+  for (const r of rels || []) {
+    const name = esc(r.p.evento_nombre), dur = durMin(r.p);
+    let txt;
+    if (r.periodic) txt = `⚠ suena durante «${name}»`;
+    else if (r.off < 0) txt = `📅 ${fmtMin(-r.off)} antes de «${name}»`;
+    else if (r.off === 0) txt = `📅 al iniciar «${name}»`;
+    else if (r.off <= dur) txt = `📅 durante «${name}»`;
+    else txt = `📅 ${fmtMin(r.off - dur)} después de «${name}»`;
+    tags.push(`<span class="chip ev-rel ${r.periodic ? "warn" : ""}" title="${esc(recText(r.p))} a las ${esc(r.p.hora)}">${txt} · ${esc(r.p.hora)}${esc(diasTxt(r.days))}</span>`);
+  }
+  if (w && w.ignorado && /\S/.test(w.ignorado)) tags.push(`<span class="chip muted-chip" title="${esc(w.ignorado)}">lo que va después de # no se ejecuta</span>`);
+  return tags.length ? `<div class="cron-rel">${tags.join("")}</div>` : "";
 }
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */
