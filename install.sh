@@ -96,7 +96,13 @@ if [ "$APT" = 1 ] && command -v apt-get >/dev/null 2>&1; then
   PKGS="ffmpeg espeak-ng"
   [ "$TIPO" = irlp ] && PKGS="$PKGS alsa-utils"
   MISSING=""
-  for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || MISSING="$MISSING $p"; done
+  # Se busca el comando, no el paquete: asl3-tts trae su propio espeak-ng
+  # (y su libespeak-ng), y el paquete de Debian choca con él.
+  for p in $PKGS; do
+    c=$p; [ "$p" = alsa-utils ] && c=aplay
+    command -v "$c" >/dev/null 2>&1 || dpkg -s "$p" >/dev/null 2>&1 || MISSING="$MISSING $p"
+  done
+  if dpkg -s asl3-tts >/dev/null 2>&1; then MISSING=$(echo "$MISSING" | sed 's/ espeak-ng//'); fi
   if [ -n "$MISSING" ]; then
     c_info "Instalando:$MISSING (puede tardar unos minutos)"
     export DEBIAN_FRONTEND=noninteractive
