@@ -23,7 +23,7 @@ El instalador:
 
 Después abre `http://IP-DEL-NODO:8090`.
 
-Opciones: `--tipo asl|irlp`, `--nodo 12345`, `--puerto 8090`, `--password CLAVE`, `--sin-espeak`.
+Opciones: `--tipo asl|irlp`, `--nodo 12345`, `--puerto 8090`, `--password CLAVE`, `--sin-paquetes`.
 Para actualizar, vuelve a ejecutar `install.sh` con la versión nueva. Tus eventos y audios se conservan.
 
 | Tarea | Comando |
