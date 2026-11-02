@@ -167,17 +167,51 @@ def _lufs_sox(wav8k):
     return v if v > -70 else None
 
 
+AIRE_SUFFIX = ".aire.wav"
+
+
+def is_aire(p):
+    """Archivo ya convertido para el aire (cuando no se guardan los originales)."""
+    return Path(p).name.endswith(AIRE_SUFFIX)
+
+
+def _cache_path(src, tag):
+    st = src.stat()
+    key = hashlib.sha1("{}|{}|{}|{}|{}".format(src.resolve(), st.st_size, st.st_mtime, tag,
+                                               CACHE_VERSION).encode()).hexdigest()[:16]
+    return paths.cache_dir() / "{}_{}.wav".format(re.sub(r"[^\w-]", "_", src.stem)[:40], key)
+
+
+def compact(src, target_lufs):
+    """Convierte src al formato del aire, lo deja junto al original con
+    terminación .aire.wav y borra el original y sus copias en caché.
+    Devuelve (ruta nueva, bytes liberados)."""
+    src = Path(src)
+    if is_aire(src):
+        return src, 0
+    prep = prepare(src, target_lufs)
+    raw = _cache_path(src, "raw")
+    dest = src.with_name(src.stem[:60] + AIRE_SUFFIX)
+    shutil.copyfile(str(prep), str(dest))
+    freed = -dest.stat().st_size
+    for f in {prep, raw, src}:
+        if f.is_file():
+            freed += f.stat().st_size
+            paths.rm(f)
+    log.info("Original %s reemplazado por %s", src.name, dest.name)
+    return dest, freed
+
+
 def prepare(src, target_lufs):
     """Devuelve un WAV 8 kHz mono listo para el aire (cacheado).
     target_lufs=None → solo convierte, sin normalizar."""
     src = Path(src)
     if not src.is_file():
         raise FileNotFoundError("No existe el audio " + src.name)
-    st = src.stat()
+    if is_aire(src):
+        return src                            # ya convertido al subirlo
     tag = "raw" if target_lufs is None else "{:.1f}".format(target_lufs)
-    key = hashlib.sha1("{}|{}|{}|{}|{}".format(src.resolve(), st.st_size, st.st_mtime, tag,
-                                               CACHE_VERSION).encode()).hexdigest()[:16]
-    out = paths.cache_dir() / "{}_{}.wav".format(re.sub(r"[^\w-]", "_", src.stem)[:40], key)
+    out = _cache_path(src, tag)
     with _lock_for(str(out)):
         if out.is_file() and out.stat().st_size > 44:
             os.utime(str(out), None)          # marca de uso para la limpieza

@@ -48,6 +48,7 @@ DEFAULTS = {
     "section_normalize": True,
     "normalize_target": -18.0,
     "pause_volume": 95,
+    "keep_originals": True,       # False: al subir se guarda solo la versión para el aire
 
     # Seguridad
     "password_hash": "",

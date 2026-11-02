@@ -42,6 +42,8 @@ Para actualizar, vuelve a ejecutar `install.sh` con la versión nueva. Tus event
 
 Todo se convierte a WAV 8 kHz, 16 bits, mono (el formato de Asterisk) y se normaliza a -18 LUFS medidos en mono, con limitador a -2 dB. Con ffmpeg se mide LUFS real; con sox (HamVOIP) se aproxima con un filtro de ponderación K y una segunda pasada que compensa lo que se come el limitador.
 
+Para ahorrar espacio, en **Ajustes → Nivel de audio** se puede desactivar "Guardar los audios originales": al subir un audio se guarda solo la versión para el aire (`.aire.wav`) y se borra el original. El botón "Convertir los ya subidos" hace lo mismo con lo que ya está en el nodo.
+
 Formatos que acepta: con ffmpeg, MP3, WAV, M4A, OGG, FLAC, AAC, OPUS. Con sox + mpg123 (HamVOIP), MP3, WAV, OGG, FLAC (no M4A).
 
 ## Pausas automáticas

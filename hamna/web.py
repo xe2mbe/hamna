@@ -307,6 +307,9 @@ class App:
                     if ctype.startswith("application/x-www-form-urlencoded") and getattr(req, "_raw", b""):
                         req.form = {k: v[0] for k, v in parse_qs(req._raw.decode()).items()}
                     resp = app.dispatch(req)
+                    if req.method in ("POST", "PUT", "DELETE") and req.path != "/api/login":
+                        log.info("%s %s desde %s → %s", req.method, req.path,
+                                 self.client_address[0], resp.status)
                 except HTTPError as e:
                     msg = e.msg or {401: "Inicia sesión", 404: "No encontrado",
                                     405: "Método no permitido"}.get(e.code, "Error")

@@ -185,6 +185,10 @@
               <label>Volumen de los audios de pausa (%)<input name="pause_volume" type="number" min="50" max="120"></label>
             </div>
             <p class="muted">Todo se convierte a 8 kHz mono, el formato que usan Asterisk e IRLP. El nivel se mide en mono, como sale al aire, con limitador de picos a -2 dB.</p>
+            <h3>Espacio en disco</h3>
+            <label class="check"><input type="checkbox" name="keep_originals"> Guardar los audios originales</label>
+            <p class="muted">Si lo desactivas, al subir un audio se guarda solo la versión ya lista para el aire y se borra el original: ocupa casi la mitad, porque ya no se guardan dos copias de cada audio. A cambio, si después cambias el nivel objetivo, esos audios no se vuelven a nivelar, y lo que descargues desde la página será la versión de 8 kHz.</p>
+            <div class="row gap"><button type="button" class="btn" id="btnCompactar">Convertir los ya subidos y borrar originales</button></div>
           </fieldset>
 
           <fieldset data-set="seguridad" class="hidden">

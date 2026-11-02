@@ -145,6 +145,25 @@ def secciones(req):
     return jsonr([_sec_out(s) for s in db.get_secciones()])
 
 
+def _air_target(cfg):
+    return float(cfg.get("normalize_target", -18)) if cfg.get("section_normalize") else None
+
+
+def _compact_section(sid, cfg=None):
+    """Si no se guardan los originales, deja solo la versión para el aire.
+    Devuelve los bytes liberados."""
+    cfg = cfg or settings.load()
+    s = db.get_seccion(sid)
+    if not s or not s.get("ruta_archivo"):
+        return 0
+    src = paths.audios_dir() / s["ruta_archivo"]
+    if not src.is_file() or audio.is_aire(src):
+        return 0
+    dest, freed = audio.compact(src, _air_target(cfg))
+    db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest))
+    return freed
+
+
 def _generate_tts(sid):
     s = db.get_seccion(sid)
     if not s or not (s.get("texto_tts") or "").strip():
@@ -157,6 +176,8 @@ def _generate_tts(sid):
     if s.get("ruta_archivo") and s["ruta_archivo"] != dest.name:
         paths.rm(paths.audios_dir() / s["ruta_archivo"])
     db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest))
+    if not settings.load().get("keep_originals", True):
+        _compact_section(sid)
 
 
 def _apply_section(req, sid, tipo, is_new):
@@ -178,6 +199,8 @@ def _apply_section(req, sid, tipo, is_new):
         if old and old.get("ruta_archivo") and old["ruta_archivo"] != dest.name:
             paths.rm(paths.audios_dir() / old["ruta_archivo"])
     db.update_seccion(sid, **fields)
+    if up and not settings.load().get("keep_originals", True):
+        _compact_section(sid)
     if tipo == "TTS" and (is_new or truthy(form.get("generar", "0"))):
         _generate_tts(sid)
 
@@ -246,6 +269,26 @@ def seccion_aire(req, sid):
         raise ValueError("La sección no tiene audio")
     engine.play_single(paths.audios_dir() / s["ruta_archivo"], s["nombre"])
     return ok()
+
+
+@app.route("/api/secciones/compactar", ("POST",))
+def secciones_compactar(req):
+    """Convierte todas las secciones al formato del aire y borra los originales."""
+    if engine.status().get("on_air"):
+        raise ValueError("Espera a que termine la transmisión")
+    cfg = settings.load()
+    n, freed, errores = 0, 0, []
+    for s in db.get_secciones():
+        try:
+            b = _compact_section(s["id"], cfg)
+        except Exception as e:
+            log.warning("No pude convertir %s: %s", s["nombre"], e)
+            errores.append(s["nombre"])
+            continue
+        if b:
+            n += 1
+            freed += b
+    return ok(convertidas=n, liberado_mb=round(freed / 2.0**20, 1), errores=errores)
 
 
 @app.route("/api/tts/preview", ("POST",))
@@ -407,7 +450,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int}
-BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize"}
+BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice"}

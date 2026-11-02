@@ -588,6 +588,16 @@ $("#setForm").onsubmit = async (e) => {
   const r = await run(() => api("/api/ajustes", { method: "PUT", json: data }), "Ajustes guardados");
   S.cfg = r.ajustes; S.info = null; updateNodeLabel(); loadAjustes();
 };
+$("#btnCompactar").onclick = async () => {
+  if (!(await confirmBox("Se van a convertir todas las secciones al formato del aire y se borrarán los audios originales. Esto no se puede deshacer.", "Sí, convertir y borrar"))) return;
+  const b = $("#btnCompactar"); busy(b, true, "Convirtiendo…");
+  try {
+    const r = await api("/api/secciones/compactar", { method: "POST" });
+    if (r.errores.length) toast("No se pudieron convertir: " + r.errores.join(", "), true);
+    else toast(r.convertidas ? `${r.convertidas} secciones convertidas · ${r.liberado_mb} MB liberados` : "No había originales que convertir");
+  } catch (e) { toast(e.message, true); }
+  finally { busy(b, false); }
+};
 function renderPauseSounds() {
   const items = [["alerta", "pause_alert_file", "🔔 Alerta", "Suena encima del audio, segundos antes de la pausa"],
     ["pausa", "pause_announcement_file", "⏸ Anuncio de pausa", "Al cortar, antes de soltar el PTT"],
