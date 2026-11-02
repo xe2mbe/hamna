@@ -192,7 +192,7 @@ legend { font-size: 1.1rem; font-weight: 600; margin-bottom: 14px; padding: 0; }
 #modalBody { padding: 18px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .seg { display: flex; gap: 4px; margin-bottom: 14px; }
-.seg button { flex: 1; }
+.seg button { flex: 1; min-width: 0; padding-left: 6px; padding-right: 6px; overflow: hidden; text-overflow: ellipsis; }
 .seg button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .vars { display: flex; flex-wrap: wrap; gap: 4px; margin: -6px 0 12px; }
 .vars button { font: 12px ui-monospace, Consolas, monospace; background: var(--surface2); color: var(--tts-fg);

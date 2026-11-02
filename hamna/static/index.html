@@ -99,6 +99,7 @@
             <label>Número de nodo<input name="node" placeholder="58788"></label>
             <label>Nombre de la estación (opcional)<input name="station_name" placeholder="XE2MBE · Durango"></label>
             <div class="only-asl">
+              <label>Comando para cortar el audio (opcional)<input name="asl_flush_cmd" placeholder="rpt cmd {nodo} cop 24 0"><small>Lo usan Detener, Pausa y Siguiente para soltar el PTT a media reproducción. Vacío = el tramo en curso termina solo.</small></label>
               <label>Modo de reproducción en ASL
                 <select name="asl_mode">
                   <option value="localplay">localplay — solo el transmisor de este nodo</option>

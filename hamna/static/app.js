@@ -470,8 +470,8 @@ async function seccionForm(s) {
         <p class="muted" id="sfResolved" style="font-size:.85rem"></p>
       </div>
       <div class="only-file">
-        <label>Archivo de audio<input type="file" name="archivo" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac">
-          <small>${!isNew && s.ruta_archivo ? "Actual: " + esc(s.ruta_archivo) + " · " + fmt(s.duracion) + ". Sube otro solo si quieres reemplazarlo." : "MP3, WAV, M4A, OGG o FLAC. Se convierte solo al formato del nodo."}</small></label>
+        <label>Archivo de audio<input type="file" name="archivo" accept="${info.formatos.join(",")}">
+          <small>${!isNew && s.ruta_archivo ? "Actual: " + esc(s.ruta_archivo) + " · " + fmt(s.duracion) + ". Sube otro solo si quieres reemplazarlo." : info.formatos.map((f) => f.slice(1).toUpperCase()).join(", ") + ". Se convierte solo al formato del nodo."}</small></label>
         <div id="sfProg" class="bar hidden"><div></div></div>
       </div>
       <div class="modal-actions">
@@ -560,7 +560,9 @@ async function loadAjustes() {
   f.azure_key.placeholder = S.cfg.azure_key_set ? "•••••• (guardada; escribe para cambiarla)" : "Pega aquí tu clave";
   f.azure_key.value = "";
   $("#detectHint").textContent = `Detectado en este equipo: ${info.detectado.toUpperCase()}${info.nodo_detectado ? " · nodo " + info.nodo_detectado : ""}`;
-  $("#ttsHint").textContent = [info.piper ? "Piper disponible" : "Piper no instalado", info.espeak ? "eSpeak disponible" : "eSpeak no instalado"].join(" · ");
+  const names = { azure: "Azure", piper: "Piper", espeak: "eSpeak" };
+  $("#ttsHint").textContent = "Disponibles en este nodo: " + info.motores_tts.map((m) => names[m]).join(", ");
+  $$("#setForm [name=tts_engine] option").forEach((o) => (o.disabled = !info.motores_tts.includes(o.value)));
   syncSetVis();
   renderPauseSounds();
   showSet(S.setSec);
@@ -658,7 +660,9 @@ async function loadSistema() {
   const rows = [["Versión", "HAMNA Web " + i.version], ["Salida al aire", (be.backend || "").toUpperCase() + (be.mode ? " · " + be.mode : "")],
     ["Nodo", be.node || be.stationid || "—"], ["Asterisk", be.asterisk], ["Nodo responde", be.nodo_ok == null ? null : be.nodo_ok ? "Sí" : "No"],
     ["Enlazado con", be.enlaces || be.conectado_a], ["Zona horaria", i.zona_horaria], ["Espacio libre", i.disco_libre_mb + " MB"],
-    ["ffmpeg", i.ffmpeg ? "OK" : "No instalado"], ["Error", be.error]].filter((r) => r[1] != null && r[1] !== "");
+    ["Sistema", { asl3: "AllStarLink 3", hamvoip: "HamVOIP", asl: "AllStarLink" }[i.sabor] || i.detectado],
+    ["Audio", Object.entries(i.herramientas).filter(([, v]) => v).map(([k]) => k).join(", ") || "sin herramientas"],
+    ["Formatos que acepta", i.formatos.map((f) => f.slice(1).toUpperCase()).join(", ")], ["Error", be.error]].filter((r) => r[1] != null && r[1] !== "");
   $("#sysInfo").innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
     <h3>Últimas transmisiones</h3>
     <div class="hist">${i.historial.length ? i.historial.map((h) => `<div><span>${esc(h.inicio)}</span><b>${esc(h.evento)}</b><span class="muted">${esc(h.origen)}</span><span>${esc(h.resultado || "en curso")}</span></div>`).join("") : '<p class="muted">Todavía no hay transmisiones.</p>'}</div>`;

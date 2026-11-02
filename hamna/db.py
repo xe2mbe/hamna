@@ -3,8 +3,6 @@ HAMNA Web — base de datos SQLite.
 Mismo esquema que HAMNA Desktop (eventos, secciones, evento_secciones,
 programacion), para que ambos se entiendan.
 """
-from __future__ import annotations
-
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -14,7 +12,7 @@ from . import paths
 _lock = threading.RLock()
 
 
-def _connect() -> sqlite3.Connection:
+def _connect():
     conn = sqlite3.connect(str(paths.db_file()), timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -32,24 +30,24 @@ def conn():
             c.close()
 
 
-def rows(sql: str, args=()) -> list[dict]:
+def rows(sql, args=()):
     with conn() as c:
         return [dict(r) for r in c.execute(sql, args).fetchall()]
 
 
-def row(sql: str, args=()) -> dict | None:
+def row(sql, args=()):
     with conn() as c:
         r = c.execute(sql, args).fetchone()
         return dict(r) if r else None
 
 
-def execute(sql: str, args=()) -> int:
+def execute(sql, args=()):
     with conn() as c:
         cur = c.execute(sql, args)
         return cur.lastrowid
 
 
-def init_db() -> None:
+def init_db():
     with conn() as c:
         c.execute("PRAGMA journal_mode = WAL")
         c.executescript("""
@@ -117,14 +115,14 @@ def init_db() -> None:
 
 
 # ── Tipos ──────────────────────────────────────────────────────────────────────
-def tipo_seccion_id(nombre: str) -> int:
+def tipo_seccion_id(nombre):
     r = row("SELECT id FROM tipos_seccion WHERE nombre=?", (nombre,))
     if not r:
-        raise ValueError(f"Tipo de sección desconocido: {nombre}")
+        raise ValueError("Tipo de sección desconocido: " + nombre)
     return r["id"]
 
 
-def get_eventos_types() -> list[dict]:
+def get_eventos_types():
     return rows("SELECT id, nombre FROM eventos_type ORDER BY nombre")
 
 
@@ -136,7 +134,7 @@ _SEC_SELECT = """
 """
 
 
-def get_secciones() -> list[dict]:
+def get_secciones():
     out = rows(_SEC_SELECT + " ORDER BY s.nombre COLLATE NOCASE")
     usos = {r["seccion_id"]: r["n"] for r in rows(
         "SELECT seccion_id, COUNT(*) AS n FROM evento_secciones GROUP BY seccion_id")}
@@ -145,12 +143,12 @@ def get_secciones() -> list[dict]:
     return out
 
 
-def get_seccion(sid: int) -> dict | None:
+def get_seccion(sid):
     return row(_SEC_SELECT + " WHERE s.id=?", (sid,))
 
 
 def insert_seccion(nombre, tipo, texto_tts=None, regenerar_antes=False,
-                   titulo=None, descripcion=None) -> int:
+                   titulo=None, descripcion=None):
     return execute("""
         INSERT INTO secciones (nombre, tipo_seccion_id, texto_tts,
                                regenerar_antes, titulo, descripcion)
@@ -159,26 +157,26 @@ def insert_seccion(nombre, tipo, texto_tts=None, regenerar_antes=False,
          titulo, descripcion))
 
 
-def update_seccion(sid: int, **fields) -> None:
+def update_seccion(sid, **fields):
     allowed = {"nombre", "ruta_archivo", "texto_tts", "duracion",
                "regenerar_antes", "titulo", "descripcion"}
     sets, vals = [], []
     for k, v in fields.items():
         if k in allowed:
-            sets.append(f"{k}=?")
+            sets.append(k + "=?")
             vals.append(int(bool(v)) if k == "regenerar_antes" else v)
     if not sets:
         return
     vals.append(sid)
-    execute(f"UPDATE secciones SET {', '.join(sets)} WHERE id=?", vals)
+    execute("UPDATE secciones SET " + ", ".join(sets) + " WHERE id=?", vals)
 
 
-def delete_seccion(sid: int) -> None:
+def delete_seccion(sid):
     execute("DELETE FROM secciones WHERE id=?", (sid,))
 
 
 # ── Eventos ────────────────────────────────────────────────────────────────────
-def get_eventos() -> list[dict]:
+def get_eventos():
     return rows("""
         SELECT e.id, e.nombre, e.numero, e.tipo_evento_id, et.nombre AS tipo,
                e.creado_en,
@@ -192,29 +190,29 @@ def get_eventos() -> list[dict]:
     """)
 
 
-def get_evento(eid: int) -> dict | None:
+def get_evento(eid):
     return row("""
         SELECT e.id, e.nombre, e.numero, e.tipo_evento_id, et.nombre AS tipo
         FROM eventos e LEFT JOIN eventos_type et ON et.id = e.tipo_evento_id
         WHERE e.id=?""", (eid,))
 
 
-def insert_evento(nombre, tipo_evento_id=None, numero=None) -> int:
+def insert_evento(nombre, tipo_evento_id=None, numero=None):
     return execute(
         "INSERT INTO eventos (nombre, tipo_evento_id, numero) VALUES (?,?,?)",
         (nombre, tipo_evento_id, numero))
 
 
-def update_evento(eid, nombre, tipo_evento_id=None, numero=None) -> None:
+def update_evento(eid, nombre, tipo_evento_id=None, numero=None):
     execute("UPDATE eventos SET nombre=?, tipo_evento_id=?, numero=? WHERE id=?",
             (nombre, tipo_evento_id, numero, eid))
 
 
-def delete_evento(eid: int) -> None:
+def delete_evento(eid):
     execute("DELETE FROM eventos WHERE id=?", (eid,))
 
 
-def get_secciones_by_evento(eid: int) -> list[dict]:
+def get_secciones_by_evento(eid):
     return rows("""
         SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
                s.duracion, s.regenerar_antes, s.titulo, s.descripcion,
@@ -226,7 +224,7 @@ def get_secciones_by_evento(eid: int) -> list[dict]:
         ORDER BY es.orden, s.id""", (eid,))
 
 
-def add_seccion_to_evento(eid: int, sid: int) -> None:
+def add_seccion_to_evento(eid, sid):
     with conn() as c:
         orden = c.execute(
             "SELECT COALESCE(MAX(orden),0)+1 FROM evento_secciones WHERE evento_id=?",
@@ -235,60 +233,60 @@ def add_seccion_to_evento(eid: int, sid: int) -> None:
                   " VALUES (?,?,?)", (eid, sid, orden))
 
 
-def remove_seccion_from_evento(eid: int, sid: int) -> None:
+def remove_seccion_from_evento(eid, sid):
     execute("DELETE FROM evento_secciones WHERE evento_id=? AND seccion_id=?",
             (eid, sid))
 
 
-def set_orden_evento(eid: int, ids: list[int]) -> None:
+def set_orden_evento(eid, ids):
     with conn() as c:
         for i, sid in enumerate(ids):
             c.execute("UPDATE evento_secciones SET orden=? "
                       "WHERE evento_id=? AND seccion_id=?", (i + 1, eid, sid))
 
 
-def set_contabilizable(eid: int, sid: int, value: bool) -> None:
+def set_contabilizable(eid, sid, value):
     execute("UPDATE evento_secciones SET contabilizable=? "
             "WHERE evento_id=? AND seccion_id=?", (int(bool(value)), eid, sid))
 
 
 # ── Programación ──────────────────────────────────────────────────────────────
-def get_programacion(solo_activos=False) -> list[dict]:
+def get_programacion(solo_activos=False):
     where = "WHERE p.activo = 1" if solo_activos else ""
-    return rows(f"""
+    return rows("""
         SELECT p.id, p.evento_id, p.fecha, p.hora, p.recurrencia, p.activo,
                e.nombre AS evento_nombre, et.nombre AS evento_tipo
         FROM programacion p
         JOIN eventos e ON e.id = p.evento_id
         LEFT JOIN eventos_type et ON et.id = e.tipo_evento_id
-        {where}
+        """ + where + """
         ORDER BY p.hora, p.fecha""")
 
 
-def insert_programacion(eid, fecha, hora, recurrencia="ninguna", activo=True) -> int:
+def insert_programacion(eid, fecha, hora, recurrencia="ninguna", activo=True):
     return execute("INSERT INTO programacion (evento_id, fecha, hora, recurrencia, activo)"
                    " VALUES (?,?,?,?,?)", (eid, fecha, hora, recurrencia, int(bool(activo))))
 
 
-def update_programacion(pid, eid, fecha, hora, recurrencia, activo) -> None:
+def update_programacion(pid, eid, fecha, hora, recurrencia, activo):
     execute("UPDATE programacion SET evento_id=?, fecha=?, hora=?, recurrencia=?, activo=?"
             " WHERE id=?", (eid, fecha, hora, recurrencia, int(bool(activo)), pid))
 
 
-def delete_programacion(pid: int) -> None:
+def delete_programacion(pid):
     execute("DELETE FROM programacion WHERE id=?", (pid,))
 
 
 # ── Historial ─────────────────────────────────────────────────────────────────
-def historial_inicio(eid, nombre, origen) -> int:
+def historial_inicio(eid, nombre, origen):
     return execute("INSERT INTO historial (evento_id, evento, origen, inicio)"
                    " VALUES (?,?,?,datetime('now','localtime'))", (eid, nombre, origen))
 
 
-def historial_fin(hid, resultado) -> None:
+def historial_fin(hid, resultado):
     execute("UPDATE historial SET fin=datetime('now','localtime'), resultado=? WHERE id=?",
             (resultado, hid))
 
 
-def get_historial(limit=30) -> list[dict]:
+def get_historial(limit=30):
     return rows("SELECT * FROM historial ORDER BY id DESC LIMIT ?", (limit,))

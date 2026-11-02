@@ -3,19 +3,20 @@ HAMNA Web — síntesis de voz.
 
 Motores:
   azure   Azure Speech por REST (voces neuronales; requiere internet y clave)
-  espeak  espeak-ng local (sin internet; voz robótica)
   piper   asl-tts de AllStarLink (Piper, voz neuronal local) si está instalado
+  espeak  espeak-ng local (sin internet; voz sintética)
 """
-from __future__ import annotations
-
 import datetime
 import html
+import json
 import logging
 import shutil
 import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from . import paths
 
 log = logging.getLogger("hamna.tts")
 
@@ -42,21 +43,21 @@ VARIABLES = [
 ]
 
 
-def fmt_seg(s) -> str:
+def fmt_seg(s):
     s = int(float(s or 0))
     if s < 60:
-        return f"{s} segundo{'s' if s != 1 else ''}"
+        return "{} segundo{}".format(s, "" if s == 1 else "s")
     m, r = divmod(s, 60)
-    mins = f"{m} minuto{'s' if m != 1 else ''}"
-    return mins if r == 0 else f"{mins} con {r} segundo{'s' if r != 1 else ''}"
+    mins = "{} minuto{}".format(m, "" if m == 1 else "s")
+    return mins if r == 0 else "{} con {} segundo{}".format(mins, r, "" if r == 1 else "s")
 
 
-def resolve_variables(text: str, cfg: dict, ctx: dict | None = None) -> str:
+def resolve_variables(text, cfg, ctx=None):
     now = datetime.datetime.now()
     ctx = ctx or {}
     rep = {
         "{fecha}": now.strftime("%d/%m/%Y"),
-        "{fecha_larga}": f"{now.day} de {MESES[now.month - 1]} de {now.year}",
+        "{fecha_larga}": "{} de {} de {}".format(now.day, MESES[now.month - 1], now.year),
         "{hora}": now.strftime("%H:%M"),
         "{dia}": DIAS[now.weekday()],
         "{pausa_cada}": fmt_seg(cfg.get("pause_tx_time", 160)),
@@ -72,7 +73,7 @@ def resolve_variables(text: str, cfg: dict, ctx: dict | None = None) -> str:
     return text
 
 
-def event_context(evento: dict | None, secs: list[dict]) -> dict:
+def event_context(evento, secs):
     if not evento:
         return {}
     dur_t = sum(float(s.get("duracion") or 0) for s in secs)
@@ -87,7 +88,7 @@ def event_context(evento: dict | None, secs: list[dict]) -> dict:
 
 
 # ── Motores ───────────────────────────────────────────────────────────────────
-def _azure(text: str, cfg: dict, out: Path) -> Path:
+def _azure(text, cfg, out):
     key = (cfg.get("azure_key") or "").strip()
     region = (cfg.get("azure_region") or "").strip()
     if not key or not region:
@@ -97,82 +98,97 @@ def _azure(text: str, cfg: dict, out: Path) -> Path:
     rate = int(cfg.get("azure_rate", 100))
     pitch = int(cfg.get("azure_pitch", 0))
     locale = voice[:5] if len(voice) >= 5 else "es-MX"
-    rate_str = f"+{rate - 100}%" if rate >= 100 else f"-{100 - rate}%"
-    pitch_str = f"+{pitch}Hz" if pitch >= 0 else f"{pitch}Hz"
-    body = (f'<prosody rate="{rate_str}" pitch="{pitch_str}">'
-            f'{html.escape(text)}</prosody>')
+    rate_str = "+{}%".format(rate - 100) if rate >= 100 else "-{}%".format(100 - rate)
+    pitch_str = "+{}Hz".format(pitch) if pitch >= 0 else "{}Hz".format(pitch)
+    body = '<prosody rate="{}" pitch="{}">{}</prosody>'.format(rate_str, pitch_str, html.escape(text))
     if style and style != "general":
-        body = f'<mstts:express-as style="{style}">{body}</mstts:express-as>'
-    ssml = (f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
-            f'xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="{locale}">'
-            f'<voice name="{voice}">{body}</voice></speak>')
+        body = '<mstts:express-as style="{}">{}</mstts:express-as>'.format(style, body)
+    ssml = ('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+            'xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="{}">'
+            '<voice name="{}">{}</voice></speak>').format(locale, voice, body)
+    # Pedir WAV 16 kHz: así no hace falta decodificar MP3 en nodos sin ffmpeg
     req = urllib.request.Request(
-        f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1",
+        "https://{}.tts.speech.microsoft.com/cognitiveservices/v1".format(region),
         data=ssml.encode("utf-8"), method="POST",
         headers={"Ocp-Apim-Subscription-Key": key,
                  "Content-Type": "application/ssml+xml",
-                 "X-Microsoft-OutputFormat": "audio-24khz-160kbitrate-mono-mp3",
+                 "X-Microsoft-OutputFormat": "riff-16khz-16bit-mono-pcm",
                  "User-Agent": "HAMNA-Web/1.0"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            data = r.read()
+        r = urllib.request.urlopen(req, timeout=60)
+        data = r.read()
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Azure HTTP {e.code}: {e.read().decode(errors='ignore')[:200]}")
-    out = out.with_suffix(".mp3")
+        raise RuntimeError("Azure HTTP {}: {}".format(e.code, e.read().decode(errors="ignore")[:200]))
+    except urllib.error.URLError as e:
+        raise RuntimeError("No pude conectar con Azure: {}".format(e.reason))
+    out = out.with_suffix(".wav")
     out.write_bytes(data)
     return out
 
 
-def _espeak(text: str, cfg: dict, out: Path) -> Path:
+def _espeak(text, cfg, out):
     exe = shutil.which("espeak-ng") or shutil.which("espeak")
     if not exe:
-        raise RuntimeError("espeak-ng no está instalado (apt install espeak-ng)")
+        raise RuntimeError("eSpeak no está instalado en este nodo")
     out = out.with_suffix(".wav")
-    r = subprocess.run([exe, "-v", str(cfg.get("espeak_voice") or "es-419"),
-                        "-s", str(int(cfg.get("espeak_speed", 150))),
-                        "-p", str(int(cfg.get("espeak_pitch", 50))),
-                        "-w", str(out), text],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
+    # El texto va en un archivo UTF-8: como argumento falla si el sistema está en LANG=C
+    txt = out.with_suffix(".txt")
+    txt.write_text(text, encoding="utf-8")
+    try:
+        r = subprocess.run([exe, "-b", "1", "-v", str(cfg.get("espeak_voice") or "es-419"),
+                            "-s", str(int(cfg.get("espeak_speed", 150))),
+                            "-p", str(int(cfg.get("espeak_pitch", 50))),
+                            "-w", str(out), "-f", str(txt)],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
+    finally:
+        paths.rm(txt)
     if r.returncode != 0 or not out.is_file():
-        raise RuntimeError("espeak-ng falló: " + r.stderr.decode(errors="ignore")[:200])
+        raise RuntimeError("eSpeak falló: " + r.stderr.decode(errors="ignore")[:200])
     return out
 
 
-def piper_available() -> bool:
+def piper_available():
     return bool(shutil.which("asl-tts"))
 
 
-def _piper(text: str, cfg: dict, out: Path) -> Path:
+def espeak_available():
+    return bool(shutil.which("espeak-ng") or shutil.which("espeak"))
+
+
+def _piper(text, cfg, out):
     exe = shutil.which("asl-tts")
     if not exe:
         raise RuntimeError("asl-tts (Piper) no está instalado: apt install asl3-tts")
-    # asl-tts -f guarda el archivo en vez de reproducirlo; agrega la extensión .ul
     base = out.with_suffix("")
-    r = subprocess.run([exe, "-n", str(cfg.get("node") or "0"), "-t", text,
-                        "-f", str(base)],
+    r = subprocess.run([exe, "-n", str(cfg.get("node") or "0"), "-t", text, "-f", str(base)],
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
     for ext in (".ul", ".ulaw", ".wav", ".gsm", ""):
         cand = Path(str(base) + ext)
         if cand.is_file() and cand.stat().st_size > 0:
-            if ext in (".ul", ".ulaw"):
-                # μ-law crudo a 8 kHz: convertir a WAV para que ffmpeg lo lea
-                wav = out.with_suffix(".wav")
-                subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                                "-f", "mulaw", "-ar", "8000", "-ac", "1", "-i", str(cand),
-                                str(wav)], timeout=120)
-                cand.unlink(missing_ok=True)
-                return wav
+            if ext == ".ulaw":
+                fixed = cand.with_suffix(".ul")
+                cand.rename(fixed)
+                return fixed
             return cand
     raise RuntimeError("asl-tts no generó audio: " + r.stderr.decode(errors="ignore")[:200])
 
 
-def synthesize(text: str, cfg: dict, out: Path, ctx: dict | None = None) -> Path:
+def engines():
+    out = ["azure"]
+    if piper_available():
+        out.append("piper")
+    if espeak_available():
+        out.append("espeak")
+    return out
+
+
+def synthesize(text, cfg, out, ctx=None):
     """Sintetiza *text* (con variables resueltas). Devuelve la ruta creada;
     la extensión depende del motor."""
     resolved = resolve_variables(text, cfg, ctx)
-    engine = cfg.get("tts_engine", "espeak")
+    engine = cfg.get("tts_engine", "azure")
     log.info("TTS %s: %s", engine, resolved[:80].replace("\n", " "))
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(out)
     if engine == "azure":
         return _azure(resolved, cfg, out)
     if engine == "piper":
@@ -180,13 +196,11 @@ def synthesize(text: str, cfg: dict, out: Path, ctx: dict | None = None) -> Path
     return _espeak(resolved, cfg, out)
 
 
-def azure_voices(key: str, region: str) -> list[dict]:
-    import json
+def azure_voices(key, region):
     req = urllib.request.Request(
-        f"https://{region}.tts.speech.microsoft.com/cognitiveservices/voices/list",
+        "https://{}.tts.speech.microsoft.com/cognitiveservices/voices/list".format(region),
         headers={"Ocp-Apim-Subscription-Key": key})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        data = json.loads(r.read())
+    data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode("utf-8"))
     return [{"name": v["ShortName"], "display": v.get("LocalName", v["ShortName"]),
              "locale": v["Locale"], "gender": v.get("Gender", ""),
              "styles": v.get("StyleList", [])}

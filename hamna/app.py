@@ -1,166 +1,134 @@
 """
-HAMNA Web — servidor HTTP (Flask). Compatible con Flask 1.1 (Raspbian 11)
-hasta Flask 3 (Debian 13).
+HAMNA Web — API HTTP y página. Funciona con Python 3.5 a 3.13 sin paquetes extra.
 """
-from __future__ import annotations
-
+import binascii
 import datetime as dt
-import functools
 import logging
 import os
 import re
-import secrets
 import shutil
 import time
 import uuid
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, request, send_file, session
-from werkzeug.security import check_password_hash, generate_password_hash
-
 from . import VERSION, audio, backends, db, paths, settings, tts
 from .engine import engine
+from .web import App, HTTPError, check_password, hash_password, jsonr, send_file
 
 log = logging.getLogger("hamna.web")
 
 STATIC = Path(__file__).parent / "static"
-AUDIO_EXT = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".opus", ".gsm", ".ul"}
-
-app = Flask(__name__, static_folder=str(STATIC), static_url_path="/static")
-app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["PERMANENT_SESSION_LIFETIME"] = dt.timedelta(days=30)
+app = App(STATIC)
 
 
 def init_app():
     db.init_db()
     cfg = settings.load()
     if not cfg.get("secret_key"):
-        cfg = settings.save({"secret_key": secrets.token_hex(32)})
-    app.secret_key = cfg["secret_key"]
+        cfg = settings.save({"secret_key": binascii.hexlify(os.urandom(32)).decode()})
+    app.secret = cfg["secret_key"]
 
 
 # ── Utilidades ────────────────────────────────────────────────────────────────
 def ok(**kw):
-    return jsonify({"ok": True, **kw})
+    d = {"ok": True}
+    d.update(kw)
+    return jsonr(d)
 
 
-def fail(msg, code=400):
-    return jsonify({"ok": False, "error": str(msg)}), code
+def safe_name(name):
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_")[:50]
+    return stem or "audio"
 
 
-@app.errorhandler(413)
-def too_big(_e):
-    return fail("El archivo es demasiado grande (máximo 300 MB)", 413)
-
-
-def login_required(fn):
-    @functools.wraps(fn)
-    def wrapper(*a, **kw):
-        if not session.get("auth"):
-            return fail("Inicia sesión", 401)
-        # Defensa CSRF: un formulario de otro sitio no puede mandar esta cabecera
-        if request.method not in ("GET", "HEAD") and request.headers.get("X-HAMNA") != "1":
-            return fail("Petición rechazada", 403)
-        try:
-            return fn(*a, **kw)
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
-            return fail(e)
-    return wrapper
-
-
-def body() -> dict:
-    if request.is_json:
-        return request.get_json(silent=True) or {}
-    return request.form.to_dict()
-
-
-def safe_name(name: str) -> str:
-    stem = Path(name).stem
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", stem).strip("_")[:50] or "audio"
-    return stem
-
-
-def save_upload(fs, dest_dir: Path, prefix: str) -> Path:
-    ext = Path(fs.filename or "").suffix.lower()
-    if ext not in AUDIO_EXT:
-        raise ValueError(f"Formato no soportado ({ext or 'sin extensión'}). Usa MP3, WAV, M4A, OGG o FLAC")
-    dest = dest_dir / f"{prefix}_{safe_name(fs.filename)}{ext}"
-    fs.save(str(dest))
+def save_upload(up, dest_dir, prefix):
+    ext = Path(up.filename or "").suffix.lower()
+    allowed = audio.formats()
+    if ext not in allowed:
+        raise ValueError("Formato {} no soportado en este nodo. Usa: {}".format(
+            ext or "sin extensión", ", ".join(e[1:].upper() for e in allowed)))
+    dest = Path(dest_dir) / "{}_{}{}".format(prefix, safe_name(up.filename), ext)
+    shutil.move(up.path, str(dest))
+    up.path = None
     if audio.duration(dest) <= 0:
-        dest.unlink(missing_ok=True)
+        paths.rm(dest)
         raise ValueError("No pude leer el audio; ¿está dañado el archivo?")
     return dest
 
 
-def truthy(v) -> bool:
+def truthy(v):
     return str(v).lower() in ("1", "true", "on", "yes", "si", "sí")
 
 
-# ── Páginas y sesión ─────────────────────────────────────────────────────────
-@app.route("/")
-def index():
-    return send_file(str(STATIC / "index.html"))
+def parse_date(s):
+    try:
+        return dt.datetime.strptime(s, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValueError("Fecha inválida (AAAA-MM-DD)")
 
 
-@app.route("/api/login", methods=["POST"])
-def login():
-    pw = (body().get("password") or "")
+# ── Página y sesión ──────────────────────────────────────────────────────────
+@app.route("/", auth=False)
+def index(req):
+    return send_file(STATIC / "index.html", "text/html; charset=utf-8")
+
+
+@app.route("/api/login", ("POST",), auth=False)
+def login(req):
+    pw = req.json().get("password") or ""
     h = settings.get("password_hash")
     if not h:
-        return fail("Aún no hay contraseña. Ejecuta: sudo hamna-web-passwd", 403)
-    if not check_password_hash(h, pw):
+        raise HTTPError(403, "Aún no hay contraseña. En el nodo ejecuta: hamna-web-passwd")
+    if not check_password(h, pw):
         time.sleep(1.5)
-        return fail("Contraseña incorrecta", 401)
-    session.permanent = True
-    session["auth"] = True
+        raise HTTPError(401, "Contraseña incorrecta")
+    req.login()
     return ok()
 
 
-@app.route("/api/logout", methods=["POST"])
-def logout():
-    session.clear()
+@app.route("/api/logout", ("POST",), auth=False)
+def logout(req):
+    req.logout()
     return ok()
 
 
-@app.route("/api/me")
-def me():
-    return jsonify({"auth": bool(session.get("auth")), "version": VERSION,
-                    "station": settings.get("station_name") or ""})
+@app.route("/api/me", auth=False)
+def me(req):
+    return jsonr({"auth": req.authed, "version": VERSION,
+                  "station": settings.get("station_name") or ""})
 
 
 # ── Estado e información ─────────────────────────────────────────────────────
 @app.route("/api/status")
-@login_required
-def status():
+def status(req):
     s = engine.status()
     s["now"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     s["utc"] = dt.datetime.utcnow().strftime("%H:%M")
-    return jsonify(s)
+    return jsonr(s)
+
+
+def _timezone():
+    try:
+        tz = Path("/etc/timezone").read_text().strip()
+        if tz:
+            return tz
+    except Exception:
+        pass
+    real = os.path.realpath("/etc/localtime")
+    return real.split("zoneinfo/")[-1] if "zoneinfo/" in real else time.strftime("%Z")
 
 
 @app.route("/api/info")
-@login_required
-def info():
+def info(req):
     cfg = settings.load()
     be = backends.make(cfg)
     du = shutil.disk_usage(str(paths.data_dir()))
-    tz = time.strftime("%Z")
-    try:
-        tz = Path("/etc/timezone").read_text().strip() or tz
-    except Exception:
-        try:
-            tz = os.path.realpath("/etc/localtime").split("zoneinfo/")[-1]
-        except Exception:
-            pass
-    return jsonify({
+    return jsonr({
         "version": VERSION, "backend": be.info(), "detectado": backends.detect(),
-        "nodo_detectado": backends.detect_asl_node(),
-        "zona_horaria": tz, "disco_libre_mb": du.free // 2**20,
-        "ffmpeg": audio.ffmpeg_ok(), "piper": tts.piper_available(),
-        "espeak": bool(shutil.which("espeak-ng") or shutil.which("espeak")),
-        "variables": tts.VARIABLES,
+        "sabor": backends.detect_flavor(), "nodo_detectado": backends.detect_asl_node(),
+        "zona_horaria": _timezone(), "disco_libre_mb": du.free // 2**20,
+        "herramientas": audio.tools(), "formatos": audio.formats(),
+        "motores_tts": tts.engines(), "variables": tts.VARIABLES,
         "historial": db.get_historial(15),
     })
 
@@ -173,12 +141,26 @@ def _sec_out(s):
 
 
 @app.route("/api/secciones")
-@login_required
-def secciones():
-    return jsonify([_sec_out(s) for s in db.get_secciones()])
+def secciones(req):
+    return jsonr([_sec_out(s) for s in db.get_secciones()])
 
 
-def _apply_section(sid: int, form, files, tipo: str, is_new: bool):
+def _generate_tts(sid):
+    s = db.get_seccion(sid)
+    if not s or not (s.get("texto_tts") or "").strip():
+        return
+    cfg = settings.load()
+    ctx = {"titulo": s.get("titulo") or s["nombre"], "descripcion": s.get("descripcion") or ""}
+    src = tts.synthesize(s["texto_tts"], cfg, paths.tmp_dir() / ("tts_" + uuid.uuid4().hex[:8]), ctx)
+    dest = paths.audios_dir() / "{}_{}{}".format(sid, safe_name(s["nombre"]), src.suffix)
+    shutil.move(str(src), str(dest))
+    if s.get("ruta_archivo") and s["ruta_archivo"] != dest.name:
+        paths.rm(paths.audios_dir() / s["ruta_archivo"])
+    db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest))
+
+
+def _apply_section(req, sid, tipo, is_new):
+    form = req.form
     fields = {}
     for k in ("nombre", "titulo", "descripcion", "texto_tts"):
         if k in form:
@@ -187,94 +169,78 @@ def _apply_section(sid: int, form, files, tipo: str, is_new: bool):
         fields["regenerar_antes"] = truthy(form["regenerar_antes"])
     if "nombre" in fields and not fields["nombre"]:
         raise ValueError("La sección necesita un nombre")
-    fs = files.get("archivo")
+    up = req.files.get("archivo")
     old = db.get_seccion(sid)
-    if fs and fs.filename:
-        dest = save_upload(fs, paths.audios_dir(), f"{sid}")
+    if up:
+        dest = save_upload(up, paths.audios_dir(), str(sid))
         fields["ruta_archivo"] = dest.name
         fields["duracion"] = audio.duration(dest)
         if old and old.get("ruta_archivo") and old["ruta_archivo"] != dest.name:
-            (paths.audios_dir() / old["ruta_archivo"]).unlink(missing_ok=True)
+            paths.rm(paths.audios_dir() / old["ruta_archivo"])
     db.update_seccion(sid, **fields)
-    if tipo == "TTS" and (truthy(form.get("generar", "0")) or is_new):
+    if tipo == "TTS" and (is_new or truthy(form.get("generar", "0"))):
         _generate_tts(sid)
 
 
-def _generate_tts(sid: int):
-    s = db.get_seccion(sid)
-    if not s or not (s.get("texto_tts") or "").strip():
-        return
-    cfg = settings.load()
-    ctx = {"titulo": s.get("titulo") or s["nombre"], "descripcion": s.get("descripcion") or ""}
-    src = tts.synthesize(s["texto_tts"], cfg, paths.tmp_dir() / f"tts_{uuid.uuid4().hex[:8]}", ctx)
-    dest = paths.audios_dir() / f"{sid}_{safe_name(s['nombre'])}{src.suffix}"
-    shutil.move(str(src), str(dest))
-    if s.get("ruta_archivo") and s["ruta_archivo"] != dest.name:
-        (paths.audios_dir() / s["ruta_archivo"]).unlink(missing_ok=True)
-    db.update_seccion(sid, nombre=s["nombre"], ruta_archivo=dest.name, duracion=audio.duration(dest))
-
-
-@app.route("/api/secciones", methods=["POST"])
-@login_required
-def seccion_new():
-    f = request.form
+@app.route("/api/secciones", ("POST",))
+def seccion_new(req):
+    f = req.form
     tipo = f.get("tipo", "Audio")
     if tipo not in ("TTS", "Audio", "Sonido"):
         raise ValueError("Tipo inválido")
     nombre = (f.get("nombre") or "").strip()
     if not nombre:
         raise ValueError("La sección necesita un nombre")
-    if tipo != "TTS" and not (request.files.get("archivo") and request.files["archivo"].filename):
+    if tipo != "TTS" and "archivo" not in req.files:
         raise ValueError("Sube un archivo de audio")
     if tipo == "TTS" and not (f.get("texto_tts") or "").strip():
         raise ValueError("Escribe el texto a sintetizar")
     sid = db.insert_seccion(nombre, tipo)
     try:
-        _apply_section(sid, f, request.files, tipo, True)
+        _apply_section(req, sid, tipo, True)
     except Exception:
         db.delete_seccion(sid)
         raise
     return ok(seccion=_sec_out(db.get_seccion(sid)))
 
 
-@app.route("/api/secciones/<int:sid>", methods=["POST"])
-@login_required
-def seccion_edit(sid):
+@app.route("/api/secciones/<int:sid>", ("POST",))
+def seccion_edit(req, sid):
     s = db.get_seccion(sid)
     if not s:
-        abort(404)
-    _apply_section(sid, request.form, request.files, s["tipo"], False)
+        raise HTTPError(404)
+    _apply_section(req, sid, s["tipo"], False)
     return ok(seccion=_sec_out(db.get_seccion(sid)))
 
 
-@app.route("/api/secciones/<int:sid>", methods=["DELETE"])
-@login_required
-def seccion_del(sid):
+@app.route("/api/secciones/<int:sid>", ("DELETE",))
+def seccion_del(req, sid):
     s = db.get_seccion(sid)
     if s:
         if s.get("ruta_archivo"):
-            (paths.audios_dir() / s["ruta_archivo"]).unlink(missing_ok=True)
+            paths.rm(paths.audios_dir() / s["ruta_archivo"])
         db.delete_seccion(sid)
     return ok()
 
 
+def _browser_file(p):
+    """Archivo que el navegador pueda reproducir (convierte si hace falta)."""
+    p = Path(p)
+    if audio.can_play_in_browser(p):
+        return send_file(p)
+    return send_file(audio.prepare(p, None), "audio/wav")
+
+
 @app.route("/api/secciones/<int:sid>/audio")
-@login_required
-def seccion_audio(sid):
+def seccion_audio(req, sid):
     s = db.get_seccion(sid)
     if not s or not s.get("ruta_archivo"):
-        abort(404)
-    p = paths.audios_dir() / s["ruta_archivo"]
-    if not p.is_file():
-        abort(404)
-    if p.suffix.lower() in (".mp3", ".wav", ".ogg", ".m4a", ".opus", ".flac", ".aac"):
-        return send_file(str(p), conditional=True)
-    return send_file(str(audio.to_mp3_preview(p)), mimetype="audio/mpeg")
+        raise HTTPError(404)
+    return _browser_file(paths.audios_dir() / s["ruta_archivo"])
 
 
-@app.route("/api/secciones/<int:sid>/aire", methods=["POST"])
-@login_required
-def seccion_aire(sid):
+@app.route("/api/secciones/<int:sid>/aire", ("POST",))
+def seccion_aire(req, sid):
     s = db.get_seccion(sid)
     if not s or not s.get("ruta_archivo"):
         raise ValueError("La sección no tiene audio")
@@ -282,46 +248,43 @@ def seccion_aire(sid):
     return ok()
 
 
-@app.route("/api/tts/preview", methods=["POST"])
-@login_required
-def tts_preview():
-    b = body()
+@app.route("/api/tts/preview", ("POST",))
+def tts_preview(req):
+    b = req.json()
     text = (b.get("texto") or "").strip()
     if not text:
         raise ValueError("Escribe algún texto")
     cfg = settings.load()
     ctx = {"titulo": b.get("titulo") or "", "descripcion": b.get("descripcion") or "",
            "evento": "Evento de prueba", "numero": "1"}
-    src = tts.synthesize(text, cfg, paths.tmp_dir() / f"preview_{uuid.uuid4().hex[:8]}", ctx)
-    return ok(url=f"/api/tmp/{src.name}", texto=tts.resolve_variables(text, cfg, ctx))
+    src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx)
+    if not audio.can_play_in_browser(src):
+        src = audio.prepare(src, None)
+    return ok(url="/api/archivo/" + src.parent.name + "/" + src.name,
+              texto=tts.resolve_variables(text, cfg, ctx))
 
 
-@app.route("/api/tmp/<name>")
-@login_required
-def tmp_file(name):
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
-        abort(404)
-    p = paths.tmp_dir() / name
-    if not p.is_file():
-        abort(404)
-    return send_file(str(p), conditional=True)
+@app.route("/api/archivo/<carpeta>/<name>")
+def tmp_file(req, carpeta, name):
+    if carpeta not in ("tmp", "cache") or not re.match(r"^[A-Za-z0-9_.-]+$", name):
+        raise HTTPError(404)
+    base = paths.tmp_dir() if carpeta == "tmp" else paths.cache_dir()
+    return send_file(base / name)
 
 
 # ── Eventos ──────────────────────────────────────────────────────────────────
 @app.route("/api/eventos")
-@login_required
-def eventos():
-    return jsonify({"eventos": db.get_eventos(), "tipos": db.get_eventos_types()})
+def eventos(req):
+    return jsonr({"eventos": db.get_eventos(), "tipos": db.get_eventos_types()})
 
 
 @app.route("/api/eventos/<int:eid>")
-@login_required
-def evento(eid):
+def evento(req, eid):
     ev = db.get_evento(eid)
     if not ev:
-        abort(404)
+        raise HTTPError(404)
     ev["secciones"] = [_sec_out(s) for s in db.get_secciones_by_evento(eid)]
-    return jsonify(ev)
+    return jsonr(ev)
 
 
 def _ev_fields(b):
@@ -329,67 +292,57 @@ def _ev_fields(b):
     if not nombre:
         raise ValueError("El evento necesita un nombre")
     tipo = b.get("tipo_evento_id") or None
-    numero = b.get("numero")
-    numero = int(numero) if str(numero or "").strip().isdigit() else None
-    return nombre, (int(tipo) if tipo else None), numero
+    numero = str(b.get("numero") or "").strip()
+    return nombre, (int(tipo) if tipo else None), (int(numero) if numero.isdigit() else None)
 
 
-@app.route("/api/eventos", methods=["POST"])
-@login_required
-def evento_new():
-    eid = db.insert_evento(*_ev_fields(body()))
-    return ok(id=eid)
+@app.route("/api/eventos", ("POST",))
+def evento_new(req):
+    return ok(id=db.insert_evento(*_ev_fields(req.json())))
 
 
-@app.route("/api/eventos/<int:eid>", methods=["PUT"])
-@login_required
-def evento_edit(eid):
-    db.update_evento(eid, *_ev_fields(body()))
+@app.route("/api/eventos/<int:eid>", ("PUT",))
+def evento_edit(req, eid):
+    db.update_evento(eid, *_ev_fields(req.json()))
     return ok()
 
 
-@app.route("/api/eventos/<int:eid>", methods=["DELETE"])
-@login_required
-def evento_del(eid):
+@app.route("/api/eventos/<int:eid>", ("DELETE",))
+def evento_del(req, eid):
     if engine.busy() and engine.st.get("evento_id") == eid:
         raise ValueError("No se puede borrar un evento que está al aire")
     db.delete_evento(eid)
     return ok()
 
 
-@app.route("/api/eventos/<int:eid>/secciones", methods=["POST"])
-@login_required
-def evento_add_sec(eid):
-    for sid in body().get("ids", []):
+@app.route("/api/eventos/<int:eid>/secciones", ("POST",))
+def evento_add_sec(req, eid):
+    for sid in req.json().get("ids", []):
         db.add_seccion_to_evento(eid, int(sid))
     return ok()
 
 
-@app.route("/api/eventos/<int:eid>/secciones/<int:sid>", methods=["DELETE"])
-@login_required
-def evento_rm_sec(eid, sid):
+@app.route("/api/eventos/<int:eid>/secciones/<int:sid>", ("DELETE",))
+def evento_rm_sec(req, eid, sid):
     db.remove_seccion_from_evento(eid, sid)
     return ok()
 
 
-@app.route("/api/eventos/<int:eid>/orden", methods=["PUT"])
-@login_required
-def evento_orden(eid):
-    db.set_orden_evento(eid, [int(x) for x in body().get("ids", [])])
+@app.route("/api/eventos/<int:eid>/orden", ("PUT",))
+def evento_orden(req, eid):
+    db.set_orden_evento(eid, [int(x) for x in req.json().get("ids", [])])
     return ok()
 
 
-@app.route("/api/eventos/<int:eid>/secciones/<int:sid>/contabilizable", methods=["PUT"])
-@login_required
-def evento_cont(eid, sid):
-    db.set_contabilizable(eid, sid, bool(body().get("value")))
+@app.route("/api/eventos/<int:eid>/secciones/<int:sid>/contabilizable", ("PUT",))
+def evento_cont(req, eid, sid):
+    db.set_contabilizable(eid, sid, bool(req.json().get("value")))
     return ok()
 
 
 # ── Programación ─────────────────────────────────────────────────────────────
 @app.route("/api/programacion")
-@login_required
-def programacion():
+def programacion(req):
     out = []
     now = dt.datetime.now()
     for r in db.get_programacion():
@@ -398,7 +351,7 @@ def programacion():
         r["faltan_s"] = int((nxt - now).total_seconds()) if nxt else None
         out.append(r)
     out.sort(key=lambda r: (r["faltan_s"] is None, r["faltan_s"] or 0))
-    return jsonify(out)
+    return jsonr(out)
 
 
 def _prog_fields(b):
@@ -408,45 +361,40 @@ def _prog_fields(b):
     fecha = (b.get("fecha") or "").strip()
     hora = (b.get("hora") or "").strip()[:5]
     rec = b.get("recurrencia") or "ninguna"
-    dt.date.fromisoformat(fecha)
-    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+    parse_date(fecha)
+    if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", hora):
         raise ValueError("Hora inválida (HH:MM)")
     if rec not in ("ninguna", "diaria", "semanal", "lun-vie"):
         raise ValueError("Recurrencia inválida")
     return eid, fecha, hora, rec, b.get("activo", True) not in (False, 0, "0", "false")
 
 
-@app.route("/api/programacion", methods=["POST"])
-@login_required
-def prog_new():
-    return ok(id=db.insert_programacion(*_prog_fields(body())))
+@app.route("/api/programacion", ("POST",))
+def prog_new(req):
+    return ok(id=db.insert_programacion(*_prog_fields(req.json())))
 
 
-@app.route("/api/programacion/<int:pid>", methods=["PUT"])
-@login_required
-def prog_edit(pid):
-    db.update_programacion(pid, *_prog_fields(body()))
+@app.route("/api/programacion/<int:pid>", ("PUT",))
+def prog_edit(req, pid):
+    db.update_programacion(pid, *_prog_fields(req.json()))
     return ok()
 
 
-@app.route("/api/programacion/<int:pid>", methods=["DELETE"])
-@login_required
-def prog_del(pid):
+@app.route("/api/programacion/<int:pid>", ("DELETE",))
+def prog_del(req, pid):
     db.delete_programacion(pid)
     return ok()
 
 
 # ── Control de transmisión ───────────────────────────────────────────────────
-@app.route("/api/tx/start", methods=["POST"])
-@login_required
-def tx_start():
-    engine.start_event(int(body().get("evento_id") or 0), origen="manual")
+@app.route("/api/tx/start", ("POST",))
+def tx_start(req):
+    engine.start_event(int(req.json().get("evento_id") or 0), origen="manual")
     return ok()
 
 
-@app.route("/api/tx/<cmd>", methods=["POST"])
-@login_required
-def tx_cmd(cmd):
+@app.route("/api/tx/<cmd>", ("POST",))
+def tx_cmd(req, cmd):
     if cmd == "stop":
         engine.stop()
     else:
@@ -460,32 +408,32 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize"}
-STR_KEYS = {"backend", "node", "asl_mode", "irlp_env", "irlp_key_cmd", "irlp_unkey_cmd",
-            "irlp_player", "station_name", "tts_engine", "azure_region", "azure_voice",
-            "azure_style", "espeak_voice"}
+STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
+            "irlp_unkey_cmd", "irlp_player", "station_name", "tts_engine", "azure_region",
+            "azure_voice", "azure_style", "espeak_voice"}
 
 
 @app.route("/api/ajustes")
-@login_required
-def ajustes():
-    return jsonify(settings.public())
+def ajustes(req):
+    return jsonr(settings.public())
 
 
-@app.route("/api/ajustes", methods=["PUT"])
-@login_required
-def ajustes_save():
-    b = body()
+@app.route("/api/ajustes", ("PUT",))
+def ajustes_save(req):
     upd = {}
-    for k, v in b.items():
+    for k, v in req.json().items():
         if k in NUM_KEYS:
-            upd[k] = NUM_KEYS[k](float(v))
+            try:
+                upd[k] = NUM_KEYS[k](float(v))
+            except (TypeError, ValueError):
+                raise ValueError("Valor inválido en " + k)
         elif k in BOOL_KEYS:
-            upd[k] = bool(v) if isinstance(v, bool) else truthy(v)
+            upd[k] = v if isinstance(v, bool) else truthy(v)
         elif k in STR_KEYS:
             upd[k] = str(v).strip()
         elif k == "azure_key" and str(v).strip():
             upd[k] = str(v).strip()
-    if "node" in upd and upd["node"] and not re.fullmatch(r"[A-Za-z0-9]{1,10}", upd["node"]):
+    if upd.get("node") and not re.match(r"^[A-Za-z0-9]{1,10}$", upd["node"]):
         raise ValueError("Número de nodo inválido")
     if upd.get("backend") not in (None, "auto", "asl", "irlp", "simulado"):
         raise ValueError("Tipo de nodo inválido")
@@ -497,49 +445,45 @@ PAUSE_KINDS = {"alerta": "pause_alert_file", "pausa": "pause_announcement_file",
                "continuamos": "pause_resume_file"}
 
 
-@app.route("/api/ajustes/sonido/<kind>", methods=["POST", "DELETE", "GET"])
-@login_required
-def ajustes_sonido(kind):
+@app.route("/api/ajustes/sonido/<kind>", ("GET", "POST", "DELETE"))
+def ajustes_sonido(req, kind):
     key = PAUSE_KINDS.get(kind)
     if not key:
-        abort(404)
+        raise HTTPError(404)
     cur = settings.get(key) or ""
-    if request.method == "GET":
-        p = paths.sonidos_dir() / cur if cur else None
-        if not p or not p.is_file():
-            abort(404)
-        return send_file(str(p), conditional=True)
-    if cur:
-        (paths.sonidos_dir() / cur).unlink(missing_ok=True)
-    if request.method == "DELETE":
-        settings.save({key: ""})
-        return ok()
-    fs = request.files.get("archivo")
-    if not fs or not fs.filename:
-        raise ValueError("Elige un archivo")
-    dest = save_upload(fs, paths.sonidos_dir(), kind)
-    settings.save({key: dest.name})
-    return ok(nombre=dest.name)
+    if req.method == "GET":
+        if not cur:
+            raise HTTPError(404)
+        return _browser_file(paths.sonidos_dir() / cur)
+    if req.method == "POST":
+        up = req.files.get("archivo")
+        if not up:
+            raise ValueError("Elige un archivo")
+        dest = save_upload(up, paths.sonidos_dir(), kind + "_" + uuid.uuid4().hex[:4])
+    else:
+        dest = None
+    if cur and (dest is None or cur != dest.name):
+        paths.rm(paths.sonidos_dir() / cur)
+    settings.save({key: dest.name if dest else ""})
+    return ok(nombre=dest.name if dest else "")
 
 
-@app.route("/api/ajustes/password", methods=["POST"])
-@login_required
-def ajustes_password():
-    b = body()
-    if not check_password_hash(settings.get("password_hash"), b.get("actual") or ""):
+@app.route("/api/ajustes/password", ("POST",))
+def ajustes_password(req):
+    b = req.json()
+    if not check_password(settings.get("password_hash"), b.get("actual") or ""):
         raise ValueError("La contraseña actual no coincide")
     nueva = b.get("nueva") or ""
     if len(nueva) < 6:
         raise ValueError("La contraseña nueva debe tener al menos 6 caracteres")
-    settings.save({"password_hash": generate_password_hash(nueva, method="pbkdf2:sha256")})
+    settings.save({"password_hash": hash_password(nueva)})
     return ok()
 
 
-@app.route("/api/azure/voces", methods=["POST"])
-@login_required
-def azure_voces():
+@app.route("/api/azure/voces", ("POST",))
+def azure_voces(req):
     cfg = settings.load()
-    b = body()
+    b = req.json()
     key = (b.get("azure_key") or cfg.get("azure_key") or "").strip()
     region = (b.get("azure_region") or cfg.get("azure_region") or "").strip()
     if not key or not region:
@@ -547,22 +491,20 @@ def azure_voces():
     try:
         return ok(voces=tts.azure_voices(key, region))
     except Exception as e:
-        raise RuntimeError(f"Azure no respondió: {e}")
+        raise RuntimeError("Azure no respondió: {}".format(e))
 
 
-@app.route("/api/prueba/nodo", methods=["POST"])
-@login_required
-def prueba_nodo():
+@app.route("/api/prueba/nodo", ("POST",))
+def prueba_nodo(req):
     good, msg = backends.make(settings.load()).test()
-    return jsonify({"ok": good, "mensaje": msg})
+    return jsonr({"ok": good, "mensaje": msg})
 
 
-@app.route("/api/prueba/aire", methods=["POST"])
-@login_required
-def prueba_aire():
+@app.route("/api/prueba/aire", ("POST",))
+def prueba_aire(req):
     cfg = settings.load()
-    text = (body().get("texto") or "").strip() or \
+    text = (req.json().get("texto") or "").strip() or \
         "Prueba de HAMNA Web. Son las {hora} del {dia} {fecha_larga}."
-    src = tts.synthesize(text, cfg, paths.tmp_dir() / f"prueba_{uuid.uuid4().hex[:8]}")
+    src = tts.synthesize(text, cfg, paths.tmp_dir() / ("prueba_" + uuid.uuid4().hex[:8]))
     engine.play_single(src, "Prueba de transmisión")
     return ok()

@@ -2,21 +2,26 @@
 HAMNA Web — audio.
 
 Todo lo que sale al aire se convierte a WAV 8 kHz, 16 bits, mono: es el
-formato nativo de Asterisk (rpt localplay) y también sirve para aplay en
-IRLP. Con un solo formato, cortar, pegar y mezclar se hace en Python con el
-módulo wave, sin volver a llamar a ffmpeg.
-"""
-from __future__ import annotations
+formato nativo de Asterisk (rpt localplay) y sirve para aplay en IRLP. Con un
+solo formato, cortar, pegar y mezclar se hace en Python con el módulo wave.
 
+Herramientas, en orden de preferencia:
+  ffmpeg            convierte todo y mide LUFS de verdad (ASL3, IRLP con Debian)
+  sox + mpg123      HamVOIP: sox convierte; mpg123 decodifica MP3; el nivel se
+                    mide con sox tras un filtro que imita la ponderación K
+"""
 import array
 import hashlib
 import json
 import logging
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
 import time
+import uuid
 import wave
 from pathlib import Path
 
@@ -25,110 +30,204 @@ from . import paths
 log = logging.getLogger("hamna.audio")
 
 RATE = 8000
-CACHE_VERSION = "v1"
+CACHE_VERSION = "v3"
 PEAK_LIMIT_DB = -2.0
-_locks: dict[str, threading.Lock] = {}
+_locks = {}
 _locks_guard = threading.Lock()
 
 
-def _lock_for(key: str) -> threading.Lock:
+def _lock_for(key):
     with _locks_guard:
         return _locks.setdefault(key, threading.Lock())
 
 
-def _run(cmd: list[str], timeout=600) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          timeout=timeout)
+def _run(cmd, timeout=900):
+    return subprocess.run([str(c) for c in cmd], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, timeout=timeout)
 
 
-def ffmpeg_ok() -> bool:
+def have(tool):
+    return bool(shutil.which(tool))
+
+
+def tools():
+    return {t: have(t) for t in ("ffmpeg", "sox", "mpg123")}
+
+
+def formats():
+    """Extensiones que este nodo puede leer."""
+    if have("ffmpeg"):
+        return [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".opus", ".wma", ".gsm", ".ul"]
+    f = [".wav", ".ogg", ".flac", ".gsm", ".ul", ".aiff"] if have("sox") else [".wav"]
+    if have("mpg123"):
+        f.insert(0, ".mp3")
+    return f
+
+
+def can_play_in_browser(path):
+    return Path(path).suffix.lower() in (".mp3", ".wav", ".ogg", ".m4a", ".opus", ".flac", ".aac")
+
+
+# ── Lectura de duración ──────────────────────────────────────────────────────
+def wav_duration(path):
     try:
-        return _run(["ffmpeg", "-version"], 15).returncode == 0
+        with wave.open(str(path), "rb") as w:
+            return w.getnframes() / float(w.getframerate())
     except Exception:
-        return False
+        return 0.0
 
 
-def duration(path: str | Path) -> float:
+def duration(path):
     """Duración en segundos de cualquier archivo de audio."""
     p = Path(path)
     if not p.is_file():
         return 0.0
     if p.suffix.lower() == ".wav":
+        d = wav_duration(p)
+        if d > 0:
+            return d
+    if have("ffprobe"):
         try:
-            with wave.open(str(p), "rb") as w:
-                return w.getnframes() / float(w.getframerate())
+            r = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                      "-of", "default=nw=1:nk=1", p], 60)
+            return float(r.stdout.decode().strip() or 0)
         except Exception:
             pass
-    try:
-        r = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
-                  "-of", "default=nw=1:nk=1", str(p)], 60)
-        return float(r.stdout.decode().strip() or 0)
-    except Exception:
+    try:   # sin ffprobe: convertir (queda en caché para cuando salga al aire)
+        return wav_duration(prepare(p, None))
+    except Exception as e:
+        log.warning("No pude leer la duración de %s: %s", p.name, e)
         return 0.0
 
 
-def _measure_loudness(src: Path) -> dict | None:
-    """Primera pasada de loudnorm: mide en mono, como sale al aire."""
-    r = _run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(src),
-              "-af", "aformat=channel_layouts=mono,loudnorm=print_format=json",
-              "-f", "null", "-"])
+# ── Conversión y nivel ───────────────────────────────────────────────────────
+def _to_8k_ffmpeg(src, out, gain_db=None):
+    af = "aformat=channel_layouts=mono"
+    if gain_db is not None:
+        limit = 10 ** (PEAK_LIMIT_DB / 20)
+        af += (",volume={:.2f}dB,alimiter=limit={:.4f}:attack=5:release=50:level=disabled"
+               .format(gain_db, limit))
+    r = _run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", src, "-af", af,
+              "-ar", str(RATE), "-ac", "1", "-sample_fmt", "s16", "-f", "wav", out])
+    if r.returncode != 0:
+        raise RuntimeError("ffmpeg no pudo convertir {}: {}".format(
+            Path(src).name, r.stderr.decode(errors="ignore")[-300:]))
+
+
+def _lufs_ffmpeg(src):
+    r = _run(["ffmpeg", "-hide_banner", "-nostats", "-i", src, "-af",
+              "aformat=channel_layouts=mono,loudnorm=print_format=json", "-f", "null", "-"])
     txt = r.stderr.decode(errors="ignore")
-    start = txt.rfind("{")
-    end = txt.rfind("}")
-    if start < 0 or end < start:
-        return None
+    a, b = txt.rfind("{"), txt.rfind("}")
     try:
-        return json.loads(txt[start:end + 1])
+        v = float(json.loads(txt[a:b + 1])["input_i"])
+        return v if v > -70 else None
     except Exception:
         return None
 
 
-def prepare(src: str | Path, target_lufs: float | None) -> Path:
+def _to_8k_sox(src, out, gain_db=None):
+    src = Path(src)
+    tmp = None
+    if src.suffix.lower() == ".mp3":
+        if not have("mpg123"):
+            raise RuntimeError("No hay con qué leer MP3 en este nodo (falta mpg123 o ffmpeg)")
+        tmp = paths.tmp_dir() / ("dec_" + uuid.uuid4().hex + ".wav")
+        r = _run(["mpg123", "-q", "-w", tmp, src])
+        if r.returncode != 0 or not tmp.is_file():
+            paths.rm(tmp)
+            raise RuntimeError("mpg123 no pudo leer {}: {}".format(
+                src.name, r.stderr.decode(errors="ignore")[-200:]))
+        src = tmp
+    elif src.suffix.lower() == ".ul":
+        src = ["-t", "ul", "-r", "8000", "-c", "1", src]
+    try:
+        cmd = ["sox", "-V1"] + (src if isinstance(src, list) else [src]) + \
+              ["-r", str(RATE), "-c", "1", "-b", "16", "-e", "signed-integer", out]
+        if gain_db is not None:
+            # limitador de sox a 0 dBFS y luego bajar 2 dB = ganancia exacta con techo en -2 dB
+            cmd += ["gain", "-l", "{:.2f}".format(gain_db - PEAK_LIMIT_DB),
+                    "gain", "{:.1f}".format(PEAK_LIMIT_DB)]
+        r = _run(cmd)
+        if r.returncode != 0:
+            raise RuntimeError("sox no pudo convertir: " + r.stderr.decode(errors="ignore")[-300:])
+    finally:
+        if tmp:
+            paths.rm(tmp)
+
+
+def _lufs_sox(wav8k):
+    """Aproximación de LUFS: filtro de ponderación K (paso alto 38 Hz + realce
+    de agudos) y RMS sin compuertas. Para voz da unos 1-2 dB de diferencia."""
+    r = _run(["sox", "-V1", wav8k, "-n", "highpass", "38", "treble", "4", "1681", "0.707q", "stats"])
+    m = re.search(r"RMS lev dB\s+(-?[\d.]+)", r.stderr.decode(errors="ignore"))
+    if not m:
+        return None
+    v = float(m.group(1)) - 0.691
+    return v if v > -70 else None
+
+
+def prepare(src, target_lufs):
     """Devuelve un WAV 8 kHz mono listo para el aire (cacheado).
     target_lufs=None → solo convierte, sin normalizar."""
     src = Path(src)
     if not src.is_file():
-        raise FileNotFoundError(str(src))
+        raise FileNotFoundError("No existe el audio " + src.name)
     st = src.stat()
-    tag = "raw" if target_lufs is None else f"{target_lufs:.1f}"
-    key = hashlib.sha1(f"{src.resolve()}|{st.st_size}|{st.st_mtime}|{tag}|{CACHE_VERSION}"
-                       .encode()).hexdigest()[:16]
-    out = paths.cache_dir() / f"{src.stem[:40]}_{key}.wav"
+    tag = "raw" if target_lufs is None else "{:.1f}".format(target_lufs)
+    key = hashlib.sha1("{}|{}|{}|{}|{}".format(src.resolve(), st.st_size, st.st_mtime, tag,
+                                               CACHE_VERSION).encode()).hexdigest()[:16]
+    out = paths.cache_dir() / "{}_{}.wav".format(re.sub(r"[^\w-]", "_", src.stem)[:40], key)
     with _lock_for(str(out)):
         if out.is_file() and out.stat().st_size > 44:
-            os.utime(out, None)       # marca de uso para la limpieza
+            os.utime(str(out), None)          # marca de uso para la limpieza
             return out
         t0 = time.time()
-        tmp = out.with_suffix(".part.wav")
-        afilter = "aformat=channel_layouts=mono"
-        if target_lufs is not None:
-            m = _measure_loudness(src)
-            if m and m.get("input_i") not in (None, "-inf") and float(m["input_i"]) > -70:
-                # Ganancia lineal (no cambia la dinámica) + limitador de picos
-                gain = min(target_lufs - float(m["input_i"]), 20.0)
-                limit = 10 ** (PEAK_LIMIT_DB / 20)
-                afilter += (f",volume={gain:.2f}dB"
-                            f",alimiter=limit={limit:.4f}:attack=5:release=50:level=disabled")
+        tmp = out.with_name(out.stem + ".part.wav")
+        try:
+            if have("ffmpeg"):
+                gain = None
+                if target_lufs is not None:
+                    cur = _lufs_ffmpeg(src)
+                    if cur is None:
+                        log.warning("No pude medir el nivel de %s; solo se convierte", src.name)
+                    else:
+                        gain = min(target_lufs - cur, 20.0)
+                _to_8k_ffmpeg(src, tmp, gain)
+            elif have("sox"):
+                if target_lufs is None:
+                    _to_8k_sox(src, tmp)
+                else:
+                    raw = prepare(src, None)
+                    cur = _lufs_sox(raw)
+                    if cur is None:
+                        shutil.copyfile(str(raw), str(tmp))
+                    else:
+                        gain = min(target_lufs - cur, 20.0)
+                        _to_8k_sox(raw, tmp, gain)
+                        # El limitador le quita nivel a la voz con picos altos:
+                        # medir otra vez y compensar lo que falte
+                        got = _lufs_sox(tmp)
+                        if got is not None and abs(target_lufs - got) > 0.5:
+                            gain = min(gain + (target_lufs - got) * 1.2, 24.0)
+                            _to_8k_sox(raw, tmp, gain)
             else:
-                log.warning("No se pudo medir el nivel de %s; solo se convierte", src.name)
-        cmd = ["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(src),
-               "-af", afilter, "-ar", str(RATE), "-ac", "1",
-               "-sample_fmt", "s16", "-f", "wav", str(tmp)]
-        r = _run(cmd)
-        if r.returncode != 0 or not tmp.is_file():
-            err = r.stderr.decode(errors="ignore")[-400:]
-            raise RuntimeError(f"ffmpeg no pudo convertir {src.name}: {err}")
-        os.replace(tmp, out)
+                raise RuntimeError("Este nodo no tiene ffmpeg ni sox para convertir audio")
+            if not tmp.is_file() or tmp.stat().st_size <= 44:
+                raise RuntimeError("La conversión de {} no produjo audio".format(src.name))
+            os.replace(str(tmp), str(out))
+        finally:
+            paths.rm(tmp)
         log.info("Audio preparado %s → %s (%.1f s, objetivo %s)",
                  src.name, out.name, time.time() - t0, tag)
         return out
 
 
 # ── Operaciones sobre WAV 8 kHz mono ─────────────────────────────────────────
-def read_samples(path: Path) -> array.array:
+def read_samples(path):
     with wave.open(str(path), "rb") as w:
         if w.getframerate() != RATE or w.getnchannels() != 1 or w.getsampwidth() != 2:
-            raise ValueError(f"{path.name} no es WAV 8 kHz mono 16 bits")
+            raise ValueError("{} no es WAV 8 kHz mono 16 bits".format(Path(path).name))
         data = w.readframes(w.getnframes())
     a = array.array("h")
     a.frombytes(data)
@@ -137,24 +236,28 @@ def read_samples(path: Path) -> array.array:
     return a
 
 
-def write_samples(path: Path, a: array.array) -> None:
+def write_samples(path, a):
     if sys.byteorder == "big":
         a = array.array("h", a)
         a.byteswap()
-    tmp = path.with_suffix(".part.wav")
-    with wave.open(str(tmp), "wb") as w:
+    path = Path(path)
+    tmp = path.with_name(path.stem + ".part.wav")
+    w = wave.open(str(tmp), "wb")
+    try:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(RATE)
         w.writeframes(a.tobytes())
-    os.replace(tmp, path)
+    finally:
+        w.close()
+    os.replace(str(tmp), str(path))
 
 
-def silence(seconds: float) -> array.array:
+def silence(seconds):
     return array.array("h", bytes(2 * max(0, int(seconds * RATE))))
 
 
-def mix_into(base: array.array, over: array.array, at_sample: int) -> None:
+def mix_into(base, over, at_sample):
     """Suma *over* sobre *base* desde at_sample, con recorte."""
     at_sample = max(0, at_sample)
     n = min(len(over), len(base) - at_sample)
@@ -163,9 +266,8 @@ def mix_into(base: array.array, over: array.array, at_sample: int) -> None:
         base[at_sample + i] = 32767 if v > 32767 else (-32768 if v < -32768 else v)
 
 
-def build_segment(body: Path, start: float, end: float, out: Path,
-                  lead: float = 0.0, pre: list[Path] = (), post: list[Path] = (),
-                  alert: Path | None = None, alert_before: float = 0.0) -> dict:
+def build_segment(body, start, end, out, lead=0.0, pre=(), post=(),
+                  alert=None, alert_before=0.0):
     """Arma el archivo de un tramo al aire:
         [silencio PTT] + [anuncio de regreso] + cuerpo[start:end] + [anuncio de pausa]
     con la alerta mezclada *alert_before* segundos antes del final del cuerpo.
@@ -176,11 +278,11 @@ def build_segment(body: Path, start: float, end: float, out: Path,
     for p in pre:
         s = read_samples(p)
         a.extend(s)
-        pre_len += len(s) / RATE
+        pre_len += len(s) / float(RATE)
     body_start = len(a)
     chunk = src[int(start * RATE):int(end * RATE)]
     a.extend(chunk)
-    body_len = len(chunk) / RATE
+    body_len = len(chunk) / float(RATE)
     if alert is not None and alert_before > 0:
         al = read_samples(alert)
         at = body_start + len(chunk) - int(alert_before * RATE)
@@ -188,25 +290,21 @@ def build_segment(body: Path, start: float, end: float, out: Path,
     for p in post:
         a.extend(read_samples(p))
     write_samples(out, a)
-    return {"total": len(a) / RATE, "body_offset": lead + pre_len, "body_len": body_len}
+    return {"total": len(a) / float(RATE), "body_offset": lead + pre_len, "body_len": body_len}
 
 
-def cleanup(max_age_days: int = 21) -> None:
+def cleanup(max_age_days=21):
     """Borra tramos viejos y caché sin uso."""
     now = time.time()
     for f in paths.tmp_dir().glob("*"):
-        if f.is_file() and now - f.stat().st_mtime > 6 * 3600:
-            f.unlink(missing_ok=True)
+        try:
+            if f.is_file() and now - f.stat().st_mtime > 6 * 3600:
+                paths.rm(f)
+        except OSError:
+            pass
     for f in paths.cache_dir().glob("*.wav"):
-        if now - f.stat().st_mtime > max_age_days * 86400:
-            f.unlink(missing_ok=True)
-
-
-def to_mp3_preview(src: Path) -> Path:
-    """Versión ligera para escuchar en el navegador (no para el aire)."""
-    out = paths.tmp_dir() / f"prev_{hashlib.sha1(str(src).encode()).hexdigest()[:10]}.mp3"
-    r = _run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", str(src),
-              "-ac", "1", "-b:a", "64k", str(out)])
-    if r.returncode != 0:
-        raise RuntimeError("No se pudo convertir para escuchar")
-    return out
+        try:
+            if now - f.stat().st_mtime > max_age_days * 86400:
+                paths.rm(f)
+        except OSError:
+            pass

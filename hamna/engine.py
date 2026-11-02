@@ -14,8 +14,6 @@ segundos. Cada tramo es un solo archivo, así el transmisor no se suelta:
 Entre tramos el PTT se suelta durante pause_duration segundos y el
 siguiente tramo arranca retroceso_secs antes del corte.
 """
-from __future__ import annotations
-
 import datetime as dt
 import logging
 import threading
@@ -38,11 +36,11 @@ class Stopped(Exception):
 class Engine:
     def __init__(self):
         self._lock = threading.RLock()
-        self._thread: threading.Thread | None = None
-        self._cmd: str | None = None
+        self._thread = None
+        self._cmd = None
         self._wake = threading.Event()
-        self._fired: set = set()
-        self._prewarmed: set = set()
+        self._fired = set()
+        self._prewarmed = set()
         self.events = deque(maxlen=80)
         self._reset_status()
 
@@ -56,12 +54,12 @@ class Engine:
         }
         self._seg_clock = None   # (t0_monotonic, body_offset, body_start, body_len)
 
-    def note(self, msg: str, level="info"):
+    def note(self, msg, level="info"):
         ts = dt.datetime.now().strftime("%H:%M:%S")
         self.events.appendleft({"t": ts, "msg": msg, "level": level})
         getattr(log, "warning" if level == "warn" else level, log.info)(msg)
 
-    def status(self) -> dict:
+    def status(self):
         with self._lock:
             s = dict(self.st)
             s["secciones"] = [dict(x) for x in self.st["secciones"]]
@@ -83,10 +81,10 @@ class Engine:
             self.st.update(kw)
 
     # ── Comandos ─────────────────────────────────────────────────────────────
-    def busy(self) -> bool:
+    def busy(self):
         return bool(self._thread and self._thread.is_alive())
 
-    def start_event(self, evento_id: int, origen: str = "manual") -> None:
+    def start_event(self, evento_id, origen = "manual"):
         ev = db.get_evento(evento_id)
         if not ev:
             raise ValueError("El evento no existe")
@@ -95,14 +93,16 @@ class Engine:
         self.stop(wait=True)
         self._start(lambda: self._run_event(ev, origen))
 
-    def play_single(self, path: Path, label: str) -> None:
+    def play_single(self, path, label):
         """Transmite un solo audio (prueba)."""
         self.stop(wait=True)
         self._start(lambda: self._run_single(path, label))
 
     def _start(self, target):
         self._cmd = None
-        self.st["error"] = ""
+        with self._lock:
+            # Marcar "preparando" ya, para que la página no vea un instante "fuera del aire"
+            self.st.update(error="", on_air=True, state="preparing")
         self._wake.clear()
         self._thread = threading.Thread(target=self._guard(target), daemon=True)
         self._thread.start()
@@ -115,7 +115,7 @@ class Engine:
                 self.note("Transmisión detenida por el operador", "warn")
             except Exception as e:
                 log.exception("Fallo en la transmisión")
-                self.note(f"Error: {e}", "error")
+                self.note("Error: {}".format(e), "error")
                 self._set(error=str(e))
             finally:
                 err = self.st.get("error", "")
@@ -124,7 +124,7 @@ class Engine:
                     self.st["error"] = err
         return run
 
-    def command(self, cmd: str) -> None:
+    def command(self, cmd):
         if cmd not in ("stop", "next", "skip_pause", "pause", "resume"):
             raise ValueError(cmd)
         if not self.busy():
@@ -132,14 +132,14 @@ class Engine:
         self._cmd = cmd
         self._wake.set()
 
-    def stop(self, wait=False) -> None:
+    def stop(self, wait=False):
         if self.busy():
             self.command("stop")
             if wait and self._thread:
                 self._thread.join(timeout=8)
 
     # ── Esperas interrumpibles ───────────────────────────────────────────────
-    def _take(self, *accept) -> str | None:
+    def _take(self, *accept):
         """Consume el comando pendiente. 'stop' siempre interrumpe; los que
         no aplican en este momento se descartan."""
         c = self._cmd
@@ -150,7 +150,7 @@ class Engine:
         self._cmd = None
         return c if (not accept or c in accept) else None
 
-    def _wait(self, seconds: float, *accept) -> str | None:
+    def _wait(self, seconds, *accept):
         end = time.monotonic() + max(0.0, seconds)
         with self._lock:
             self.st["countdown"] = end
@@ -169,16 +169,16 @@ class Engine:
                 self.st["countdown"] = None
 
     # ── Preparación de audio ─────────────────────────────────────────────────
-    def _target(self, cfg) -> float | None:
+    def _target(self, cfg):
         return float(cfg.get("normalize_target", -18)) if cfg.get("section_normalize") else None
 
-    def _pause_target(self, cfg) -> float | None:
+    def _pause_target(self, cfg):
         t = self._target(cfg)
         if t is None:
             return None
         return t + (int(cfg.get("pause_volume", 95)) - 100) * 0.4
 
-    def _pause_files(self, cfg) -> dict:
+    def _pause_files(self, cfg):
         out = {}
         for key in ("pause_alert_file", "pause_announcement_file", "pause_resume_file"):
             name = cfg.get(key) or ""
@@ -187,20 +187,20 @@ class Engine:
                 out[key] = audio.prepare(p, self._pause_target(cfg))
         return out
 
-    def _regen(self, sec: dict, ev: dict, secs: list, cfg: dict) -> None:
+    def _regen(self, sec, ev, secs, cfg):
         ctx = tts.event_context(ev, secs)
         ctx.update(titulo=sec.get("titulo") or sec.get("nombre"),
                    descripcion=sec.get("descripcion") or "")
-        out = paths.tmp_dir() / f"regen_{sec['id']}_{uuid.uuid4().hex[:6]}"
+        out = paths.tmp_dir() / "regen_{}_{}".format(sec['id'], uuid.uuid4().hex[:6])
         try:
             src = tts.synthesize(sec["texto_tts"], cfg, out, ctx)
             sec["_prep"] = audio.prepare(src, self._target(cfg))
             sec["duracion"] = audio.duration(sec["_prep"])
-            self.note(f"TTS regenerado: {sec['nombre']}")
+            self.note("TTS regenerado: {}".format(sec['nombre']))
         except Exception as e:
-            self.note(f"No se pudo regenerar '{sec['nombre']}': {e} — uso la versión guardada", "warn")
+            self.note("No se pudo regenerar '{}': {} — uso la versión guardada".format(sec['nombre'], e), "warn")
 
-    def prepare_event(self, evento_id: int) -> int:
+    def prepare_event(self, evento_id):
         """Deja en caché los audios de un evento (se llama 20 min antes)."""
         cfg = settings.load()
         n = 0
@@ -213,7 +213,7 @@ class Engine:
         return n
 
     @staticmethod
-    def _file_of(sec: dict) -> Path | None:
+    def _file_of(sec):
         name = sec.get("ruta_archivo") or ""
         if not name:
             return None
@@ -223,21 +223,21 @@ class Engine:
         return p if p.is_file() else None
 
     # ── Transmisión ──────────────────────────────────────────────────────────
-    def _run_single(self, path: Path, label: str):
+    def _run_single(self, path, label):
         cfg = settings.load()
         be = backends.make(cfg)
         prep = audio.prepare(path, self._target(cfg))
-        out = paths.tmp_dir() / f"seg_{uuid.uuid4().hex[:8]}.wav"
+        out = paths.tmp_dir() / "seg_{}.wav".format(uuid.uuid4().hex[:8])
         info = audio.build_segment(prep, 0, audio.duration(prep), out,
                                    lead=float(cfg.get("ptt_on_delay", 0)))
         self._set(on_air=True, state="tx", evento=label, origen="prueba",
                   secciones=[{"nombre": label, "duracion": info["body_len"], "tipo": "Prueba"}],
-                  cur_sec=0, started_at=dt.datetime.now().isoformat(timespec="seconds"))
-        self.note(f"Prueba al aire: {label}")
+                  cur_sec=0, started_at=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        self.note("Prueba al aire: {}".format(label))
         self._play(be, out, info, 0.0)
-        out.unlink(missing_ok=True)
+        paths.rm(out)
 
-    def _run_event(self, ev: dict, origen: str):
+    def _run_event(self, ev, origen):
         cfg = settings.load()
         be = backends.make(cfg)
         secs = [dict(s) for s in db.get_secciones_by_evento(ev["id"])]
@@ -245,10 +245,10 @@ class Engine:
         result = "incompleto"
         self._set(on_air=True, state="preparing", evento_id=ev["id"], evento=ev["nombre"],
                   origen=origen, error="", cur_sec=-1,
-                  started_at=dt.datetime.now().isoformat(timespec="seconds"),
+                  started_at=dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                   secciones=[{"id": s["id"], "nombre": s["nombre"], "tipo": s["tipo"],
                               "duracion": float(s["duracion"] or 0)} for s in secs])
-        self.note(f"Iniciando «{ev['nombre']}» ({origen}) por {be.name}")
+        self.note("Iniciando «{}» ({}) por {}".format(ev['nombre'], origen, be.name))
         try:
             # Todo se prepara antes de activar el PTT, para no dejar silencio al aire
             for s in secs:
@@ -274,25 +274,25 @@ class Engine:
                     self._sync_secs(secs)
                 self._take("next", "skip_pause")
                 if not sec.get("_prep"):
-                    self.note(f"«{sec['nombre']}» no tiene audio; se omite", "warn")
+                    self.note("«{}» no tiene audio; se omite".format(sec['nombre']), "warn")
                     continue
                 self._set(cur_sec=i, sec_pos=0.0)
-                self.note(f"Sección {i + 1}/{len(secs)}: {sec['nombre']}")
+                self.note("Sección {}/{}: {}".format(i + 1, len(secs), sec['nombre']))
                 self._play_section(be, sec, cfg, pf)
             result = "completo"
-            self.note(f"«{ev['nombre']}» terminó")
+            self.note("«{}» terminó".format(ev['nombre']))
         except Stopped:
             result = "detenido"
             raise
         except Exception as e:
-            result = f"error: {e}"
+            result = "error: {}".format(e)
             raise
         finally:
             db.historial_fin(hid, result)
             for s in secs:
                 p = s.get("_prep")
                 if p and Path(p).parent == paths.tmp_dir():
-                    Path(p).unlink(missing_ok=True)
+                    paths.rm(p)
 
     def _sync_secs(self, secs):
         with self._lock:
@@ -300,7 +300,7 @@ class Engine:
                 if i < len(self.st["secciones"]):
                     self.st["secciones"][i]["duracion"] = float(s.get("duracion") or 0)
 
-    def _play_section(self, be, sec: dict, cfg: dict, pf: dict):
+    def _play_section(self, be, sec, cfg, pf):
         body = Path(sec["_prep"])
         dur = audio.duration(body)
         lead = float(cfg.get("ptt_on_delay", 0) or 0)
@@ -315,7 +315,7 @@ class Engine:
             if pause_on and dur - pos > tx_time + TAIL_MIN:
                 end = pos + tx_time
             last = end >= dur - 0.05
-            out = paths.tmp_dir() / f"seg_{uuid.uuid4().hex[:8]}.wav"
+            out = paths.tmp_dir() / "seg_{}.wav".format(uuid.uuid4().hex[:8])
             info = audio.build_segment(
                 body, pos, end, out, lead=lead,
                 pre=[pf["pause_resume_file"]] if resumed and "pause_resume_file" in pf else [],
@@ -325,7 +325,7 @@ class Engine:
             try:
                 res = self._play(be, out, info, pos)
             finally:
-                out.unlink(missing_ok=True)
+                paths.rm(out)
 
             if res == "next":
                 return
@@ -347,14 +347,14 @@ class Engine:
                 return
             # Pausa automática
             self._set(state="paused", ptt=False, sec_pos=end)
-            self.note(f"Pausa automática de {int(float(cfg.get('pause_duration', 10)))} s")
+            self.note("Pausa automática de {} s".format(int(float(cfg.get('pause_duration', 10)))))
             c = self._wait(float(cfg.get("pause_duration", 10)), "skip_pause", "next")
             if c == "next":
                 return
             pos = max(0.0, end - rewind)
             resumed = True
 
-    def _play(self, be, wav: Path, info: dict, body_start: float) -> str:
+    def _play(self, be, wav, info, body_start):
         """Transmite un tramo. Devuelve 'done', 'next' o 'pause'."""
         with self._lock:
             self.st.update(state="tx", ptt=True, sec_pos=body_start)
@@ -380,11 +380,11 @@ class Engine:
 
     # ── Programador ──────────────────────────────────────────────────────────
     @staticmethod
-    def applies_today(row: dict, day: dt.date) -> bool:
+    def applies_today(row, day):
         rec = (row.get("recurrencia") or "ninguna").lower()
         fecha = row.get("fecha") or ""
         try:
-            orig = dt.date.fromisoformat(fecha)
+            orig = dt.datetime.strptime(fecha, "%Y-%m-%d").date()
         except ValueError:
             orig = None
         if rec == "ninguna":
@@ -400,7 +400,7 @@ class Engine:
         return False
 
     @classmethod
-    def next_run(cls, row: dict, now: dt.datetime | None = None) -> dt.datetime | None:
+    def next_run(cls, row, now = None):
         now = now or dt.datetime.now()
         try:
             h, m = map(int, (row.get("hora") or "")[:5].split(":"))
@@ -451,11 +451,11 @@ class Engine:
             self._fired.add(key)
             if self.busy() and self.st.get("evento_id") == row["evento_id"]:
                 continue
-            self.note(f"Programador: inicia «{row['evento_nombre']}» a las {hhmm}")
+            self.note("Programador: inicia «{}» a las {}".format(row['evento_nombre'], hhmm))
             try:
                 self.start_event(row["evento_id"], origen="programado")
             except Exception as e:
-                self.note(f"Programador: no se pudo iniciar «{row['evento_nombre']}»: {e}", "error")
+                self.note("Programador: no se pudo iniciar «{}»: {}".format(row['evento_nombre'], e), "error")
         # olvidar disparos de otros días
         self._fired = {k for k in self._fired if k[1] == today}
         self._prewarmed = {k for k in self._prewarmed if k[1] == today}
@@ -463,9 +463,9 @@ class Engine:
     def _prewarm(self, row):
         try:
             n = self.prepare_event(row["evento_id"])
-            self.note(f"Audios de «{row['evento_nombre']}» preparados ({n})")
+            self.note("Audios de «{}» preparados ({})".format(row['evento_nombre'], n))
         except Exception as e:
-            self.note(f"Preparación anticipada falló: {e}", "warn")
+            self.note("Preparación anticipada falló: {}".format(e), "warn")
 
 
 engine = Engine()
