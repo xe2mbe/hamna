@@ -9,6 +9,7 @@
 #    --puerto 8090        puerto de la página web
 #    --password CLAVE     contraseña de la página (si no, se pregunta)
 #    --sin-paquetes       no instalar nada con apt (ffmpeg, espeak-ng)
+#    --sin-cron           no dar permiso a la página para ver/editar el cron
 #
 #  No necesita paquetes de Python: usa solo Python 3.5 o más nuevo.
 #  Volver a ejecutarlo actualiza el programa y conserva los datos.
@@ -23,6 +24,7 @@ TIPO=""
 NODO=""
 PASSWORD=""
 APT=1
+CRON=1
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONIOENCODING=utf-8
 
@@ -38,6 +40,7 @@ while [ $# -gt 0 ]; do
     --puerto) PORT="$2"; shift 2 ;;
     --password) PASSWORD="$2"; shift 2 ;;
     --sin-paquetes) APT=0; shift ;;
+    --sin-cron) CRON=0; shift ;;
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) die "Opción desconocida: $1" ;;
   esac
@@ -85,6 +88,9 @@ else
   c_ok "IRLP ${NODO:-?} (servicio como $RUN_USER)"
 fi
 RUN_GROUP=$(id -gn "$RUN_USER")
+HAS_IRLP=0; [ -d /home/irlp/scripts ] && id repeater >/dev/null 2>&1 && HAS_IRLP=1
+HAS_ASL=0; [ -f /etc/asterisk/rpt.conf ] && [ -n "$AST" ] && HAS_ASL=1
+[ "$HAS_IRLP" = 1 ] && [ "$HAS_ASL" = 1 ] && c_ok "Este nodo tiene ASL e IRLP: se podrán programar conexiones en los dos"
 
 # ── 2. Python y herramientas de audio ───────────────────────────────────────
 PY=$(command -v python3 || true)
@@ -128,11 +134,15 @@ systemctl stop "$SERVICE" 2>/dev/null || true
 mkdir -p "$APP_DIR" "$DATA_DIR"
 rm -rf "$APP_DIR/hamna"
 cp -r "$SRC_DIR/hamna" "$APP_DIR/"
+rm -rf "$APP_DIR/bin" && mkdir -p "$APP_DIR/bin"
+cp "$SRC_DIR"/bin/hamna-* "$APP_DIR/bin/"
+sed -i "1s|.*|#!$PY -I|" "$APP_DIR/bin/hamna-cron"
 for f in install.sh uninstall.sh README.md; do [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$APP_DIR/"; done
 find "$APP_DIR" -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
 chown -R root:root "$APP_DIR"
 chmod -R a+rX "$APP_DIR"
-chmod 755 "$APP_DIR"/*.sh 2>/dev/null || true
+chmod 755 "$APP_DIR"/*.sh "$APP_DIR"/bin/* 2>/dev/null || true
+chmod 755 "$APP_DIR" "$APP_DIR/bin"
 chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR"
 chmod 750 "$DATA_DIR"
 [ "$TIPO" = irlp ] && { usermod -aG audio repeater 2>/dev/null || true; }
@@ -174,6 +184,33 @@ cat > /usr/local/bin/hamna-web-passwd <<EOF
 cd $APP_DIR && exec $RUNPFX env HAMNA_DATA=$DATA_DIR PYTHONIOENCODING=utf-8 $PY -m hamna --set-password "\$@"
 EOF
 chmod 755 /usr/local/bin/hamna-web-passwd
+
+# ── 4b. Permisos para cron y conexiones ─────────────────────────────────────
+# Reglas de sudo limitadas a los ayudantes fijos de /opt/hamna-web/bin
+# (dueño root, sin escritura para el servicio).
+SUDOERS=/etc/sudoers.d/hamna-web
+rm -f "$SUDOERS"
+if [ "$RUN_USER" != root ] && command -v sudo >/dev/null 2>&1 && [ -d /etc/sudoers.d ]; then
+  TMP=$(mktemp)
+  echo "# HAMNA Web (lo crea install.sh; se borra con uninstall.sh)" > "$TMP"
+  [ "$CRON" = 1 ] && echo "$RUN_USER ALL=(root) NOPASSWD: $APP_DIR/bin/hamna-cron" >> "$TMP"
+  [ "$HAS_IRLP" = 1 ] && [ "$RUN_USER" != repeater ] &&     echo "$RUN_USER ALL=(repeater) NOPASSWD: $APP_DIR/bin/hamna-irlp" >> "$TMP"
+  if [ "$HAS_ASL" = 1 ] && [ "$TIPO" = irlp ]; then
+    AST_USER=$(ps -o user= -C asterisk 2>/dev/null | head -1 | tr -d ' ' || true)
+    [ -n "$AST_USER" ] && [ "$AST_USER" != "$RUN_USER" ] &&       echo "$RUN_USER ALL=($AST_USER) NOPASSWD: $AST -rx *" >> "$TMP"
+  fi
+  if [ "$(wc -l < "$TMP")" -gt 1 ]; then
+    if visudo -cf "$TMP" >/dev/null 2>&1; then
+      install -m 440 -o root -g root "$TMP" "$SUDOERS"
+      c_ok "Permisos de sudo para cron/conexiones en $SUDOERS"
+    else
+      c_warn "No pude validar la regla de sudo; la página no podrá editar el cron"
+    fi
+  fi
+  rm -f "$TMP"
+elif [ "$RUN_USER" != root ]; then
+  c_warn "Sin sudo: la página no podrá ver el cron de root"
+fi
 
 # ── 5. Servicio ─────────────────────────────────────────────────────────────
 AFTER="network-online.target"

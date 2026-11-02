@@ -32,6 +32,7 @@
     <button data-tab="prog" class="active">Programación</button>
     <button data-tab="eventos">Eventos</button>
     <button data-tab="secciones">Secciones</button>
+    <button data-tab="cron">Cron</button>
     <button data-tab="ajustes">Ajustes</button>
   </nav>
 
@@ -69,6 +70,16 @@
         </div>
       </div>
       <div id="secList" class="table"></div>
+    </section>
+
+    <!-- Cron -->
+    <section class="view hidden" id="view-cron">
+      <div class="view-head">
+        <h1>Tareas de cron</h1>
+        <button class="btn" id="btnCronReload">↻ Recargar</button>
+      </div>
+      <p class="muted">Las tareas programadas del sistema del nodo (boletines, hora, conexiones). Cada cambio guarda antes un respaldo en <code>/var/backups/hamna-cron/</code>. Cuidado: lo que pongas aquí corre con los permisos de ese usuario.</p>
+      <div id="cronList" class="cron-list"><p class="empty">Cargando…</p></div>
     </section>
 
     <!-- Ajustes -->

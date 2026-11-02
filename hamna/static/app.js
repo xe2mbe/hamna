@@ -107,12 +107,12 @@ async function start() {
 /* ── Pestañas ────────────────────────────────────────────────────────────── */
 $$("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
 function showTab(t) {
-  if (!["prog", "eventos", "secciones", "ajustes"].includes(t)) t = "prog";
+  if (!["prog", "eventos", "secciones", "cron", "ajustes"].includes(t)) t = "prog";
   S.tab = t;
   try { localStorage.setItem("hamna.tab", t); } catch {}
   $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
   $$(".view").forEach((v) => v.classList.toggle("hidden", v.id !== "view-" + t));
-  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, ajustes: loadAjustes })[t]();
+  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, cron: loadCron, ajustes: loadAjustes })[t]();
 }
 
 function updateNodeLabel() {
@@ -291,7 +291,7 @@ async function loadEventos() {
   el.innerHTML = S.eventos.length ? S.eventos.map((e) => `
     <button class="list-item ${e.id === S.evSel ? "active" : ""}" data-id="${e.id}">
       <b>${esc(e.nombre)}</b>${e.numero ? ` <span class="chip">#${e.numero}</span>` : ""}
-      <small>${e.num_secciones} secciones · ${fmt(e.duracion_total)}${e.tipo ? " · " + esc(e.tipo) : ""}</small>
+      <small>${evSummary(e)}</small>
     </button>`).join("") : `<p class="empty">Aún no hay eventos.</p>`;
   if (S.evSel && S.eventos.some((e) => e.id === S.evSel)) loadEvento(S.evSel);
   else { S.evSel = null; $("#eventoDetail").innerHTML = `<p class="empty">Elige un evento para ver y ordenar sus secciones.</p>`; }
@@ -332,7 +332,9 @@ async function loadEvento(id) {
           <button class="btn" data-rm title="Quitar del evento">✕</button>
         </span>
       </div>`).join("") : `<p class="empty">Este evento no tiene secciones.</p>`}</div>
-    <div class="row gap" style="margin-top:12px"><button class="btn" id="evAdd">+ Agregar secciones</button></div>`;
+    <div class="row gap" style="margin-top:12px"><button class="btn" id="evAdd">+ Agregar secciones</button></div>
+    <div class="links" id="evLinks"></div>`;
+  renderLinks(ev);
   $("#evTx").onclick = () => txStart(ev.id, ev.nombre);
   $("#evEdit").onclick = () => eventoForm(ev);
   $("#evDel").onclick = async () => {
@@ -362,6 +364,121 @@ async function loadEvento(id) {
     loadEvento(ev.id);
   };
 }
+/* ── Conexiones automáticas de un evento ─────────────────────────────────── */
+const ACC = { conectar: "Conectar", desconectar: "Desconectar", desconectar_todo: "Desconectar todo" };
+const MODO = { transceptor: "transceptor", monitor: "solo monitor", permanente: "permanente" };
+const evSummary = (e) => `${e.num_secciones} secciones · ${fmt(e.duracion_total)}${e.tipo ? " · " + esc(e.tipo) : ""}${e.num_conexiones ? " · 🔗 " + e.num_conexiones : ""}`;
+function linkText(a) {
+  if (a.sistema === "irlp") return a.accion === "conectar" ? `Conectar a ${esc(a.destino)}` : "Desconectar (end)";
+  if (a.accion === "desconectar_todo") return "Desconectar todos los enlaces";
+  if (a.accion === "desconectar") return `Desconectar ${esc(a.destino)}`;
+  return `Conectar a ${esc(a.destino)}${a.modo && a.modo !== "transceptor" ? ` <span class="muted">(${MODO[a.modo]})</span>` : ""}`;
+}
+function linkWhen(a) {
+  const m = +a.minutos || 0;
+  if (a.momento === "antes") return m ? `${m} min antes` : "Al iniciar";
+  return m ? `${m} min después` : "Al terminar";
+}
+async function renderLinks(ev) {
+  const info = await getInfo();
+  const sis = info.sistemas || {};
+  const list = ev.conexiones || [];
+  const none = !sis.asl && !sis.irlp;
+  const det = [sis.asl && "ASL" + (sis.asl_nodo ? " " + sis.asl_nodo : ""), sis.irlp && "IRLP"].filter(Boolean).join(" y ");
+  $("#evLinks").innerHTML = `
+    <h3>Conexiones automáticas</h3>
+    <p class="muted" style="margin:0 0 8px">Se ejecutan al lanzar el evento (a mano o programado) y al terminar, aunque lo detengas.
+      «N min antes» solo se adelanta cuando el evento está programado; a mano se hace al iniciar.
+      <br>${none ? "⚠ No detecté ASL ni IRLP en este equipo: las acciones no podrán ejecutarse." : "Detectado en este nodo: " + esc(det) + "."}</p>
+    <div id="lkList">${list.length ? list.map((a, i) => `
+      <div class="link-row" data-i="${i}">
+        <span class="when">${linkWhen(a)}</span>
+        <span><span class="chip ${a.sistema}">${a.sistema.toUpperCase()}</span> ${linkText(a)}</span>
+        <span class="mini">
+          <button class="btn" data-act="test" title="Ejecutar ahora">▶</button>
+          <button class="btn" data-act="edit" title="Editar">✎</button>
+          <button class="btn" data-act="rm" title="Quitar">✕</button>
+        </span>
+      </div>`).join("") : `<p class="muted">Este evento no conecta ni desconecta nada.</p>`}</div>
+    <div class="row gap" style="margin-top:8px"><button class="btn" id="lkAdd">+ Agregar conexión o desconexión</button></div>`;
+  const save = async (items) => {
+    const r = await run(() => api(`/api/eventos/${ev.id}/conexiones`, { method: "PUT", json: { items } }), "Conexiones guardadas");
+    ev.conexiones = r.conexiones; renderLinks(ev); refreshEventosList();
+  };
+  $("#lkAdd").onclick = () => linkForm(null, sis, (a) => save([...list, a]));
+  $("#lkList").onclick = async (e) => {
+    const b = e.target.closest("button[data-act]"); if (!b) return;
+    const i = +b.closest(".link-row").dataset.i, a = list[i];
+    if (b.dataset.act === "rm") {
+      if (await confirmBox("¿Quitar esta acción del evento?", "Quitar")) save(list.filter((_, j) => j !== i));
+    } else if (b.dataset.act === "edit") {
+      linkForm(a, sis, (n) => save(list.map((x, j) => (j === i ? n : x))));
+    } else if (b.dataset.act === "test") {
+      const what = a.sistema.toUpperCase() + ": " + linkText(a).replace(/<[^>]+>/g, "");
+      if (!(await confirmBox(`¿Ejecutar ahora «${what}»? Esto cambia los enlaces reales del nodo.`, "Ejecutar"))) return;
+      busy(b, true, "…");
+      try { const r = await api("/api/conexiones/probar", { method: "POST", json: a }); toast("Hecho: " + r.comando); }
+      catch (err) { toast(err.message, true); }
+      finally { busy(b, false); }
+    }
+  };
+}
+async function refreshEventosList() {
+  const ev = await api("/api/eventos");
+  S.eventos = ev.eventos;
+  $$("#eventosList .list-item").forEach((b) => {
+    const e = S.eventos.find((x) => x.id === +b.dataset.id);
+    if (e) b.querySelector("small").innerHTML = evSummary(e);
+  });
+}
+function linkForm(a, sis, onSave) {
+  const avail = ["asl", "irlp"].filter((x) => sis[x]);
+  const opts = avail.length ? avail : ["asl", "irlp"];
+  a = a || { sistema: opts[0], accion: "conectar", destino: "", modo: "transceptor", momento: "antes", minutos: 0 };
+  if (!opts.includes(a.sistema)) opts.push(a.sistema);
+  openModal("Conexión o desconexión", `
+    <form id="lf">
+      <div class="grid2">
+        <label>Sistema<select name="sistema">${opts.map((x) => `<option value="${x}" ${x === a.sistema ? "selected" : ""}>${x.toUpperCase()}</option>`).join("")}</select></label>
+        <label>Acción<select name="accion"></select></label>
+      </div>
+      <div class="grid2">
+        <label id="lfDest">Nodo<input name="destino" inputmode="numeric" value="${esc(a.destino)}" placeholder="2000"><small id="lfHint"></small></label>
+        <label id="lfModo">Modo<select name="modo">${Object.entries(MODO).map(([k, v]) => `<option value="${k}" ${k === (a.modo || "transceptor") ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      </div>
+      <div class="grid2">
+        <label>Cuándo<select name="momento"><option value="antes" ${a.momento === "antes" ? "selected" : ""}>Antes de iniciar</option><option value="despues" ${a.momento === "despues" ? "selected" : ""}>Al terminar</option></select></label>
+        <label>Minutos<input name="minutos" type="number" min="0" max="120" step="1" value="${+a.minutos || 0}"><small id="lfMin"></small></label>
+      </div>
+      <p class="err" id="lfErr"></p>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div>
+    </form>`);
+  const f = $("#lf");
+  let acc = a.accion;
+  const sync = () => {
+    const irlp = f.sistema.value === "irlp";
+    const accs = irlp ? { conectar: "Conectar", desconectar_todo: "Desconectar (end)" } : ACC;
+    if (f.accion.value) acc = f.accion.value;
+    if (!accs[acc]) acc = irlp && acc === "desconectar" ? "desconectar_todo" : "conectar";
+    f.accion.innerHTML = Object.entries(accs).map(([k, v]) => `<option value="${k}" ${k === acc ? "selected" : ""}>${v}</option>`).join("");
+    $("#lfDest").classList.toggle("hidden", acc === "desconectar_todo");
+    $("#lfModo").classList.toggle("hidden", irlp || acc !== "conectar");
+    $("#lfHint").textContent = irlp ? "Nodo (4 dígitos) o reflector, p. ej. 9050" : "Nodo AllStar, o EchoLink (3xxxxxx)";
+    const m = +f.minutos.value || 0;
+    $("#lfMin").textContent = f.momento.value === "antes" ? (m ? `${m} min antes de la hora programada` : "Justo al iniciar")
+      : (m ? `${m} min después de terminar` : "En cuanto termina");
+  };
+  f.onchange = sync; f.minutos.oninput = sync; sync();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const n = { sistema: f.sistema.value, accion: f.accion.value, destino: f.destino.value.trim(),
+      modo: f.modo.value, momento: f.momento.value, minutos: +f.minutos.value || 0 };
+    const re = n.sistema === "irlp" ? /^\d{4,6}$/ : /^\d{3,7}$/;
+    if (n.accion !== "desconectar_todo" && !re.test(n.destino)) { $("#lfErr").textContent = "Escribe un número de nodo válido"; return; }
+    closeModal(); onSave(n);
+  };
+}
+
 async function addSecciones(ev) {
   const all = await api("/api/secciones");
   const have = new Set(ev.secciones.map((s) => s.id));
@@ -676,6 +793,200 @@ async function loadSistema() {
   $("#sysInfo").innerHTML = `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
     <h3>Últimas transmisiones</h3>
     <div class="hist">${i.historial.length ? i.historial.map((h) => `<div><span>${esc(h.inicio)}</span><b>${esc(h.evento)}</b><span class="muted">${esc(h.origen)}</span><span>${esc(h.resultado || "en curso")}</span></div>`).join("") : '<p class="muted">Todavía no hay transmisiones.</p>'}</div>`;
+}
+
+/* ── Cron ────────────────────────────────────────────────────────────────── */
+const CRON_F = [/^[\d*,\/-]+$/, /^[\d*,\/-]+$/, /^[\d*,\/-]+$/, /^[\d*,\/a-z-]+$/i, /^[\d*,\/a-z-]+$/i];
+const CRON_SP = { "@reboot": "Al arrancar el equipo", "@hourly": "Cada hora", "@daily": "Cada día a medianoche",
+  "@midnight": "Cada día a medianoche", "@weekly": "Cada domingo a medianoche", "@monthly": "El día 1 de cada mes",
+  "@yearly": "Cada 1 de enero", "@annually": "Cada 1 de enero" };
+function cronParse(raw) {
+  if (!raw.trim()) return { kind: "blank", raw };
+  let on = true, body = raw;
+  const c = raw.match(/^\s*#\s?(.*)$/);
+  if (c) { on = false; body = c[1]; }
+  const sp = body.match(/^\s*(@(?:reboot|yearly|annually|monthly|weekly|daily|midnight|hourly))\s+(\S.*)$/);
+  if (sp) return { kind: "entry", on, sched: sp[1], cmd: sp[2], raw };
+  const m = body.match(/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S.*)$/);
+  if (m && m.slice(1, 6).every((x, i) => CRON_F[i].test(x))) return { kind: "entry", on, sched: m.slice(1, 6).join(" "), cmd: m[6], raw };
+  if (!on) return { kind: "comment", raw, text: body };
+  return { kind: "other", raw };
+}
+const cronLine = (e) => (e.on ? "" : "#") + e.sched + " " + e.cmd;
+function expandDow(d) {
+  if (d === "*") return [0, 1, 2, 3, 4, 5, 6];
+  const out = new Set();
+  for (const part of d.split(",")) {
+    const r = part.match(/^(\d)(?:-(\d))?$/);
+    if (!r) return null;
+    const a = +r[1], b = r[2] != null ? +r[2] : a;
+    for (let i = a; i <= b; i++) out.add(i % 7);
+  }
+  return [...out].sort();
+}
+function dowText(d) {
+  const days = expandDow(d);
+  if (!days) return "días " + d;
+  if (days.length === 7) return "Todos los días";
+  const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+  const contiguous = days.length >= 3 && days.every((d, i) => !i || d === days[i - 1] + 1);
+  if (contiguous) return cap(`${DIAS[days[0]]} a ${DIAS[days[days.length - 1]]}`);
+  const t = days.map((i) => DIAS[i]).join(", ");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function cronDesc(s) {
+  if (CRON_SP[s]) return CRON_SP[s];
+  const [m, h, dom, mon, dow] = s.split(" ");
+  const num = (x) => /^\d+$/.test(x), nums = (x) => /^\d+(,\d+)*$/.test(x);
+  const p2 = (x) => String(x).padStart(2, "0");
+  let when;
+  if (num(m) && nums(h)) when = "a las " + h.split(",").map((x) => `${p2(x)}:${p2(m)}`).join(" y ");
+  else if (/^\*\/\d+$/.test(m) && h === "*") when = `cada ${m.slice(2)} min`;
+  else if (num(m) && h === "*") when = `cada hora, al minuto ${m}`;
+  else if (m === "*" && h === "*") when = "cada minuto";
+  else if (nums(m)) when = `a los minutos ${m}` + (h === "*" ? "" : ` (horas ${h})`);
+  else when = `min ${m}, hora ${h}`;
+  let days;
+  if (dom === "*" && mon === "*") days = dowText(dow);
+  else if (mon === "*" && dow === "*" && nums(dom)) days = `Día ${dom} de cada mes`;
+  else days = `Día ${dom}, mes ${mon}, semana ${dow}`;
+  return `${days} ${when}`;
+}
+async function loadCron() {
+  const el = $("#cronList");
+  let r;
+  try { r = await api("/api/cron"); }
+  catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  if (!r.disponible) {
+    el.innerHTML = `<p class="empty">Este equipo no tiene el ayudante de cron. Vuelve a ejecutar <code>install.sh</code> en el nodo.</p>`;
+    return;
+  }
+  S.cron = r.tablas;
+  el.innerHTML = r.tablas.map((t, ti) => {
+    if (t.error) return `<div class="cron-card"><header><h2>${esc(t.titulo)}</h2></header><p class="note err">${esc(t.error)}</p></div>`;
+    const lines = t.texto.split("\n").map(cronParse);
+    const rows = lines.map((l, li) => {
+      if (l.kind === "entry") return `
+        <div class="cron-row ${l.on ? "" : "off"}" data-li="${li}">
+          <label class="check" style="margin:0" title="${l.on ? "Activa" : "Desactivada"}"><input type="checkbox" data-tog ${l.on ? "checked" : ""} ${t.editable ? "" : "disabled"}></label>
+          <span class="when"><b>${esc(cronDesc(l.sched))}</b><small>${esc(l.sched)}</small></span>
+          <code>${esc(l.cmd)}</code>
+          <span class="mini">${t.editable ? `<button class="btn" data-edit title="Editar">✎</button><button class="btn" data-del title="Borrar">✕</button>` : ""}</span>
+        </div>`;
+      if (l.kind === "comment" && l.text.trim()) return `<div class="cron-row comment"># ${esc(l.text)}</div>`;
+      if (l.kind === "other") return `<div class="cron-row comment"><code>${esc(l.raw)}</code></div>`;
+      return "";
+    }).join("");
+    const n = lines.filter((l) => l.kind === "entry").length;
+    return `<div class="cron-card" data-ti="${ti}">
+      <header><h2>${esc(t.titulo)} <span class="chip">${n} tareas</span></h2>
+        ${t.editable ? `<div class="row gap wrap"><button class="btn" data-raw>Editar como texto</button><button class="btn primary" data-add>+ Agregar tarea</button></div>` : `<span class="muted">solo lectura</span>`}</header>
+      ${t.nota ? `<p class="note">${esc(t.nota)}</p>` : ""}
+      <div>${rows || `<p class="muted" style="padding:10px 14px">Sin tareas.</p>`}</div>
+    </div>`;
+  }).join("");
+}
+async function cronSave(t, text, msg) {
+  try {
+    await api("/api/cron", { method: "PUT", json: { id: t.id, hash: t.hash, texto: text } });
+    toast(msg || "Cron guardado");
+  } catch (e) { toast(e.message, true); }
+  loadCron();
+}
+function cronLines(t) { return t.texto.split("\n").map(cronParse); }
+const cronJoin = (lines) => lines.map((l) => l.raw).join("\n");
+$("#btnCronReload").onclick = loadCron;
+$("#cronList").onclick = async (e) => {
+  const card = e.target.closest(".cron-card"); if (!card || card.dataset.ti == null) return;
+  const t = S.cron[+card.dataset.ti];
+  const b = e.target.closest("button");
+  if (!b || !t.editable) return;
+  const lines = cronLines(t);
+  if ("add" in b.dataset) return cronForm(t, null, (entry, comment) => {
+    const add = [];
+    if (comment) add.push({ raw: "# " + comment });
+    add.push({ raw: cronLine(entry) });
+    while (lines.length && lines[lines.length - 1].kind === "blank") lines.pop();
+    cronSave(t, cronJoin([...lines, ...add]) + "\n", "Tarea agregada");
+  });
+  if ("raw" in b.dataset) return cronRaw(t);
+  const li = +b.closest(".cron-row").dataset.li, l = lines[li];
+  if ("del" in b.dataset) {
+    if (!(await confirmBox(`¿Borrar esta tarea?\n\n${l.sched} ${l.cmd}`, "Borrar"))) return;
+    lines.splice(li, 1);
+    cronSave(t, cronJoin(lines), "Tarea borrada");
+  } else if ("edit" in b.dataset) {
+    cronForm(t, l, (entry) => { lines[li] = { raw: cronLine(entry) }; cronSave(t, cronJoin(lines), "Tarea guardada"); });
+  }
+};
+$("#cronList").onchange = (e) => {
+  if (!("tog" in e.target.dataset)) return;
+  const t = S.cron[+e.target.closest(".cron-card").dataset.ti];
+  const lines = cronLines(t), li = +e.target.closest(".cron-row").dataset.li, l = lines[li];
+  l.on = e.target.checked; lines[li] = { raw: cronLine(l) };
+  cronSave(t, cronJoin(lines), l.on ? "Tarea activada" : "Tarea desactivada");
+};
+function cronForm(t, l, onSave) {
+  l = l || { on: true, sched: "0 8 * * *", cmd: "" };
+  const f5 = l.sched.split(" ");
+  const simple = f5.length === 5 && /^\d+$/.test(f5[0]) && /^\d+$/.test(f5[1]) && f5[2] === "*" && f5[3] === "*" && expandDow(f5[4]);
+  const days = simple ? expandDow(f5[4]) : [0, 1, 2, 3, 4, 5, 6];
+  const hhmm = simple ? `${f5[1].padStart(2, "0")}:${f5[0].padStart(2, "0")}` : "08:00";
+  openModal(l.cmd ? "Editar tarea" : "Nueva tarea de cron", `
+    <form id="cf">
+      <div class="seg" id="cfMode"><button type="button" data-m="s" class="${simple ? "active" : ""}">Hora y días</button><button type="button" data-m="a" class="${simple ? "" : "active"}">Avanzado</button></div>
+      <div id="cfS" class="${simple ? "" : "hidden"}">
+        <label>Hora<input name="hora" type="time" value="${hhmm}"></label>
+        <label>Días</label>
+        <div class="days">${[1, 2, 3, 4, 5, 6, 0].map((i) => `<label><input type="checkbox" name="d" value="${i}" ${days.includes(i) ? "checked" : ""}> ${DIAS[i].slice(0, 3)}</label>`).join("")}</div>
+      </div>
+      <div id="cfA" class="${simple ? "hidden" : ""}">
+        <label>Programación (minuto hora día-del-mes mes día-de-semana)<input name="sched" value="${esc(l.sched)}" class="cron-raw" style="min-height:0"><small id="cfDesc"></small></label>
+      </div>
+      <label>Comando<textarea name="cmd" rows="3" class="cron-raw" style="min-height:0" placeholder="/usr/sbin/asterisk -rx &quot;rpt cmd 59624 ilink 3 2000&quot;">${esc(l.cmd)}</textarea></label>
+      ${l.cmd ? "" : `<label>Comentario (opcional)<input name="comment" placeholder="Conectar al boletín dominical"></label>`}
+      <label class="check"><input type="checkbox" name="on" ${l.on ? "checked" : ""}> Activa</label>
+      <p class="err" id="cfErr"></p>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div>
+    </form>`);
+  const f = $("#cf");
+  let mode = simple ? "s" : "a";
+  const build = () => {
+    if (mode === "a") return f.sched.value.trim().replace(/\s+/g, " ");
+    const [h, m] = (f.hora.value || "00:00").split(":").map(Number);
+    const d = $$("input[name=d]:checked", f).map((x) => +x.value).sort();
+    return `${m} ${h} * * ${d.length === 7 || !d.length ? "*" : d.join(",")}`;
+  };
+  const desc = () => { const s = build(); $("#cfDesc").textContent = cronParse(s + " x").kind === "entry" ? cronDesc(s) : "Formato no válido"; };
+  $("#cfMode").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.m === "a" && mode === "s") f.sched.value = build();
+    mode = b.dataset.m;
+    $$("#cfMode button").forEach((x) => x.classList.toggle("active", x === b));
+    $("#cfS").classList.toggle("hidden", mode !== "s"); $("#cfA").classList.toggle("hidden", mode !== "a");
+    desc();
+  };
+  f.oninput = desc; desc();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const sched = build(), cmd = f.cmd.value.replace(/\s*\n\s*/g, " ").trim();
+    if (mode === "s" && !$$("input[name=d]:checked", f).length) { $("#cfErr").textContent = "Elige al menos un día"; return; }
+    if (!cmd) { $("#cfErr").textContent = "Escribe el comando"; return; }
+    if (cronParse(sched + " " + cmd).kind !== "entry") { $("#cfErr").textContent = "La programación no es válida"; return; }
+    closeModal();
+    onSave({ on: f.on.checked, sched, cmd }, f.comment ? f.comment.value.trim().replace(/\n/g, " ") : "");
+  };
+}
+function cronRaw(t) {
+  openModal("Editar " + t.titulo, `
+    <p class="muted">Texto completo de la tabla. Se valida antes de guardar y se respalda la versión anterior.</p>
+    <textarea id="crTxt" class="cron-raw" spellcheck="false">${esc(t.texto)}</textarea>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" id="crOk">Guardar</button></div>`);
+  $("#crOk").onclick = () => {
+    const text = $("#crTxt").value;
+    closeModal();
+    cronSave(t, text, "Cron guardado");
+  };
 }
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */

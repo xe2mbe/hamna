@@ -23,7 +23,7 @@ El instalador:
 
 Después abre `http://IP-DEL-NODO:8090`.
 
-Opciones: `--tipo asl|irlp`, `--nodo 12345`, `--puerto 8090`, `--password CLAVE`, `--sin-paquetes`.
+Opciones: `--tipo asl|irlp`, `--nodo 12345`, `--puerto 8090`, `--password CLAVE`, `--sin-paquetes`, `--sin-cron`.
 Para actualizar, vuelve a ejecutar `install.sh` con la versión nueva. Tus eventos y audios se conservan.
 
 | Tarea | Comando |
@@ -56,6 +56,23 @@ Cada sección más larga que el "tiempo antes de pausar" se corta en tramos. Cad
 ```
 
 Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empezar unos segundos antes del corte (retroceso).
+
+## Conexiones automáticas
+
+Cada evento puede conectar o desconectar enlaces antes de empezar y al terminar (pestaña **Eventos**, abajo del detalle):
+
+| Sistema | Conectar | Desconectar |
+|---|---|---|
+| ASL / HamVOIP | `rpt cmd <nodo> ilink 3` (transceptor), `2` (monitor) o `13` (permanente) | `ilink 1 <nodo>` o `ilink 6` (todos) |
+| IRLP | `$SCRIPT/decode <nodo o reflector>` | `$SCRIPT/end` |
+
+"N min antes" se adelanta solo cuando el evento está programado; si lo lanzas a mano, se hace al iniciar y espera 5 s a que el enlace se establezca antes de transmitir. Las de "al terminar" corren también si detienes el evento. Si el nodo tiene ASL e IRLP, se pueden usar los dos.
+
+## Cron
+
+La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab de root y de asterisk, y en IRLP `custom/custom.crons` (el crontab de repeater se vuelve a armar solo cada día a las 3:00 con `irlp.crons` + `custom.crons`). `/etc/crontab` y `/etc/cron.d` se muestran en solo lectura.
+
+Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Quien tenga la contraseña de la página puede programar comandos como root**: usa una contraseña fuerte y no expongas el puerto a internet. Para no dar ese permiso, instala con `--sin-cron`.
 
 ## Diferencias con HAMNA Desktop
 

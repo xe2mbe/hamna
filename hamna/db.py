@@ -94,6 +94,17 @@ def init_db():
                 recurrencia TEXT DEFAULT 'ninguna',
                 activo      INTEGER DEFAULT 1
             );
+            CREATE TABLE IF NOT EXISTS evento_conexiones (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                evento_id  INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+                orden      INTEGER DEFAULT 0,
+                sistema    TEXT NOT NULL,
+                accion     TEXT NOT NULL,
+                destino    TEXT DEFAULT '',
+                modo       TEXT DEFAULT '',
+                momento    TEXT NOT NULL DEFAULT 'antes',
+                minutos    REAL DEFAULT 0
+            );
             CREATE TABLE IF NOT EXISTS historial (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 evento_id  INTEGER,
@@ -184,7 +195,9 @@ def get_eventos():
                  WHERE es.evento_id = e.id) AS num_secciones,
                (SELECT COALESCE(SUM(s.duracion),0) FROM evento_secciones es
                  JOIN secciones s ON s.id = es.seccion_id
-                 WHERE es.evento_id = e.id) AS duracion_total
+                 WHERE es.evento_id = e.id) AS duracion_total,
+               (SELECT COUNT(*) FROM evento_conexiones ec
+                 WHERE ec.evento_id = e.id) AS num_conexiones
         FROM eventos e LEFT JOIN eventos_type et ON et.id = e.tipo_evento_id
         ORDER BY e.nombre COLLATE NOCASE
     """)
@@ -275,6 +288,23 @@ def update_programacion(pid, eid, fecha, hora, recurrencia, activo):
 
 def delete_programacion(pid):
     execute("DELETE FROM programacion WHERE id=?", (pid,))
+
+
+# ── Conexiones automáticas de un evento ──────────────────────────────────────
+def get_conexiones(eid):
+    return rows("SELECT id, sistema, accion, destino, modo, momento, minutos"
+                " FROM evento_conexiones WHERE evento_id=? ORDER BY orden, id", (eid,))
+
+
+def set_conexiones(eid, items):
+    """Reemplaza la lista completa (ya validada)."""
+    with conn() as c:
+        c.execute("DELETE FROM evento_conexiones WHERE evento_id=?", (eid,))
+        for i, a in enumerate(items):
+            c.execute("INSERT INTO evento_conexiones (evento_id, orden, sistema, accion, destino,"
+                      " modo, momento, minutos) VALUES (?,?,?,?,?,?,?,?)",
+                      (eid, i, a["sistema"], a["accion"], a["destino"], a["modo"],
+                       a["momento"], a["minutos"]))
 
 
 # ── Historial ─────────────────────────────────────────────────────────────────

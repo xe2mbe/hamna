@@ -22,11 +22,12 @@ import uuid
 from collections import deque
 from pathlib import Path
 
-from . import audio, backends, db, paths, settings, tts
+from . import audio, backends, db, links, paths, settings, tts
 
 log = logging.getLogger("hamna.engine")
 
 TAIL_MIN = 5.0     # no hacer una pausa si después quedan menos de 5 s
+LINK_SETTLE = 5.0  # segundos para que un enlace recién pedido se establezca
 
 
 class Stopped(Exception):
@@ -41,6 +42,8 @@ class Engine:
         self._wake = threading.Event()
         self._fired = set()
         self._prewarmed = set()
+        self._pre_done = {}      # evento_id → ids de acciones "antes" ya hechas por el programador
+        self._post_timers = {}   # evento_id → timers de acciones "al terminar"
         self.events = deque(maxlen=80)
         self._reset_status()
 
@@ -237,6 +240,48 @@ class Engine:
         self._play(be, out, info, 0.0)
         paths.rm(out)
 
+    # ── Conexiones automáticas ───────────────────────────────────────────────
+    def _link(self, a, cfg, cuando):
+        try:
+            cmd = links.run(a, cfg)
+            self.note("Conexión {}: {} ✓ ({})".format(cuando, links.describe(links.validate(a)), cmd))
+            return True
+        except Exception as e:
+            self.note("Conexión {}: {} falló: {}".format(cuando, a.get("accion"), e), "warn")
+            return False
+
+    def _links_before(self, ev, cfg):
+        """Acciones 'antes' que el programador no hizo ya. Devuelve True si conectó algo."""
+        t0, done = self._pre_done.pop(ev["id"], (0.0, set()))
+        if time.monotonic() - t0 > 125 * 60:
+            done = set()          # quedó de un evento programado que no llegó a arrancar
+        connected = False
+        for a in db.get_conexiones(ev["id"]):
+            if a["momento"] == "antes" and a["id"] not in done:
+                if self._link(a, cfg, "al iniciar") and a["accion"] == "conectar":
+                    connected = True
+        return connected
+
+    def _links_after(self, ev, cfg):
+        for t in self._post_timers.pop(ev["id"], []):
+            t.cancel()
+        timers = []
+        for a in db.get_conexiones(ev["id"]):
+            if a["momento"] != "despues":
+                continue
+            delay = float(a["minutos"] or 0) * 60
+            if delay <= 0:
+                self._link(a, cfg, "al terminar")
+            else:
+                self.note("Conexión: «{}» en {:g} min".format(
+                    links.describe(links.validate(a)), float(a["minutos"])))
+                t = threading.Timer(delay, self._link, (a, cfg, "al terminar"))
+                t.daemon = True
+                t.start()
+                timers.append(t)
+        if timers:
+            self._post_timers[ev["id"]] = timers
+
     def _run_event(self, ev, origen):
         cfg = settings.load()
         be = backends.make(cfg)
@@ -249,7 +294,10 @@ class Engine:
                   secciones=[{"id": s["id"], "nombre": s["nombre"], "tipo": s["tipo"],
                               "duracion": float(s["duracion"] or 0)} for s in secs])
         self.note("Iniciando «{}» ({}) por {}".format(ev['nombre'], origen, be.name))
+        for t in self._post_timers.pop(ev["id"], []):
+            t.cancel()      # desconexiones pendientes de una corrida anterior
         try:
+            linked_at = time.monotonic() if self._links_before(ev, cfg) else None
             # Todo se prepara antes de activar el PTT, para no dejar silencio al aire
             for s in secs:
                 p = self._file_of(s)
@@ -259,6 +307,8 @@ class Engine:
                 self._take()
             pf = self._pause_files(cfg)
             self._sync_secs(secs)
+            if linked_at is not None:
+                self._wait(LINK_SETTLE - (time.monotonic() - linked_at))
 
             for i, sec in enumerate(secs):
                 if i > 0:
@@ -289,6 +339,10 @@ class Engine:
             raise
         finally:
             db.historial_fin(hid, result)
+            try:
+                self._links_after(ev, cfg)
+            except Exception as e:
+                self.note("Conexiones al terminar: {}".format(e), "warn")
             for s in secs:
                 p = s.get("_prep")
                 if p and Path(p).parent == paths.tmp_dir():
@@ -438,6 +492,7 @@ class Engine:
             except ValueError:
                 continue
             mins_left = (h * 60 + m) - (now.hour * 60 + now.minute)
+            self._tick_links(row, now, today, h, m)
             if 0 < mins_left <= 20:
                 key = (row["id"], today)
                 if key not in self._prewarmed:
@@ -459,6 +514,28 @@ class Engine:
         # olvidar disparos de otros días
         self._fired = {k for k in self._fired if k[1] == today}
         self._prewarmed = {k for k in self._prewarmed if k[1] == today}
+
+    def _tick_links(self, row, now, today, h, m):
+        """Acciones 'N minutos antes' de un evento programado."""
+        start = dt.datetime.combine(today, dt.time(h, m))
+        if now >= start:
+            return
+        acts = [a for a in db.get_conexiones(row["evento_id"])
+                if a["momento"] == "antes" and float(a["minutos"] or 0) > 0]
+        for a in acts:
+            if start - dt.timedelta(minutes=float(a["minutos"])) > now:
+                continue
+            key = (row["id"], today, "link", a["id"])
+            if key in self._fired:
+                continue
+            self._fired.add(key)
+            t0, done = self._pre_done.get(row["evento_id"], (0.0, set()))
+            if time.monotonic() - t0 > 125 * 60:
+                done = set()
+            done.add(a["id"])
+            self._pre_done[row["evento_id"]] = (time.monotonic(), done)
+            threading.Thread(target=self._link, args=(a, settings.load(), "previa"),
+                             daemon=True).start()
 
     def _prewarm(self, row):
         try:

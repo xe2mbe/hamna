@@ -4,7 +4,7 @@ set -eu
 [ "$(id -u)" -eq 0 ] || { echo "Ejecútalo como root"; exit 1; }
 
 systemctl disable --now hamna-web 2>/dev/null || true
-rm -f /etc/systemd/system/hamna-web.service /usr/local/bin/hamna-web-passwd
+rm -f /etc/systemd/system/hamna-web.service /usr/local/bin/hamna-web-passwd /etc/sudoers.d/hamna-web
 systemctl daemon-reload
 rm -rf /opt/hamna-web
 

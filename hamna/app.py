@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, backends, db, paths, settings, tts
+from . import VERSION, audio, backends, cron, db, links, paths, settings, tts
 from .engine import engine
 from .web import App, HTTPError, check_password, hash_password, jsonr, send_file
 
@@ -128,6 +128,7 @@ def info(req):
         "sabor": backends.detect_flavor(), "nodo_detectado": backends.detect_asl_node(),
         "zona_horaria": _timezone(), "disco_libre_mb": du.free // 2**20,
         "herramientas": audio.tools(), "formatos": audio.formats(),
+        "sistemas": links.detect_systems(), "cron": cron.available(),
         "motores_tts": tts.engines(), "variables": tts.VARIABLES,
         "historial": db.get_historial(15),
     })
@@ -327,7 +328,32 @@ def evento(req, eid):
     if not ev:
         raise HTTPError(404)
     ev["secciones"] = [_sec_out(s) for s in db.get_secciones_by_evento(eid)]
+    ev["conexiones"] = db.get_conexiones(eid)
     return jsonr(ev)
+
+
+@app.route("/api/eventos/<int:eid>/conexiones", ("PUT",))
+def evento_conexiones(req, eid):
+    if not db.get_evento(eid):
+        raise HTTPError(404)
+    items = req.json().get("items") or []
+    if len(items) > 20:
+        raise ValueError("Máximo 20 acciones por evento")
+    clean = []
+    for i, a in enumerate(items, 1):
+        try:
+            clean.append(links.validate(a))
+        except ValueError as e:
+            raise ValueError("Acción {}: {}".format(i, e))
+    db.set_conexiones(eid, clean)
+    return ok(conexiones=db.get_conexiones(eid))
+
+
+@app.route("/api/conexiones/probar", ("POST",))
+def conexion_probar(req):
+    a = links.validate(req.json())
+    cmd = links.run(a, settings.load())
+    return ok(comando=cmd, texto=links.describe(a))
 
 
 def _ev_fields(b):
@@ -381,6 +407,30 @@ def evento_orden(req, eid):
 def evento_cont(req, eid, sid):
     db.set_contabilizable(eid, sid, bool(req.json().get("value")))
     return ok()
+
+
+# ── Cron ─────────────────────────────────────────────────────────────────────
+@app.route("/api/cron")
+def cron_list(req):
+    if not cron.available():
+        return jsonr({"disponible": False, "tablas": []})
+    return jsonr({"disponible": True, "tablas": cron.list_tables()})
+
+
+@app.route("/api/cron", ("PUT",))
+def cron_save(req):
+    b = req.json()
+    tid, h, text = b.get("id") or "", b.get("hash") or "", b.get("texto")
+    if not isinstance(text, str) or not re.match(r"^(irlp|user:[a-z_][a-z0-9_-]{0,31})$", tid)             or not re.match(r"^[0-9a-f]{40}$", h):
+        raise ValueError("Datos inválidos")
+    try:
+        r = cron.save_table(tid, h, text)
+    except RuntimeError as e:
+        if getattr(e, "conflicto", False):
+            raise HTTPError(409, str(e))
+        raise
+    log.info("Cron %s guardado (respaldo %s)", tid, r.get("respaldo"))
+    return ok(respaldo=r.get("respaldo"))
 
 
 # ── Programación ─────────────────────────────────────────────────────────────

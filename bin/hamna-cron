@@ -1,0 +1,233 @@
+#!/usr/bin/python3 -I
+# -*- coding: utf-8 -*-
+"""
+HAMNA Web — lee y guarda tablas de cron. Lo usa la página por sudo.
+
+  hamna-cron list                    → JSON con todas las tablas
+  hamna-cron set <id> <hash>         → guarda la tabla <id> con el texto de stdin
+
+<id> es "user:<nombre>" (crontab de un usuario) o "irlp" (custom.crons).
+<hash> es el que dio "list": si la tabla cambió desde entonces no se guarda.
+Antes de guardar se respalda en /var/backups/hamna-cron/.
+Compatible con Python 3.5.
+"""
+import hashlib
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+SPOOLS = ("/var/spool/cron/crontabs", "/var/spool/cron")
+IRLP_CUSTOM = "/home/irlp/custom/custom.crons"
+IRLP_BASE = "/home/irlp/scripts/irlp.crons"
+BACKUPS = "/var/backups/hamna-cron"
+KEEP = 30
+MAX = 64 * 1024
+
+FIELD = r"[0-9A-Za-z*/,\-]+"
+RE_ENTRY = re.compile(r"^\s*(" + FIELD + r"\s+){5}\S")
+RE_SPECIAL = re.compile(r"^\s*@(reboot|yearly|annually|monthly|weekly|daily|midnight|hourly)\s+\S")
+RE_ENV = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=")
+
+
+def sha(t):
+    return hashlib.sha1(t.encode("utf-8", "surrogateescape")).hexdigest()
+
+
+def read(path):
+    with open(path, "rb") as f:
+        return f.read().decode("utf-8", "surrogateescape")
+
+
+def crontab_l(user):
+    me = pwd.getpwuid(os.geteuid()).pw_name
+    cmd = ["crontab", "-l"] if user == me else ["crontab", "-u", user, "-l"]
+    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        err = r.stderr.decode(errors="ignore").lower()
+        if "no crontab" in err:
+            return ""
+        raise PermissionError(r.stderr.decode(errors="ignore").strip() or "sin permiso")
+    return r.stdout.decode("utf-8", "surrogateescape")
+
+
+def user_exists(u):
+    try:
+        pwd.getpwnam(u)
+        return True
+    except KeyError:
+        return False
+
+
+def users():
+    out = ["root"]
+    for u in ("asterisk", "repeater"):
+        if user_exists(u):
+            out.append(u)
+    for d in SPOOLS:
+        try:
+            for n in sorted(os.listdir(d)):
+                p = os.path.join(d, n)
+                if os.path.isfile(p) and user_exists(n) and n not in out:
+                    out.append(n)
+        except OSError:
+            pass
+    return out
+
+
+def tables():
+    res = []
+    irlp = os.path.isfile(IRLP_CUSTOM)
+    if irlp:
+        try:
+            t = read(IRLP_CUSTOM)
+            res.append({"id": "irlp", "titulo": "IRLP (custom.crons)", "editable": True, "texto": t,
+                        "hash": sha(t), "nota": "IRLP vuelve a armar el crontab de repeater cada día a "
+                        "las 3:00 con irlp.crons + este archivo. Aquí van tus boletines y nets."})
+        except OSError as e:
+            res.append({"id": "irlp", "titulo": "IRLP (custom.crons)", "error": str(e)})
+    for u in users():
+        tid = "user:" + u
+        try:
+            t = crontab_l(u)
+        except Exception as e:
+            res.append({"id": tid, "titulo": "Usuario " + u, "error": str(e)})
+            continue
+        if not t and u not in ("root", "asterisk"):
+            continue
+        item = {"id": tid, "titulo": "Usuario " + u, "editable": True, "texto": t, "hash": sha(t)}
+        if u == "repeater" and irlp:
+            item.update(editable=False, nota="Se genera solo desde irlp.crons + custom.crons; "
+                        "edita «IRLP (custom.crons)».")
+        res.append(item)
+    sys_files = ["/etc/crontab"]
+    try:
+        sys_files += sorted(os.path.join("/etc/cron.d", n) for n in os.listdir("/etc/cron.d")
+                            if not n.startswith("."))
+    except OSError:
+        pass
+    for p in sys_files:
+        try:
+            if os.path.isfile(p):
+                t = read(p)
+                res.append({"id": "file:" + p, "titulo": p, "editable": False, "texto": t,
+                            "hash": sha(t), "nota": "Archivo del sistema (solo lectura)."})
+        except OSError:
+            pass
+    return res
+
+
+def validate(text):
+    if len(text.encode("utf-8", "surrogateescape")) > MAX:
+        raise ValueError("La tabla es demasiado grande")
+    if "\x00" in text:
+        raise ValueError("Texto inválido")
+    bad = []
+    for i, line in enumerate(text.splitlines(), 1):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if RE_ENTRY.match(line) or RE_SPECIAL.match(line) or RE_ENV.match(line):
+            continue
+        bad.append("línea {}: {}".format(i, s[:60]))
+    if bad:
+        raise ValueError("Líneas que no son de cron:\n" + "\n".join(bad[:5]))
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
+def backup(tid, text):
+    os.makedirs(BACKUPS, mode=0o700, exist_ok=True)
+    name = re.sub(r"[^A-Za-z0-9_.-]", "_", tid)
+    path = os.path.join(BACKUPS, "{}-{}.txt".format(name, time.strftime("%Y%m%d-%H%M%S")))
+    with open(path, "w", encoding="utf-8", errors="surrogateescape") as f:
+        f.write(text)
+    old = sorted(n for n in os.listdir(BACKUPS) if n.startswith(name + "-"))
+    for n in old[:-KEEP]:
+        try:
+            os.remove(os.path.join(BACKUPS, n))
+        except OSError:
+            pass
+    return path
+
+
+def install_crontab(user, text):
+    fd, tmp = tempfile.mkstemp(prefix="hamna-cron-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape") as f:
+            f.write(text)
+        os.chmod(tmp, 0o644)
+        me = pwd.getpwuid(os.geteuid()).pw_name
+        cmd = ["crontab", tmp] if user == me else ["crontab", "-u", user, tmp]
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            raise ValueError("crontab lo rechazó: " + r.stderr.decode(errors="ignore").strip()[:300])
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def save(tid, expected, text):
+    text = validate(text)
+    if tid == "irlp":
+        cur = read(IRLP_CUSTOM)
+        if sha(cur) != expected:
+            raise LookupError("custom.crons cambió mientras lo editabas; recarga la página")
+        bk = backup(tid, cur)
+        st = os.stat(IRLP_CUSTOM)
+        tmp = IRLP_CUSTOM + ".hamna-tmp"
+        with open(tmp, "w", encoding="utf-8", errors="surrogateescape") as f:
+            f.write(text)
+        os.chmod(tmp, st.st_mode & 0o7777)
+        if os.geteuid() == 0:
+            os.chown(tmp, st.st_uid, st.st_gid)
+        os.replace(tmp, IRLP_CUSTOM)
+        # Igual que hace IRLP a las 3:00: irlp.crons + custom.crons
+        base = read(IRLP_BASE) if os.path.isfile(IRLP_BASE) else ""
+        if base and not base.endswith("\n"):
+            base += "\n"
+        install_crontab("repeater", base + text)
+        return bk
+    if not tid.startswith("user:"):
+        raise ValueError("Esta tabla es de solo lectura")
+    user = tid[5:]
+    if user not in users():
+        raise ValueError("Usuario desconocido")
+    cur = crontab_l(user)
+    if sha(cur) != expected:
+        raise LookupError("El cron de {} cambió mientras lo editabas; recarga la página".format(user))
+    bk = backup(tid, cur)
+    install_crontab(user, text)
+    return bk
+
+
+def main():
+    a = sys.argv[1:]
+    try:
+        if a == ["list"]:
+            print(json.dumps({"ok": True, "tablas": tables()}))
+            return 0
+        if len(a) == 3 and a[0] == "set":
+            text = sys.stdin.buffer.read(MAX + 1).decode("utf-8", "surrogateescape")
+            bk = save(a[1], a[2], text)
+            print(json.dumps({"ok": True, "respaldo": bk}))
+            return 0
+        print(json.dumps({"ok": False, "error": "uso: hamna-cron list | set <id> <hash>"}))
+        return 2
+    except LookupError as e:
+        print(json.dumps({"ok": False, "conflicto": True, "error": str(e)}))
+        return 3
+    except Exception as e:
+        print(json.dumps({"ok": False, "error": str(e)}))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

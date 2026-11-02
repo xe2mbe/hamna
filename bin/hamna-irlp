@@ -1,0 +1,22 @@
+#!/bin/bash
+# HAMNA Web — conecta o desconecta IRLP. Corre como el usuario repeater.
+#   hamna-irlp 9050     → $SCRIPT/decode 9050
+#   hamna-irlp end      → $SCRIPT/end
+# Solo acepta un número o "end": no ejecuta nada más.
+set -u
+ARG="${1:-}"
+case "$ARG" in
+  end) ;;
+  *) [[ "$ARG" =~ ^[0-9]{4,6}$ ]] || { echo "Argumento inválido: $ARG" >&2; exit 2; } ;;
+esac
+[ "$(id -un)" = repeater ] || { echo "Debe correr como repeater" >&2; exit 2; }
+ENV=/home/irlp/custom/environment
+[ -f "$ENV" ] || { echo "No existe $ENV" >&2; exit 2; }
+# shellcheck disable=SC1090
+. "$ENV"
+SCRIPT="${SCRIPT:-/home/irlp/scripts}"
+if [ "$ARG" = end ]; then
+  exec "$SCRIPT/end"
+else
+  exec "$SCRIPT/decode" "$ARG"
+fi
