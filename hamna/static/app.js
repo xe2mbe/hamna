@@ -83,7 +83,8 @@ function confirmBox(msg, okLabel = "Sí, continuar", danger = true) {
 /* ── Sesión ──────────────────────────────────────────────────────────────── */
 function showLogin() {
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
-  clearInterval(S.poll); S.poll = null;
+  S.polling = false; clearTimeout(S.pollTimer);
+  clearInterval(S.clockTimer); S.clockTimer = null;
   setTimeout(() => $("#loginPw").focus(), 50);
 }
 $("#loginForm").onsubmit = async (e) => {
@@ -99,10 +100,62 @@ async function start() {
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   try { S.cfg = await api("/api/ajustes"); } catch { return; }
   updateNodeLabel();
+  S.polling = true;
   await poll();
-  if (!S.poll) S.poll = setInterval(poll, 1000);
+  if (!S.clockTimer) S.clockTimer = setInterval(tickClock, 1000);
   showTab(localStorage.getItem("hamna.tab") || "prog");
 }
+
+/* ── Logo ────────────────────────────────────────────────────────────────── */
+const DEFAULT_ICON = $("#favicon").href;
+function applyLogo(url) {
+  S.logo = url || "";
+  for (const id of ["#brandLogo", "#loginLogo"]) {
+    const img = $(id);
+    if (url) { if (img.getAttribute("src") !== url) img.src = url; img.classList.remove("hidden"); }
+    else { img.removeAttribute("src"); img.classList.add("hidden"); }
+  }
+  $("#favicon").href = url || DEFAULT_ICON;
+  const pv = $("#logoPreview");
+  if (pv) pv.innerHTML = url ? `<img src="${esc(url)}" alt="Logo">` : '<span class="muted">Sin logo</span>';
+  const del = $("#btnLogoDel");
+  if (del) del.classList.toggle("hidden", !url);
+}
+/* Reduce la imagen en el navegador (máx. 400 px) para que el nodo no procese nada */
+function shrinkImage(file, max = 400) {
+  return new Promise((res, rej) => {
+    if (file.type === "image/gif") return res(file);           // conservar animación
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      if (k === 1 && file.size < 300 * 1024) return res(file);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      // WEBP conserva la transparencia; si el navegador no lo sabe hacer, devuelve PNG
+      c.toBlob((b) => b ? res(b) : rej(new Error("No pude leer la imagen")), "image/webp", 0.9);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("No pude leer la imagen")); };
+    img.src = url;
+  });
+}
+$("#logoFile").onchange = async (e) => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const blob = await shrinkImage(file);
+    const ext = { "image/webp": ".webp", "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif" }[blob.type] || ".png";
+    const fd = new FormData(); fd.append("archivo", blob, "logo" + ext);
+    const r = await upload("/api/ajustes/logo", fd);
+    applyLogo(r.logo); toast("Logo guardado");
+  } catch (err) { toast(err.message, true); }
+};
+$("#btnLogoDel").onclick = async () => {
+  if (!(await confirmBox("¿Quitar el logo?", "Quitar"))) return;
+  const r = await run(() => api("/api/ajustes/logo", { method: "DELETE" }), "Logo quitado");
+  applyLogo(r.logo);
+};
 
 /* ── Pestañas ────────────────────────────────────────────────────────────── */
 $$("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
@@ -121,13 +174,45 @@ function updateNodeLabel() {
   $("#nodeLabel").textContent = [c.station_name, c.node ? `Nodo ${c.node}` : "", be].filter(Boolean).join(" · ");
 }
 
-/* ── Estado al aire (cada segundo) ───────────────────────────────────────── */
+/* ── Estado al aire ──────────────────────────────────────────────────────────
+   Para no cargar la Raspberry: cada segundo solo mientras hay algo al aire,
+   cada 5 s el resto del tiempo y nada con la pestaña oculta. El reloj avanza
+   solo en el navegador con la hora que mandó el nodo. */
+const POLL_LIVE = 1000, POLL_IDLE = 5000;
+function schedulePoll() {
+  clearTimeout(S.pollTimer);
+  if (!S.polling || document.hidden) return;
+  S.pollTimer = setTimeout(poll, S.status && S.status.on_air ? POLL_LIVE : POLL_IDLE);
+}
+document.addEventListener("visibilitychange", () => {
+  if (!S.polling) return;
+  if (document.hidden) clearTimeout(S.pollTimer); else poll();
+});
+const pad2 = (n) => String(n).padStart(2, "0");
+function tickClock() {
+  if (S.tzOff == null || document.hidden) return;
+  const now = Date.now() + S.skew;
+  const loc = new Date(now + S.tzOff), utc = new Date(now);
+  $("#clockLocal").textContent = `${pad2(loc.getUTCHours())}:${pad2(loc.getUTCMinutes())}:${pad2(loc.getUTCSeconds())}`;
+  $("#clockUtc").textContent = `UTC ${pad2(utc.getUTCHours())}:${pad2(utc.getUTCMinutes())}`;
+  if (!(S.status && S.status.on_air)) tickProg();
+}
 async function poll() {
+  clearTimeout(S.pollTimer);
   let s;
-  try { s = await api("/api/status"); } catch { return; }
+  try { s = await api("/api/status"); } catch { schedulePoll(); return; }
   S.status = s;
-  $("#clockLocal").textContent = s.now.slice(11);
-  $("#clockUtc").textContent = "UTC " + s.utc;
+  if (s.ts) {
+    // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
+    const [d, t] = s.now.split(" "), [Y, M, D] = d.split("-").map(Number), [h, m, x] = t.split(":").map(Number);
+    S.skew = s.ts * 1000 - Date.now();
+    S.tzOff = Math.round((Date.UTC(Y, M - 1, D, h, m, x) - s.ts * 1000) / 60000) * 60000;
+    tickClock();
+  } else {
+    $("#clockLocal").textContent = s.now.slice(11);
+    $("#clockUtc").textContent = "UTC " + s.utc;
+  }
+  schedulePoll();
   const live = s.on_air;
   $("#onair").classList.toggle("live", live && s.state === "tx");
   $("#brandDot").classList.toggle("live", live && s.state === "tx");
@@ -151,14 +236,18 @@ async function poll() {
   $("#ctlSkip").disabled = !(live && (s.state === "paused" || s.state === "gap"));
   $("#ctlNext").disabled = !live || s.origen === "prueba";
   $("#ctlStop").disabled = !live;
-  $("#airLog").innerHTML = s.log.map((l) => `<div class="${l.level}">${esc(l.t)}  ${esc(l.msg)}</div>`).join("");
+  const logKey = s.log.length ? s.log.length + s.log[s.log.length - 1].t + s.log[s.log.length - 1].msg : "";
+  if (logKey !== S.logKey) {   // reconstruir la bitácora solo si cambió
+    S.logKey = logKey;
+    $("#airLog").innerHTML = s.log.map((l) => `<div class="${l.level}">${esc(l.t)}  ${esc(l.msg)}</div>`).join("");
+  }
   // Resaltar la sección al aire en el detalle del evento
   $$("#eventoDetail .sec-row").forEach((r) =>
     r.classList.toggle("on", live && s.evento_id === S.evSel && +r.dataset.idx === s.cur_sec));
   if (S.wasLive !== live) { S.wasLive = live; if (S.tab === "prog") loadProg(); }
   tickProg();
 }
-const txCmd = (c) => run(() => api("/api/tx/" + c, { method: "POST" }));
+const txCmd = (c) => run(() => api("/api/tx/" + c, { method: "POST" })).then(() => setTimeout(poll, 300), () => {});
 $("#ctlPause").onclick = () => txCmd("pause");
 $("#ctlResume").onclick = () => txCmd("resume");
 $("#ctlSkip").onclick = () => txCmd("skip_pause");
@@ -172,6 +261,7 @@ async function txStart(eid, nombre) {
     : `¿Transmitir «${nombre}» ahora?`;
   if (!(await confirmBox(msg, "📡 Transmitir"))) return;
   await run(() => api("/api/tx/start", { method: "POST", json: { evento_id: eid } }), "Iniciando transmisión");
+  setTimeout(poll, 300);
 }
 
 /* ── Programación ────────────────────────────────────────────────────────── */
@@ -684,6 +774,7 @@ async function loadAjustes() {
   $$("#setForm [name=tts_engine] option").forEach((o) => (o.disabled = !info.motores_tts.includes(o.value)));
   syncSetVis();
   renderPauseSounds();
+  applyLogo(S.logo);
   showSet(S.setSec);
 }
 function syncSetVis() {
@@ -751,7 +842,7 @@ $("#btnTestNode").onclick = async () => {
 $("#btnTestAir").onclick = async () => {
   if (!(await confirmBox("Se va a activar el transmisor del nodo con un mensaje de prueba. ¿Continuar?", "📡 Transmitir"))) return;
   const b = $("#btnTestAir"); busy(b, true, "Generando…");
-  try { await run(() => api("/api/prueba/aire", { method: "POST", json: { texto: $("#testAirText").value } }), "Prueba al aire"); }
+  try { await run(() => api("/api/prueba/aire", { method: "POST", json: { texto: $("#testAirText").value } }), "Prueba al aire"); setTimeout(poll, 300); }
   catch {} finally { busy(b, false); }
 };
 $("#btnTtsTest").onclick = async () => {
@@ -1187,7 +1278,11 @@ function cronTags(l, rels) {
 (async () => {
   try {
     const me = await (await fetch("/api/me", { credentials: "same-origin" })).json();
-    if (me.station) document.title = "HAMNA Web · " + me.station;
+    if (me.station) {
+      document.title = "HAMNA Web · " + me.station;
+      $("#loginStation").textContent = me.station; $("#loginStation").classList.remove("hidden");
+    }
+    applyLogo(me.logo);
     me.auth ? start() : showLogin();
   } catch { showLogin(); }
 })();

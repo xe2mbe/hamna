@@ -18,6 +18,7 @@ DEFAULTS = {
     "irlp_unkey_cmd": "unkey",
     "irlp_player": "aplay",
     "station_name": "",
+    "logo_file": "",            # logo de la estación (en la carpeta de datos)
 
     # TTS
     "tts_engine": "azure",      # azure | piper | espeak

@@ -60,6 +60,17 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
   padding: 28px; width: min(380px, 100%); box-shadow: var(--shadow); }
 .login-card p { margin: 4px 0 20px; }
+.login-logo { display: block; max-width: 100%; max-height: 120px; margin: 0 auto 14px; object-fit: contain; }
+.login-station { text-align: center; font-weight: 600; margin: 0 0 14px !important; }
+
+/* Logo */
+.brand-logo { height: 40px; max-width: 160px; object-fit: contain; flex: none; }
+.logo-set { display: flex; gap: 14px; align-items: center; margin: 0 0 16px; padding: 12px;
+  border: 1px dashed var(--border); border-radius: var(--radius); }
+.logo-preview { width: 96px; height: 96px; flex: none; display: grid; place-items: center;
+  background: var(--input); border: 1px solid var(--border); border-radius: 8px; font-size: .8rem; }
+.logo-preview img { max-width: 88px; max-height: 88px; object-fit: contain; }
+@media (max-width: 600px) { .brand-logo { height: 32px; max-width: 110px; } .top { gap: 10px; padding: 8px 12px; } }
 
 /* Cabecera */
 .top { display: flex; align-items: center; gap: 16px; padding: 10px 20px;

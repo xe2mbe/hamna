@@ -95,7 +95,63 @@ def logout(req):
 @app.route("/api/me", auth=False)
 def me(req):
     return jsonr({"auth": req.authed, "version": VERSION,
-                  "station": settings.get("station_name") or ""})
+                  "station": settings.get("station_name") or "",
+                  "logo": _logo_url()})
+
+
+# ── Logo de la estación ──────────────────────────────────────────────────────
+# El navegador lo reduce antes de subirlo; aquí solo se valida y se guarda,
+# para no gastar CPU de la Raspberry procesando imágenes.
+LOGO_MAX = 2 * 2**20
+LOGO_TYPES = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpg"),
+              (b"GIF87a", "gif"), (b"GIF89a", "gif"))
+
+
+def _logo_ext(head):
+    for magic, ext in LOGO_TYPES:
+        if head.startswith(magic):
+            return ext
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def _logo_url():
+    name = settings.get("logo_file") or ""
+    return "/api/logo?v=" + name if name and (paths.data_dir() / name).is_file() else ""
+
+
+@app.route("/api/logo", auth=False)
+def logo(req):
+    name = settings.get("logo_file") or ""
+    if not name:
+        raise HTTPError(404)
+    r = send_file(paths.data_dir() / name, cache=True)
+    r.headers["X-Content-Type-Options"] = "nosniff"
+    return r
+
+
+@app.route("/api/ajustes/logo", ("POST", "DELETE"))
+def ajustes_logo(req):
+    cur = settings.get("logo_file") or ""
+    dest = None
+    if req.method == "POST":
+        up = req.files.get("archivo")
+        if not up:
+            raise ValueError("Elige una imagen")
+        if os.path.getsize(up.path) > LOGO_MAX:
+            raise ValueError("La imagen pesa más de 2 MB")
+        with open(up.path, "rb") as f:
+            ext = _logo_ext(f.read(16))
+        if not ext:
+            raise ValueError("Formato no soportado. Usa PNG, JPG, WEBP o GIF")
+        dest = paths.data_dir() / "logo_{}.{}".format(uuid.uuid4().hex[:6], ext)
+        shutil.move(up.path, str(dest))
+        up.path = None
+    if cur and (dest is None or cur != dest.name):
+        paths.rm(paths.data_dir() / cur)
+    settings.save({"logo_file": dest.name if dest else ""})
+    return ok(logo=_logo_url())
 
 
 # ── Estado e información ─────────────────────────────────────────────────────
@@ -104,6 +160,7 @@ def status(req):
     s = engine.status()
     s["now"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     s["utc"] = dt.datetime.utcnow().strftime("%H:%M")
+    s["ts"] = round(time.time(), 1)
     return jsonr(s)
 
 
