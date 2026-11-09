@@ -476,6 +476,27 @@ function zonedToUtc(fecha, hora, zone) {
     (dd ? (window.HAMNA_LANG === "es" ? (dd > 0 ? " del día siguiente" : " del día anterior")
       : (dd > 0 ? " next day" : " previous day")) : "");
 }
+/* Diferencia con UTC de una zona: "(UTC−6)" o "(UTC−6, verano UTC−5)" */
+function utcOffsetMin(zone, t) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: zone, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+  return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - Math.floor(t / 60000) * 60000) / 60000);
+}
+function fmtOff(min) {
+  const s = min < 0 ? "−" : "+", a = Math.abs(min);
+  return "UTC" + (a ? s + Math.floor(a / 60) + (a % 60 ? ":" + String(a % 60).padStart(2, "0") : "") : "");
+}
+function utcLabel(zone) {
+  if (!zone) return "";
+  try {
+    const y = new Date().getUTCFullYear();
+    const a = utcOffsetMin(zone, Date.UTC(y, 0, 15, 12)), b = utcOffsetMin(zone, Date.UTC(y, 6, 15, 12));
+    if (a === b) return `(${fmtOff(a)})`;
+    const std = Math.min(a, b), dst = Math.max(a, b);
+    return `(${fmtOff(std)}, ${window.HAMNA_LANG === "es" ? "verano" : "summer"} ${fmtOff(dst)})`;
+  } catch { return ""; }
+}
 function zoneShort(p) {
   const n = p.zona_nombre || p.zona;
   return n.split(" · ")[0].split(" (")[0];
@@ -495,7 +516,7 @@ async function progForm(p) {
         <label>Hora <span class="utc-hint" id="utcHint" translate="no"></span><input type="time" name="hora" value="${esc(p.hora)}" required></label>
       </div>
       <label>Zona horaria del programa<select name="zona">${zs.map((z) =>
-        `<option value="${esc(z.id)}" ${z.id === (p.zona || "") ? "selected" : ""}>${esc(z.nombre)}</option>`).join("")}</select>
+        `<option value="${esc(z.id)}" ${z.id === (p.zona || "") ? "selected" : ""}>${esc(z.nombre)} ${esc(utcLabel(z.id || S.zonas.nodo))}</option>`).join("")}</select>
         <small>La hora y el día se toman en esa zona y HAMNA los convierte a la hora del nodo para cada fecha: si esa zona cambia de horario, el evento se recorre solo. Zona del nodo: ${esc(S.zonas.nodo || "—")}.</small></label>
       <label>Se repite<select name="recurrencia">${Object.entries(REC).map(([k, v]) =>
         `<option value="${k}" ${k === p.recurrencia ? "selected" : ""}>${v}</option>`).join("")}</select>
