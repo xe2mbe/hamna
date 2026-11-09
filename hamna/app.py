@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, backends, cron, db, links, paths, settings, tts
+from . import VERSION, audio, backends, cron, db, links, paths, sessions, settings, tts
 from .engine import engine
 from .web import App, HTTPError, check_password, hash_password, jsonr, send_file
 
@@ -118,7 +118,7 @@ def _logo_ext(head):
 
 def _logo_url():
     name = settings.get("logo_file") or ""
-    return "/api/logo?v=" + name if name and (paths.data_dir() / name).is_file() else ""
+    return "api/logo?v=" + name if name and (paths.data_dir() / name).is_file() else ""
 
 
 @app.route("/api/logo", auth=False)
@@ -361,7 +361,7 @@ def tts_preview(req):
     src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx)
     if not audio.can_play_in_browser(src):
         src = audio.prepare(src, None)
-    return ok(url="/api/archivo/" + src.parent.name + "/" + src.name,
+    return ok(url="api/archivo/" + src.parent.name + "/" + src.name,
               texto=tts.resolve_variables(text, cfg, ctx))
 
 
@@ -557,6 +557,27 @@ def tx_cmd(req, cmd):
     else:
         engine.command(cmd)
     return ok()
+
+
+# ── Sesiones (nodos conectados) ──────────────────────────────────────────────
+@app.route("/api/sesiones")
+def sesiones_get(req):
+    return jsonr(sessions.status(settings.load(), req.query.get("nodo")))
+
+
+@app.route("/api/sesiones/<accion>", ("POST",))
+def sesiones_accion(req, accion):
+    b = req.json()
+    destino = str(b.get("destino") or "").strip()
+    if accion == "conectar":
+        acc = "conectar"
+    elif accion == "desconectar":
+        acc = "desconectar" if destino else "desconectar_todo"
+    else:
+        raise HTTPError(404)
+    cmd = sessions.action(settings.load(), acc, destino, b.get("modo") or "transceptor", b.get("nodo"))
+    log.info("Sesiones: %s", cmd)
+    return ok(comando=cmd)
 
 
 # ── Ajustes ──────────────────────────────────────────────────────────────────

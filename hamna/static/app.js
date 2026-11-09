@@ -18,7 +18,7 @@ async function api(path, { method = "GET", json, form } = {}) {
   if (json !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(json); }
   if (form) opt.body = form;
   const r = await fetch(path, opt);
-  if (r.status === 401 && path !== "/api/login") { showLogin(); throw new Error("Inicia sesión"); }
+  if (r.status === 401 && path !== "api/login") { showLogin(); throw new Error("Inicia sesión"); }
   let data = null;
   try { data = await r.json(); } catch { data = null; }
   if (!r.ok || (data && data.ok === false)) throw new Error((data && data.error) || `Error ${r.status}`);
@@ -91,19 +91,22 @@ $("#loginForm").onsubmit = async (e) => {
   e.preventDefault();
   $("#loginErr").textContent = "";
   const b = $("#loginForm button"); busy(b, true, "Entrando…");
-  try { await api("/api/login", { method: "POST", json: { password: $("#loginPw").value } }); $("#loginPw").value = ""; start(); }
+  try { await api("api/login", { method: "POST", json: { password: $("#loginPw").value } }); $("#loginPw").value = ""; start(); }
   catch (err) { $("#loginErr").textContent = err.message; }
   finally { busy(b, false); }
 };
 
 async function start() {
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
-  try { S.cfg = await api("/api/ajustes"); } catch { return; }
+  try { S.cfg = await api("api/ajustes"); } catch { return; }
   updateNodeLabel();
   S.polling = true;
   await poll();
   if (!S.clockTimer) S.clockTimer = setInterval(tickClock, 1000);
-  showTab(localStorage.getItem("hamna.tab") || "prog");
+  const q = new URLSearchParams(location.search).get("tab");
+  let saved = ""; try { saved = localStorage.getItem("hamna.tab") || ""; } catch {}
+  const pedida = location.hash.slice(1) || q || saved || "prog";
+  showTab(pedida === "sesiones" ? "conexiones" : pedida);   // nombre anterior
 }
 
 /* ── Logo ────────────────────────────────────────────────────────────────── */
@@ -147,31 +150,37 @@ $("#logoFile").onchange = async (e) => {
     const blob = await shrinkImage(file);
     const ext = { "image/webp": ".webp", "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif" }[blob.type] || ".png";
     const fd = new FormData(); fd.append("archivo", blob, "logo" + ext);
-    const r = await upload("/api/ajustes/logo", fd);
+    const r = await upload("api/ajustes/logo", fd);
     applyLogo(r.logo); toast("Logo guardado");
   } catch (err) { toast(err.message, true); }
 };
 $("#btnLogoDel").onclick = async () => {
   if (!(await confirmBox("¿Quitar el logo?", "Quitar"))) return;
-  const r = await run(() => api("/api/ajustes/logo", { method: "DELETE" }), "Logo quitado");
+  const r = await run(() => api("api/ajustes/logo", { method: "DELETE" }), "Logo quitado");
   applyLogo(r.logo);
 };
 
 /* ── Pestañas ────────────────────────────────────────────────────────────── */
 $$("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+const TABS = ["prog", "eventos", "secciones", "conexiones", "cron", "ajustes"];
+window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
-  if (!["prog", "eventos", "secciones", "cron", "ajustes"].includes(t)) t = "prog";
+  if (!TABS.includes(t)) t = "prog";
+  if (S.tab === "conexiones" && t !== "conexiones") stopSesiones();
   S.tab = t;
   try { localStorage.setItem("hamna.tab", t); } catch {}
+  if (location.hash.slice(1) !== t) history.replaceState(null, "", "#" + t);
   $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
   $$(".view").forEach((v) => v.classList.toggle("hidden", v.id !== "view-" + t));
-  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, cron: loadCron, ajustes: loadAjustes })[t]();
+  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, conexiones: loadSesiones, cron: loadCron, ajustes: loadAjustes })[t]();
+  window.scrollTo(0, 0);
 }
 
 function updateNodeLabel() {
   const c = S.cfg || {};
   const be = c.backend === "auto" ? "" : (c.backend || "").toUpperCase();
-  $("#nodeLabel").textContent = [c.station_name, c.node ? `Nodo ${c.node}` : "", be].filter(Boolean).join(" · ");
+  $("#nodeLabel").innerHTML = (c.station_name ? `<b>${esc(c.station_name)}</b>` : "") +
+    esc([c.node ? `Nodo ${c.node}` : "", be].filter(Boolean).join(" · "));
 }
 
 /* ── Estado al aire ──────────────────────────────────────────────────────────
@@ -186,7 +195,8 @@ function schedulePoll() {
 }
 document.addEventListener("visibilitychange", () => {
   if (!S.polling) return;
-  if (document.hidden) clearTimeout(S.pollTimer); else poll();
+  if (document.hidden) { clearTimeout(S.pollTimer); stopSesiones(); }
+  else { poll(); if (S.tab === "conexiones") loadSesiones(); }
 });
 const pad2 = (n) => String(n).padStart(2, "0");
 function tickClock() {
@@ -200,7 +210,7 @@ function tickClock() {
 async function poll() {
   clearTimeout(S.pollTimer);
   let s;
-  try { s = await api("/api/status"); } catch { schedulePoll(); return; }
+  try { s = await api("api/status"); } catch { schedulePoll(); return; }
   S.status = s;
   if (s.ts) {
     // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
@@ -247,7 +257,7 @@ async function poll() {
   if (S.wasLive !== live) { S.wasLive = live; if (S.tab === "prog") loadProg(); }
   tickProg();
 }
-const txCmd = (c) => run(() => api("/api/tx/" + c, { method: "POST" })).then(() => setTimeout(poll, 300), () => {});
+const txCmd = (c) => run(() => api("api/tx/" + c, { method: "POST" })).then(() => setTimeout(poll, 300), () => {});
 $("#ctlPause").onclick = () => txCmd("pause");
 $("#ctlResume").onclick = () => txCmd("resume");
 $("#ctlSkip").onclick = () => txCmd("skip_pause");
@@ -260,13 +270,13 @@ async function txStart(eid, nombre) {
   const msg = s && s.on_air ? `Hay una transmisión al aire («${s.evento}»). Se detendrá para iniciar «${nombre}». ¿Continuar?`
     : `¿Transmitir «${nombre}» ahora?`;
   if (!(await confirmBox(msg, "📡 Transmitir"))) return;
-  await run(() => api("/api/tx/start", { method: "POST", json: { evento_id: eid } }), "Iniciando transmisión");
+  await run(() => api("api/tx/start", { method: "POST", json: { evento_id: eid } }), "Iniciando transmisión");
   setTimeout(poll, 300);
 }
 
 /* ── Programación ────────────────────────────────────────────────────────── */
 async function loadProg() {
-  const [prog, ev] = await Promise.all([api("/api/programacion"), api("/api/eventos")]);
+  const [prog, ev] = await Promise.all([api("api/programacion"), api("api/eventos")]);
   S.prog = prog; S.eventos = ev.eventos; S.tipos = ev.tipos;
   S.progLoaded = Date.now();
   renderProg();
@@ -332,11 +342,11 @@ $("#progList").onclick = async (e) => {
   if (b.dataset.act === "tx") return txStart(id, b.dataset.n);
   if (b.dataset.act === "edit") return progForm(p);
   if (b.dataset.act === "toggle") {
-    await run(() => api("/api/programacion/" + id, { method: "PUT", json: { ...p, activo: !p.activo } }));
+    await run(() => api("api/programacion/" + id, { method: "PUT", json: { ...p, activo: !p.activo } }));
     return loadProg();
   }
   if (b.dataset.act === "del" && (await confirmBox(`¿Borrar la programación de «${p.evento_nombre}» a las ${p.hora}?`, "Borrar"))) {
-    await run(() => api("/api/programacion/" + id, { method: "DELETE" }), "Borrada"); loadProg();
+    await run(() => api("api/programacion/" + id, { method: "DELETE" }), "Borrada"); loadProg();
   }
 };
 $("#btnNewProg").onclick = async () => {
@@ -370,14 +380,14 @@ function progForm(p) {
     e.preventDefault();
     const data = { evento_id: +f.evento_id.value, fecha: f.fecha.value, hora: f.hora.value,
       recurrencia: f.recurrencia.value, activo: f.activo.checked };
-    await run(() => api("/api/programacion" + (p.id ? "/" + p.id : ""), { method: p.id ? "PUT" : "POST", json: data }), "Guardado");
+    await run(() => api("api/programacion" + (p.id ? "/" + p.id : ""), { method: p.id ? "PUT" : "POST", json: data }), "Guardado");
     closeModal(); loadProg();
   };
 }
 
 /* ── Eventos ─────────────────────────────────────────────────────────────── */
 async function loadEventos() {
-  const ev = await api("/api/eventos");
+  const ev = await api("api/eventos");
   S.eventos = ev.eventos; S.tipos = ev.tipos;
   const el = $("#eventosList");
   el.innerHTML = S.eventos.length ? S.eventos.map((e) => `
@@ -395,7 +405,7 @@ $("#eventosList").onclick = (e) => {
   loadEvento(S.evSel);
 };
 async function loadEvento(id) {
-  const ev = await api("/api/eventos/" + id);
+  const ev = await api("api/eventos/" + id);
   S.evDet = ev;
   const secs = ev.secciones;
   const tot = secs.reduce((a, s) => a + (s.duracion || 0), 0);
@@ -431,7 +441,7 @@ async function loadEvento(id) {
   $("#evEdit").onclick = () => eventoForm(ev);
   $("#evDel").onclick = async () => {
     if (!(await confirmBox(`¿Borrar el evento «${ev.nombre}» y su programación? Las secciones se conservan en la biblioteca.`, "Borrar"))) return;
-    await run(() => api("/api/eventos/" + ev.id, { method: "DELETE" }), "Evento borrado");
+    await run(() => api("api/eventos/" + ev.id, { method: "DELETE" }), "Evento borrado");
     S.evSel = null; loadEventos();
   };
   $("#evAdd").onclick = () => addSecciones(ev);
@@ -442,17 +452,17 @@ async function loadEvento(id) {
     if (b && b.dataset.mv) {
       const ids = secs.map((s) => s.id), i = ids.indexOf(sid), j = i + +b.dataset.mv;
       [ids[i], ids[j]] = [ids[j], ids[i]];
-      await run(() => api(`/api/eventos/${ev.id}/orden`, { method: "PUT", json: { ids } }));
+      await run(() => api(`api/eventos/${ev.id}/orden`, { method: "PUT", json: { ids } }));
       loadEvento(ev.id);
     } else if (b && "rm" in b.dataset) {
-      await run(() => api(`/api/eventos/${ev.id}/secciones/${sid}`, { method: "DELETE" }));
+      await run(() => api(`api/eventos/${ev.id}/secciones/${sid}`, { method: "DELETE" }));
       loadEventos();
     }
   };
   $("#evSecs").onchange = async (e) => {
     if (!("cont" in e.target.dataset)) return;
     const sid = +e.target.closest(".sec-row").dataset.id;
-    await run(() => api(`/api/eventos/${ev.id}/secciones/${sid}/contabilizable`, { method: "PUT", json: { value: e.target.checked } }));
+    await run(() => api(`api/eventos/${ev.id}/secciones/${sid}/contabilizable`, { method: "PUT", json: { value: e.target.checked } }));
     loadEvento(ev.id);
   };
 }
@@ -494,7 +504,7 @@ async function renderLinks(ev) {
       </div>`).join("") : `<p class="muted">Este evento no conecta ni desconecta nada.</p>`}</div>
     <div class="row gap" style="margin-top:8px"><button class="btn" id="lkAdd">+ Agregar conexión o desconexión</button></div>`;
   const save = async (items) => {
-    const r = await run(() => api(`/api/eventos/${ev.id}/conexiones`, { method: "PUT", json: { items } }), "Conexiones guardadas");
+    const r = await run(() => api(`api/eventos/${ev.id}/conexiones`, { method: "PUT", json: { items } }), "Conexiones guardadas");
     ev.conexiones = r.conexiones; renderLinks(ev); refreshEventosList();
   };
   $("#lkAdd").onclick = () => linkForm(null, sis, (a) => save([...list, a]));
@@ -509,14 +519,14 @@ async function renderLinks(ev) {
       const what = a.sistema.toUpperCase() + ": " + linkText(a).replace(/<[^>]+>/g, "");
       if (!(await confirmBox(`¿Ejecutar ahora «${what}»? Esto cambia los enlaces reales del nodo.`, "Ejecutar"))) return;
       busy(b, true, "…");
-      try { const r = await api("/api/conexiones/probar", { method: "POST", json: a }); toast("Hecho: " + r.comando); }
+      try { const r = await api("api/conexiones/probar", { method: "POST", json: a }); toast("Hecho: " + r.comando); }
       catch (err) { toast(err.message, true); }
       finally { busy(b, false); }
     }
   };
 }
 async function refreshEventosList() {
-  const ev = await api("/api/eventos");
+  const ev = await api("api/eventos");
   S.eventos = ev.eventos;
   $$("#eventosList .list-item").forEach((b) => {
     const e = S.eventos.find((x) => x.id === +b.dataset.id);
@@ -572,7 +582,7 @@ function linkForm(a, sis, onSave) {
 }
 
 async function addSecciones(ev) {
-  const all = await api("/api/secciones");
+  const all = await api("api/secciones");
   const have = new Set(ev.secciones.map((s) => s.id));
   const avail = all.filter((s) => !have.has(s.id));
   if (!avail.length) return toast("Todas las secciones de la biblioteca ya están en este evento. Crea más en la pestaña Secciones.", true);
@@ -585,7 +595,7 @@ async function addSecciones(ev) {
   $("#pkOk").onclick = async () => {
     const ids = $$("#pk input:checked").map((c) => +c.value);
     if (!ids.length) return closeModal();
-    await run(() => api(`/api/eventos/${ev.id}/secciones`, { method: "POST", json: { ids } }), "Agregadas");
+    await run(() => api(`api/eventos/${ev.id}/secciones`, { method: "POST", json: { ids } }), "Agregadas");
     closeModal(); loadEventos();
   };
 }
@@ -605,7 +615,7 @@ function eventoForm(ev) {
   $("#ef").onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target, data = { nombre: f.nombre.value, tipo_evento_id: f.tipo_evento_id.value, numero: f.numero.value };
-    const r = await run(() => api("/api/eventos" + (ev.id ? "/" + ev.id : ""), { method: ev.id ? "PUT" : "POST", json: data }), "Guardado");
+    const r = await run(() => api("api/eventos" + (ev.id ? "/" + ev.id : ""), { method: ev.id ? "PUT" : "POST", json: data }), "Guardado");
     if (!ev.id) S.evSel = r.id;
     closeModal(); loadEventos();
   };
@@ -613,7 +623,7 @@ function eventoForm(ev) {
 
 /* ── Secciones ───────────────────────────────────────────────────────────── */
 async function loadSecciones() {
-  S.secciones = await api("/api/secciones");
+  S.secciones = await api("api/secciones");
   renderSecciones();
 }
 function renderSecciones() {
@@ -643,20 +653,20 @@ $("#secList").onclick = async (e) => {
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const s = S.secciones.find((x) => x.id === +b.closest(".trow").dataset.id);
   if (b.dataset.act === "play") {
-    openModal(s.nombre, `<audio controls autoplay src="/api/secciones/${s.id}/audio" style="width:100%"></audio>
+    openModal(s.nombre, `<audio controls autoplay src="api/secciones/${s.id}/audio" style="width:100%"></audio>
       ${s.tipo === "TTS" ? `<p class="muted">${esc(s.texto_tts)}</p>` : ""}`);
   } else if (b.dataset.act === "air") {
     if (await confirmBox(`¿Transmitir «${s.nombre}» (${fmt(s.duracion)}) por el nodo ahora?`, "📡 Transmitir"))
-      run(() => api(`/api/secciones/${s.id}/aire`, { method: "POST" }), "Transmitiendo…");
+      run(() => api(`api/secciones/${s.id}/aire`, { method: "POST" }), "Transmitiendo…");
   } else if (b.dataset.act === "edit") seccionForm(s);
   else if (b.dataset.act === "del") {
     const warn = s.usos ? ` Se quitará de ${s.usos} evento(s).` : "";
     if (await confirmBox(`¿Borrar «${s.nombre}»?${warn}`, "Borrar")) {
-      await run(() => api("/api/secciones/" + s.id, { method: "DELETE" }), "Borrada"); loadSecciones();
+      await run(() => api("api/secciones/" + s.id, { method: "DELETE" }), "Borrada"); loadSecciones();
     }
   }
 };
-async function getInfo() { if (!S.info) S.info = await api("/api/info"); return S.info; }
+async function getInfo() { if (!S.info) S.info = await api("api/info"); return S.info; }
 
 async function seccionForm(s) {
   const info = await getInfo();
@@ -708,7 +718,7 @@ async function seccionForm(s) {
   $("#sfPrev").onclick = async () => {
     const b = $("#sfPrev"); busy(b, true, "Generando…");
     try {
-      const r = await api("/api/tts/preview", { method: "POST", json: { texto: f.texto_tts.value, titulo: f.titulo.value || f.nombre.value, descripcion: f.descripcion.value } });
+      const r = await api("api/tts/preview", { method: "POST", json: { texto: f.texto_tts.value, titulo: f.titulo.value || f.nombre.value, descripcion: f.descripcion.value } });
       const a = $("#sfAudio"); a.src = r.url; a.classList.remove("hidden"); a.play();
       $("#sfResolved").textContent = "Se leerá: " + r.texto;
     } catch (e) { toast(e.message, true); } finally { busy(b, false); }
@@ -724,7 +734,7 @@ async function seccionForm(s) {
       const changed = isNew || f.texto_tts.value !== (s.texto_tts || "") || f.titulo.value !== (s.titulo || "") || f.descripcion.value !== (s.descripcion || "") || !s.tiene_audio;
       fd.append("generar", changed ? "1" : "0");
     } else if (f.archivo.files[0]) fd.append("archivo", f.archivo.files[0]);
-    upload(isNew ? "/api/secciones" : "/api/secciones/" + s.id, fd, $("#sfSave"), $("#sfProg"))
+    upload(isNew ? "api/secciones" : "api/secciones/" + s.id, fd, $("#sfSave"), $("#sfProg"))
       .then(() => { toast(isNew ? "Sección creada" : "Guardada"); closeModal(); loadSecciones(); S.info = null; })
       .catch((err) => toast(err.message, true));
   };
@@ -758,7 +768,7 @@ function showSet(k) {
   if (k === "sistema") loadSistema();
 }
 async function loadAjustes() {
-  S.cfg = await api("/api/ajustes");
+  S.cfg = await api("api/ajustes");
   const info = await getInfo();
   const f = $("#setForm");
   for (const el of f.elements) {
@@ -795,14 +805,14 @@ $("#setForm").onsubmit = async (e) => {
     else if (el.name === "azure_key") { if (el.value.trim()) data.azure_key = el.value.trim(); }
     else data[el.name] = el.value;
   }
-  const r = await run(() => api("/api/ajustes", { method: "PUT", json: data }), "Ajustes guardados");
+  const r = await run(() => api("api/ajustes", { method: "PUT", json: data }), "Ajustes guardados");
   S.cfg = r.ajustes; S.info = null; updateNodeLabel(); loadAjustes();
 };
 $("#btnCompactar").onclick = async () => {
   if (!(await confirmBox("Se van a convertir todas las secciones al formato del aire y se borrarán los audios originales. Esto no se puede deshacer.", "Sí, convertir y borrar"))) return;
   const b = $("#btnCompactar"); busy(b, true, "Convirtiendo…");
   try {
-    const r = await api("/api/secciones/compactar", { method: "POST" });
+    const r = await api("api/secciones/compactar", { method: "POST" });
     if (r.errores.length) toast("No se pudieron convertir: " + r.errores.join(", "), true);
     else toast(r.convertidas ? `${r.convertidas} secciones convertidas · ${r.liberado_mb} MB liberados` : "No había originales que convertir");
   } catch (e) { toast(e.message, true); }
@@ -815,7 +825,7 @@ function renderPauseSounds() {
   $("#pauseSounds").innerHTML = items.map(([k, key, label, hint]) => `
     <div class="psound" data-k="${k}">
       <div><b>${label}</b><br><small class="muted">${hint}</small></div>
-      <div>${S.cfg[key] ? `<audio controls preload="none" src="/api/ajustes/sonido/${k}?t=${encodeURIComponent(S.cfg[key])}"></audio>` : '<span class="muted">Sin audio</span>'}</div>
+      <div>${S.cfg[key] ? `<audio controls preload="none" src="api/ajustes/sonido/${k}?t=${encodeURIComponent(S.cfg[key])}"></audio>` : '<span class="muted">Sin audio</span>'}</div>
       <div class="row gap"><label class="btn sm" style="margin:0">Subir<input type="file" accept="audio/*" hidden></label>
         ${S.cfg[key] ? '<button type="button" class="btn sm ghost" data-del>Quitar</button>' : ""}</div>
     </div>`).join("");
@@ -824,32 +834,32 @@ $("#pauseSounds").onchange = async (e) => {
   if (e.target.type !== "file" || !e.target.files[0]) return;
   const k = e.target.closest(".psound").dataset.k, fd = new FormData();
   fd.append("archivo", e.target.files[0]);
-  try { await upload("/api/ajustes/sonido/" + k, fd); toast("Audio guardado"); S.cfg = await api("/api/ajustes"); renderPauseSounds(); }
+  try { await upload("api/ajustes/sonido/" + k, fd); toast("Audio guardado"); S.cfg = await api("api/ajustes"); renderPauseSounds(); }
   catch (err) { toast(err.message, true); }
 };
 $("#pauseSounds").onclick = async (e) => {
   if (!e.target.closest("[data-del]")) return;
   const k = e.target.closest(".psound").dataset.k;
-  await run(() => api("/api/ajustes/sonido/" + k, { method: "DELETE" }), "Quitado");
-  S.cfg = await api("/api/ajustes"); renderPauseSounds();
+  await run(() => api("api/ajustes/sonido/" + k, { method: "DELETE" }), "Quitado");
+  S.cfg = await api("api/ajustes"); renderPauseSounds();
 };
 $("#btnTestNode").onclick = async () => {
   const b = $("#btnTestNode"); busy(b, true, "Probando…");
-  try { const r = await api("/api/prueba/nodo", { method: "POST" });
+  try { const r = await api("api/prueba/nodo", { method: "POST" });
     $("#testNodeMsg").textContent = (r.ok ? "✅ " : "❌ ") + r.mensaje; }
   catch (e) { $("#testNodeMsg").textContent = "❌ " + e.message; } finally { busy(b, false); }
 };
 $("#btnTestAir").onclick = async () => {
   if (!(await confirmBox("Se va a activar el transmisor del nodo con un mensaje de prueba. ¿Continuar?", "📡 Transmitir"))) return;
   const b = $("#btnTestAir"); busy(b, true, "Generando…");
-  try { await run(() => api("/api/prueba/aire", { method: "POST", json: { texto: $("#testAirText").value } }), "Prueba al aire"); setTimeout(poll, 300); }
+  try { await run(() => api("api/prueba/aire", { method: "POST", json: { texto: $("#testAirText").value } }), "Prueba al aire"); setTimeout(poll, 300); }
   catch {} finally { busy(b, false); }
 };
 $("#btnTtsTest").onclick = async () => {
   const b = $("#btnTtsTest"); busy(b, true, "Generando…");
   try {
-    await api("/api/ajustes", { method: "PUT", json: collectVoice() });
-    const r = await api("/api/tts/preview", { method: "POST", json: { texto: $("#ttsTestText").value } });
+    await api("api/ajustes", { method: "PUT", json: collectVoice() });
+    const r = await api("api/tts/preview", { method: "POST", json: { texto: $("#ttsTestText").value } });
     const a = $("#ttsTestAudio"); a.src = r.url; a.classList.remove("hidden"); a.play();
   } catch (e) { toast(e.message, true); } finally { busy(b, false); }
 };
@@ -863,16 +873,16 @@ function collectVoice() {
 $("#btnVoices").onclick = async () => {
   const f = $("#setForm"), b = $("#btnVoices"); busy(b, true, "…");
   try {
-    const r = await api("/api/azure/voces", { method: "POST", json: { azure_key: f.azure_key.value, azure_region: f.azure_region.value } });
+    const r = await api("api/azure/voces", { method: "POST", json: { azure_key: f.azure_key.value, azure_region: f.azure_region.value } });
     $("#azureVoices").innerHTML = r.voces.map((v) => `<option value="${esc(v.name)}">${esc(v.display)} · ${esc(v.locale)} · ${esc(v.gender)}</option>`).join("");
     toast(`${r.voces.length} voces en español`);
   } catch (e) { toast(e.message, true); } finally { busy(b, false); }
 };
 $("#btnPw").onclick = async () => {
-  await run(() => api("/api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada");
+  await run(() => api("api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada");
   $("#pwOld").value = $("#pwNew").value = "";
 };
-$("#btnLogout").onclick = async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); showLogin(); };
+$("#btnLogout").onclick = async () => { await api("api/logout", { method: "POST" }).catch(() => {}); showLogin(); };
 async function loadSistema() {
   S.info = null;
   const i = await getInfo();
@@ -949,7 +959,7 @@ async function loadCron() {
   const el = $("#cronList");
   let r;
   try {
-    const [c, prog] = await Promise.all([api("/api/cron"), api("/api/programacion").catch(() => null)]);
+    const [c, prog] = await Promise.all([api("api/cron"), api("api/programacion").catch(() => null)]);
     r = c; if (prog) S.prog = prog;
   }
   catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
@@ -987,7 +997,7 @@ async function loadCron() {
 }
 async function cronSave(t, text, msg) {
   try {
-    await api("/api/cron", { method: "PUT", json: { id: t.id, hash: t.hash, texto: text } });
+    await api("api/cron", { method: "PUT", json: { id: t.id, hash: t.hash, texto: text } });
     toast(msg || "Cron guardado");
   } catch (e) { toast(e.message, true); }
   loadCron();
@@ -1156,7 +1166,7 @@ function cronEntries(tablas) {
 async function loadCronEntries() {
   try {
     if (!(await getInfo()).cron) return false;
-    const r = await api("/api/cron");
+    const r = await api("api/cron");
     S.cron = r.tablas; S.cronEntries = cronEntries(r.tablas);
     return true;
   } catch { return false; }
@@ -1274,10 +1284,125 @@ function cronTags(l, rels) {
   return tags.length ? `<div class="cron-rel">${tags.join("")}</div>` : "";
 }
 
+/* ── Tema claro / oscuro ─────────────────────────────────────────────────── */
+function applyTheme(th) {
+  if (th === "light" || th === "dark") document.documentElement.dataset.theme = th;
+  else delete document.documentElement.dataset.theme;
+}
+try { applyTheme(localStorage.getItem("hamna.theme")); } catch {}
+$("#btnTheme").onclick = () => {
+  const cur = document.documentElement.dataset.theme ||
+    (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  const next = cur === "light" ? "dark" : "light";
+  applyTheme(next);
+  try { localStorage.setItem("hamna.theme", next); } catch {}
+};
+
+/* ── Conexiones: nodos conectados ──────────────────────────────────────────────
+   Se consulta cada 4 s solo con esta pestaña abierta y visible. */
+const SES_EVERY = 4000;
+const ICON_NODE = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4"/></svg>';
+function stopSesiones() { clearTimeout(S.sesTimer); clearInterval(S.sesTick); S.sesTimer = S.sesTick = null; }
+async function loadSesiones() {
+  clearTimeout(S.sesTimer);
+  if (S.tab !== "conexiones" || document.hidden) return;
+  try {
+    const q = S.sesNodo ? "?nodo=" + encodeURIComponent(S.sesNodo) : "";
+    S.ses = await api("api/sesiones" + q); S.sesAt = Date.now();
+    renderSesiones();
+  } catch (e) {
+    $("#sesList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+  }
+  if (!S.sesTick) S.sesTick = setInterval(tickSesiones, 1000);
+  S.sesTimer = setTimeout(loadSesiones, SES_EVERY);
+}
+const fmtUp = (s) => {
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return d ? `${d} d ${h} h` : h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min ${String(s % 60).padStart(2, "0")} s`;
+};
+function tickSesiones() {
+  if (!S.ses || document.hidden) return;
+  const add = Math.floor((Date.now() - S.sesAt) / 1000);
+  $$("#sesList [data-secs]").forEach((el) => (el.textContent = fmtUp(+el.dataset.secs + add)));
+}
+function renderSesiones() {
+  const s = S.ses;
+  const sel = $("#sesNodo");
+  if ((s.nodos_locales || []).length > 1) {
+    sel.innerHTML = s.nodos_locales.map((n) => `<option ${n === s.nodo ? "selected" : ""}>${esc(n)}</option>`).join("");
+    sel.classList.remove("hidden");
+  } else sel.classList.add("hidden");
+  $("#sesConnect").classList.toggle("hidden", s.sistema !== "asl");
+  if (s.sistema !== "asl" && s.sistema !== "irlp") {
+    $("#sesStats").innerHTML = "";
+    $("#sesList").innerHTML = `<p class="empty">En modo simulado no hay enlaces que mostrar.</p>`;
+    $("#sesRedWrap").classList.add("hidden");
+    return;
+  }
+  const loc = s.local || {};
+  $("#sesSub").textContent = `Nodo ${s.nodo}${loc.indicativo ? " · " + loc.indicativo : ""} — nodos conectados en este momento`;
+  const estado = s.tx ? ["Transmitiendo", "tx"] : s.rx ? ["Recibiendo", "rx"] : ["En reposo", ""];
+  const talking = s.enlaces.filter((e) => e.transmitiendo);
+  $("#sesStats").innerHTML = s.sistema === "irlp" ? `
+    <div class="stat"><div class="k">IRLP</div><div class="v sm">${s.activo ? "Conectado a " + esc(s.activo) : "Sin conexión"}</div></div>` : `
+    <div class="stat"><div class="k">Enlaces directos</div><div class="v">${s.enlaces.length}</div>
+      <div class="d">${s.enlaces.filter((e) => e.direccion === "IN").length} entrantes · ${s.enlaces.filter((e) => e.direccion === "OUT").length} salientes</div></div>
+    <div class="stat"><div class="k">Nodos en la red</div><div class="v">${s.total_red}</div><div class="d">alcanzables a través de los enlaces</div></div>
+    <div class="stat ${estado[1]}"><div class="k">Estado del nodo</div><div class="v sm">${estado[0]}</div>
+      <div class="d">${talking.length ? "Habla: " + talking.map((e) => esc(e.indicativo || e.nodo)).join(", ") : "Nadie transmitiendo"}</div></div>`;
+  if (!s.enlaces.length) {
+    $("#sesList").innerHTML = `<p class="empty">No hay nodos conectados.</p>`;
+  } else {
+    $("#sesList").innerHTML = s.enlaces.map((e) => {
+      const desc = [e.descripcion, e.ubicacion].filter(Boolean).join(" · ");
+      const dir = e.direccion === "IN" ? "↘ Entrante" : e.direccion === "OUT" ? "↗ Saliente" : "";
+      const disc = s.sistema === "asl" ? `<button class="btn sm danger-soft" data-disc="${esc(e.nodo)}" title="Desconectar">Desconectar</button>` : "";
+      return `<div class="lnk ${e.modo === "monitor" ? "monitor" : ""} ${e.transmitiendo ? "keyed" : ""}">
+        <div class="av">${ICON_NODE}</div>
+        <div class="who"><b>${esc(e.indicativo || "Nodo " + e.nodo)}</b><span class="num">${esc(e.nodo)}</span>
+          <small>${esc(desc || e.ip || "")}</small></div>
+        <div class="tags">
+          ${e.transmitiendo ? '<span class="chip ok talk">Hablando</span>' : ""}
+          ${e.modo ? `<span class="chip ${e.modo === "monitor" ? "warn" : ""}">${esc(e.modo[0].toUpperCase() + e.modo.slice(1))}</span>` : ""}
+          ${dir ? `<span class="chip">${dir}</span>` : ""}
+          ${e.estado && e.estado !== "ESTABLISHED" ? `<span class="chip warn">${esc(e.estado)}</span>` : ""}
+        </div>
+        <div class="row gap"><div class="time">${e.segundos != null ? `<span data-secs="${e.segundos}">${fmtUp(e.segundos)}</span>` : ""}<small>${esc(e.ip || "")}</small></div>${disc}</div>
+      </div>`;
+    }).join("");
+  }
+  const red = s.red || [];
+  $("#sesRedWrap").classList.toggle("hidden", !red.length);
+  $("#sesRedTitle").textContent = `Red completa · ${red.length} nodos más`;
+  $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.ubicacion].filter(Boolean).join(" · "))}">
+    <b>${esc(r.nodo)}</b><small>${esc(r.indicativo || "—")}</small></span>`).join("");
+}
+$("#sesNodo").onchange = (e) => { S.sesNodo = e.target.value; loadSesiones(); };
+$("#btnSesReload").onclick = () => loadSesiones();
+$("#sesList").onclick = async (e) => {
+  const b = e.target.closest("[data-disc]"); if (!b) return;
+  const n = b.dataset.disc;
+  if (!(await confirmBox(`¿Desconectar el nodo ${n}? Dejará de oír y de mandar audio por este enlace.`, "Desconectar"))) return;
+  try {
+    await run(() => api("api/sesiones/desconectar", { method: "POST", json: { destino: n, nodo: S.ses.nodo } }), "Desconectando " + n);
+    setTimeout(loadSesiones, 1500);
+  } catch {}
+};
+$("#sesConnect").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target, n = f.destino.value.trim();
+  const b = $("button", f); busy(b, true, "Conectando…");
+  try {
+    await run(() => api("api/sesiones/conectar", { method: "POST", json: { destino: n, modo: f.modo.value, nodo: S.ses && S.ses.nodo } }), "Conectando " + n);
+    f.destino.value = "";
+    setTimeout(loadSesiones, 2500);
+  } catch {} finally { busy(b, false); }
+};
+
 /* ── Arranque ────────────────────────────────────────────────────────────── */
 (async () => {
   try {
-    const me = await (await fetch("/api/me", { credentials: "same-origin" })).json();
+    const me = await (await fetch("api/me", { credentials: "same-origin" })).json();
     if (me.station) {
       document.title = "HAMNA Web · " + me.station;
       $("#loginStation").textContent = me.station; $("#loginStation").classList.remove("hidden");

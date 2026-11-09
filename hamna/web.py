@@ -285,6 +285,15 @@ class App:
             def log_message(self, fmt, *args):
                 pass
 
+            def _client_ip(self):
+                """IP de quien usa la página. Detrás de Apache (/hamna/) la
+                conexión llega de 127.0.0.1 y la IP real viene en X-Forwarded-For."""
+                ip = self.client_address[0]
+                fwd = self.headers.get("X-Forwarded-For", "")
+                if fwd and ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+                    return fwd.split(",")[-1].strip() or ip
+                return ip
+
             def _handle(self):
                 req = None
                 try:
@@ -309,7 +318,7 @@ class App:
                     resp = app.dispatch(req)
                     if req.method in ("POST", "PUT", "DELETE") and req.path != "/api/login":
                         log.info("%s %s desde %s → %s", req.method, req.path,
-                                 self.client_address[0], resp.status)
+                                 self._client_ip(), resp.status)
                 except HTTPError as e:
                     msg = e.msg or {401: "Inicia sesión", 404: "No encontrado",
                                     405: "Método no permitido"}.get(e.code, "Error")
