@@ -1052,8 +1052,7 @@ $("#btnPw").onclick = async () => {
 };
 /* ── Actualizaciones (GitHub) ─────────────────────────────────────────────── */
 function updCmd(d) {
-  const raw = `https://raw.githubusercontent.com/${d.repo}/main/update.sh`;
-  return d.sabor === "hamvoip" ? `curl -sL ${raw} | bash` : `curl -sL ${raw} | sudo bash`;
+  return d.sabor === "hamvoip" ? "/opt/hamna-web/update.sh" : "sudo /opt/hamna-web/update.sh";
 }
 async function loadUpdates(force) {
   const box = $("#updBox");
@@ -1075,7 +1074,7 @@ async function loadUpdates(force) {
   box.innerHTML = `<div class="upd-head">
       <div>${d.hay_actualizacion ? `<b>Hay una versión nueva: v${esc(d.ultima)}</b>` : `<b>HAMNA Web está al día</b>`}
         <div class="muted" style="font-size:.84rem">Instalada: v${esc(d.instalada)} · En GitHub: v${esc(d.ultima || "?")} · Consultado: ${esc(d.consultado)}</div></div>
-      <div class="row gap"><a class="btn sm ghost" href="${esc(d.url)}" target="_blank" rel="noopener">GitHub ↗</a>
+      <div class="row gap"><a class="btn sm ghost" href="${esc(d.notas || d.url)}" target="_blank" rel="noopener">GitHub ↗</a>
         <button type="button" class="btn sm" id="btnUpd">↻ Buscar de nuevo</button></div></div>
     ${d.cambios.length ? `<ul class="upd-list">${d.cambios.map((c) =>
       `<li><span class="d">${esc(c.fecha)}</span><span>${esc(c.titulo)}</span></li>`).join("")}</ul>` : ""}

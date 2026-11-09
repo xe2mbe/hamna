@@ -52,9 +52,10 @@ HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y auto
 En el nodo, como root (o con `sudo`):
 
 ```bash
-cd /tmp && curl -sL https://github.com/xe2mbe/hamna/archive/refs/heads/main.tar.gz | tar xz
-sudo bash hamna-main/install.sh
+curl -sL https://raw.githubusercontent.com/xe2mbe/hamna/main/update.sh | sudo bash
 ```
+
+(En HamVOIP, sin `sudo`.) Instala la **última versión publicada**. Si prefieres revisar antes los archivos, baja el paquete de la versión desde la página de *Releases/Tags* de GitHub, descomprímelo y corre `sudo bash install.sh`.
 
 El instalador (sus mensajes y opciones están en inglés):
 
@@ -62,8 +63,8 @@ El instalador (sus mensajes y opciones están en inglés):
 2. En Debian/Raspbian instala `ffmpeg` y `espeak-ng` con apt (si el nodo tiene `asl3-tts`, no instala `espeak-ng`: chocan). En HamVOIP **no toca pacman**.
 3. Copia el programa a `/opt/hamna-web`. Los datos van a `/var/lib/hamna`.
 4. Crea el usuario `admin` y pide su contraseña (si no hay terminal, genera una y la muestra).
-5. Crea el servicio `hamna-web` (puerto 8090) y abre el puerto en el firewall si hay uno activo.
-6. Si el nodo tiene Apache, publica la página en **`https://IP-DEL-NODO/hamna/`** (HamVOIP: `http://`), en el mismo puerto que Allmon/AllScan/Supermon: no hay que abrir otro puerto.
+5. Si el nodo tiene Apache, publica la página en **`https://IP-DEL-NODO/hamna/`** (HamVOIP: `http://`), en el mismo puerto que Allmon/AllScan/Supermon: no hay que abrir otro puerto.
+6. Crea el servicio `hamna-web`. Con Apache, el servicio escucha **solo dentro del nodo** (127.0.0.1:8090) y el puerto 8090 se cierra en el firewall: todo pasa por `/hamna/`, con la contraseña cifrada. Sin Apache (p. ej. IRLP), queda en `http://IP-DEL-NODO:8090` y abre ese puerto en el firewall.
 7. Crea las reglas de `sudo` para que la página pueda ver/editar el cron (ver [Cron](#cron)).
 
 Opciones de `install.sh`:
@@ -77,6 +78,7 @@ Opciones de `install.sh`:
 | `--no-packages` | No instalar nada con apt |
 | `--no-cron` | No dar a la página permiso sobre el cron |
 | `--no-apache` | No publicar `/hamna/` en Apache |
+| `--listen-all` | Dejar el 8090 abierto a la red aunque haya Apache |
 | `--force` | Instalar aunque haya algo al aire o preparándose |
 
 Las opciones anteriores en español (`--tipo`, `--nodo`, `--puerto`, `--sin-paquetes`, `--sin-cron`) siguen funcionando.
@@ -87,13 +89,9 @@ Las opciones anteriores en español (`--tipo`, `--nodo`, `--puerto`, `--sin-paqu
 sudo /opt/hamna-web/update.sh
 ```
 
-En nodos con una versión anterior a la 1.6.5 (o para instalar desde cero con el mismo comando):
+En HamVOIP, sin `sudo` (ya se entra como root). En nodos con una versión anterior a la 1.6.5, usa el comando de [Instalación](#instalación).
 
-```bash
-curl -sL https://raw.githubusercontent.com/xe2mbe/hamna/main/update.sh | sudo bash
-```
-
-En HamVOIP, sin `sudo` (ya se entra como root). El actualizador baja la última versión de GitHub y corre su `install.sh`, que:
+El actualizador instala la **última versión publicada** (la etiqueta `vX.Y.Z` más nueva del repositorio), no lo último que se haya subido a `main`: los cambios en prueba no les llegan a los nodos hasta que se publica una versión. Opciones: `--version v1.7.0` para instalar una versión concreta (también sirve para regresar a una anterior) y `--branch main` para probar lo último sin publicar. Después corre el `install.sh` de esa versión, que:
 
 - **se niega a instalar si hay algo al aire o preparando audio** (para no cortar una transmisión);
 - respalda antes los datos y el programa en `/var/backups/hamna/` (guarda los últimos 5);
@@ -221,7 +219,7 @@ El nodo que recibe necesita llegar al puerto 443 (o 80) del nodo que comparte.
 - 5 contraseñas malas para un usuario desde una IP (o 20 desde una IP) la bloquean 15 minutos. Un administrador puede desbloquear en Ajustes → Usuarios; reiniciar el servicio también limpia los bloqueos.
 - Las sesiones abiertas se ven en **Ajustes → Mi cuenta** (las propias) y **Ajustes → Usuarios** (todas) y se pueden cerrar. Cambiar la contraseña o desactivar a un usuario lo saca al instante. De cada sesión solo se guarda la huella de su código.
 - No se puede borrar, desactivar ni quitar el rol al último administrador activo.
-- Usa la página por `https://…/hamna/` (Apache) para que la contraseña viaje cifrada. El puerto 8090 directo es http.
+- Con Apache, la página solo se abre por `https://…/hamna/` (la contraseña viaja cifrada) y el 8090 escucha solo dentro del nodo. Para entrar al 8090 desde fuera del nodo (no recomendado), instala con `--listen-all`, o usa un túnel SSH: `ssh -L 8090:127.0.0.1:8090 usuario@nodo`.
 
 ### Cron
 
@@ -274,7 +272,18 @@ python -m hamna --set-password prueba123 --user admin
 python -m hamna --port 8090
 ```
 
-El modo `simulado` no transmite nada, solo respeta los tiempos. Para convertir audio necesita `ffmpeg` en el PATH; para las zonas horarias en Windows, el paquete `tzdata` de Python.
+El modo `simulado` no transmite nada, solo respeta los tiempos.
+
+**Publicar una versión** (lo que ven los nodos como actualización):
+
+```bash
+# 1. subir VERSION en hamna/__init__.py y los ?v= de hamna/static/index.html
+git commit -am "Release v1.8.0"
+git tag v1.8.0
+git push origin main v1.8.0
+```
+
+Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir audio necesita `ffmpeg` en el PATH; para las zonas horarias en Windows, el paquete `tzdata` de Python.
 
 | Módulo | Qué hace |
 |---|---|

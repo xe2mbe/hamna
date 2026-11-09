@@ -11,6 +11,8 @@
 #    --no-packages        do not install anything with apt (ffmpeg, espeak-ng)
 #    --no-cron            do not let the page view/edit the cron table
 #    --no-apache          do not publish the page at http(s)://<node>/hamna/
+#    --listen-all         keep port 8090 reachable from the network (by default,
+#                         when Apache publishes /hamna/, it listens on 127.0.0.1)
 #    --force              install even if HAMNA is on air or preparing audio
 #
 #  No Python packages needed: only Python 3.5 or newer.
@@ -33,6 +35,7 @@ APT=1
 CRON=1
 APACHE=1
 FORCE=0
+LISTEN_ALL=0
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PYTHONIOENCODING=utf-8
 
@@ -51,7 +54,8 @@ while [ $# -gt 0 ]; do
     --no-cron|--sin-cron) CRON=0; shift ;;
     --no-apache) APACHE=0; shift ;;
     --force) FORCE=1; shift ;;
-    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
+    --listen-all) LISTEN_ALL=1; shift ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
     *) die "Unknown option: $1  (see --help)" ;;
   esac
 done
@@ -265,38 +269,7 @@ elif [ "$RUN_USER" != root ]; then
   c_warn "No sudo: the page will not be able to see root's cron"
 fi
 
-# ── 5. Service ──────────────────────────────────────────────────────────────
-AFTER="network-online.target"
-[ "$TYPE" = asl ] && systemctl cat asterisk >/dev/null 2>&1 && AFTER="$AFTER asterisk.service"
-{
-  echo "[Unit]"
-  echo "Description=HAMNA Web - amateur radio net automation ($FLAVOR)"
-  echo "After=$AFTER"
-  echo "Wants=network-online.target"
-  echo
-  echo "[Service]"
-  echo "Type=simple"
-  echo "User=$RUN_USER"
-  [ "$TYPE" = irlp ] && echo "SupplementaryGroups=audio"
-  echo "WorkingDirectory=$APP_DIR"
-  echo "Environment=HAMNA_DATA=$DATA_DIR"
-  echo "Environment=PYTHONIOENCODING=utf-8"
-  echo "Environment=PYTHONUNBUFFERED=1"
-  echo "ExecStart=$PY -m hamna --host 0.0.0.0 --port $PORT"
-  echo "Restart=on-failure"
-  echo "RestartSec=5"
-  echo
-  echo "[Install]"
-  echo "WantedBy=multi-user.target"
-} > /etc/systemd/system/$SERVICE.service
-systemctl daemon-reload
-systemctl enable "$SERVICE" >/dev/null 2>&1
-systemctl restart "$SERVICE"
-sleep 3
-systemctl is-active --quiet "$SERVICE" || { journalctl -u "$SERVICE" -n 30 --no-pager; die "The service did not start"; }
-c_ok "Service $SERVICE running"
-
-# ── 6. Apache: same port as Allmon/Supermon, at /hamna/ ─────────────────────
+# ── 5. Apache: same port as Allmon/Supermon, at /hamna/ ─────────────────────
 WEB_URL=""
 WEB_SCHEME="https"
 apache_conf() {
@@ -342,13 +315,61 @@ if [ "$APACHE" = 1 ]; then
   fi
 fi
 
+# With Apache in front, port 8090 is only needed inside the node: the page
+# goes through https://<node>/hamna/ and the password never travels in clear.
+HOST=0.0.0.0
+[ -n "$WEB_URL" ] && [ "$LISTEN_ALL" = 0 ] && HOST=127.0.0.1
+
+# ── 6. Service ──────────────────────────────────────────────────────────────
+AFTER="network-online.target"
+[ "$TYPE" = asl ] && systemctl cat asterisk >/dev/null 2>&1 && AFTER="$AFTER asterisk.service"
+{
+  echo "[Unit]"
+  echo "Description=HAMNA Web - amateur radio net automation ($FLAVOR)"
+  echo "After=$AFTER"
+  echo "Wants=network-online.target"
+  echo
+  echo "[Service]"
+  echo "Type=simple"
+  echo "User=$RUN_USER"
+  [ "$TYPE" = irlp ] && echo "SupplementaryGroups=audio"
+  echo "WorkingDirectory=$APP_DIR"
+  echo "Environment=HAMNA_DATA=$DATA_DIR"
+  echo "Environment=PYTHONIOENCODING=utf-8"
+  echo "Environment=PYTHONUNBUFFERED=1"
+  echo "ExecStart=$PY -m hamna --host $HOST --port $PORT"
+  echo "Restart=on-failure"
+  echo "RestartSec=5"
+  echo
+  echo "[Install]"
+  echo "WantedBy=multi-user.target"
+} > /etc/systemd/system/$SERVICE.service
+systemctl daemon-reload
+systemctl enable "$SERVICE" >/dev/null 2>&1
+systemctl restart "$SERVICE"
+sleep 3
+systemctl is-active --quiet "$SERVICE" || { journalctl -u "$SERVICE" -n 30 --no-pager; die "The service did not start"; }
+if [ "$HOST" = 127.0.0.1 ]; then c_ok "Service $SERVICE running (port $PORT only inside the node)"
+else c_ok "Service $SERVICE running (port $PORT open to the network)"; fi
+
 # ── 7. Firewall ─────────────────────────────────────────────────────────────
 if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
   ZONE=$(firewall-cmd --get-default-zone)
-  firewall-cmd -q --zone="$ZONE" --add-port="$PORT"/tcp --permanent && firewall-cmd -q --reload
-  c_ok "Port $PORT opened in firewalld (zone $ZONE)"
+  if [ "$HOST" = 127.0.0.1 ]; then
+    if firewall-cmd -q --zone="$ZONE" --query-port="$PORT"/tcp --permanent 2>/dev/null; then
+      firewall-cmd -q --zone="$ZONE" --remove-port="$PORT"/tcp --permanent && firewall-cmd -q --reload
+      c_ok "Port $PORT closed in firewalld (zone $ZONE): use /hamna/"
+    fi
+  else
+    firewall-cmd -q --zone="$ZONE" --add-port="$PORT"/tcp --permanent && firewall-cmd -q --reload
+    c_ok "Port $PORT opened in firewalld (zone $ZONE)"
+  fi
 elif command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
-  ufw allow "$PORT"/tcp >/dev/null && c_ok "Port $PORT opened in ufw"
+  if [ "$HOST" = 127.0.0.1 ]; then
+    ufw status 2>/dev/null | grep -q "^$PORT/tcp" && ufw delete allow "$PORT"/tcp >/dev/null && c_ok "Port $PORT closed in ufw: use /hamna/"
+  else
+    ufw allow "$PORT"/tcp >/dev/null && c_ok "Port $PORT opened in ufw"
+  fi
 fi
 
 # ── 8. Done ─────────────────────────────────────────────────────────────────
@@ -358,7 +379,7 @@ echo
 c_ok "HAMNA Web ${NEW_VERSION} installed"
 echo
 [ -n "$WEB_URL" ] && echo "   Open in the browser:   ${WEB_SCHEME}://${IP:-NODE-IP}${WEB_URL}"
-echo "   Direct address:        http://${IP:-NODE-IP}:$PORT"
+[ "$HOST" != 127.0.0.1 ] && echo "   Direct address:        http://${IP:-NODE-IP}:$PORT"
 echo
 if [ "$KEPT_USERS" = 1 ]; then echo "   Sign in with:          your HAMNA users (unchanged)"
 else echo "   Sign in with:          user admin"; fi
