@@ -1060,6 +1060,7 @@ async function loadUpdates(force) {
   let d;
   try { d = await api("api/actualizaciones" + (force ? "?forzar=1" : "")); }
   catch (e) {
+    markUpdate(null);
     box.className = "upd-box";
     box.innerHTML = `<div class="upd-head"><span class="muted">${esc(e.message)}</span>
       <button type="button" class="btn sm" id="btnUpd">↻ Buscar de nuevo</button></div>`;
@@ -1079,10 +1080,14 @@ async function loadUpdates(force) {
       <span class="muted">Conserva los datos, usuarios y ajustes. Antes de correrlo, revisa que nada esté al aire.</span></div>` : ""}`;
   $("#btnUpd").onclick = () => loadUpdates(true);
 }
+/* Etiqueta de versión: verde = al día, ámbar = hay versión nueva, gris = sin saber */
 function markUpdate(d) {
-  const v = $("#appVer");
-  v.classList.toggle("has-update", !!(d && d.hay_actualizacion));
-  v.title = d && d.hay_actualizacion ? `Hay una versión nueva: v${d.ultima}` : "";
+  const v = $("#appVer"), es = window.HAMNA_LANG === "es";
+  const nueva = !!(d && d.hay_actualizacion), aldia = !!(d && d.ultima && !d.hay_actualizacion);
+  v.classList.toggle("has-update", nueva);
+  v.classList.toggle("up-to-date", aldia);
+  v.title = nueva ? (es ? `Hay una versión nueva: v${d.ultima}` : `A new version is available: v${d.ultima}`)
+    : aldia ? (es ? "HAMNA Web está al día" : "HAMNA Web is up to date") : "";
 }
 $("#appVer").onclick = () => { if ($("#appVer").classList.contains("has-update")) { S.setSec = "sistema"; showTab("ajustes"); } };
 
