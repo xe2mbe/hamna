@@ -349,9 +349,13 @@ function renderProg() {
   // al final lo desactivado o sin fechas.
   const rank = (p) => (live && p.evento_id === live ? -1 : p.activo && p.faltan_s != null ? p.faltan_s : Infinity);
   S.prog = S.prog.slice().sort((a, b) => rank(a) - rank(b));
+  // La franja del próximo evento va pegada encima de su tarjeta
+  const nxt = S.prog.find((p) => p.activo && p.faltan_s != null && p.evento_id !== live);
   el.innerHTML = S.prog.map((p) => {
     const isToday = p.proxima && p.proxima.startsWith(today);
-    return `<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
+    const strip = p === nxt ? `<div class="next-strip"><div><span class="lbl">Próximo evento</span>
+        <small>${esc(p.proxima)}</small></div><div class="cd" id="nextLeft" data-left="${p.faltan_s}"></div></div>` : "";
+    return `<div class="prog-slot ${p === nxt ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
       <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora)}</span>
         ${live === p.evento_id ? '<span class="chip live">AL AIRE</span>' : isToday ? '<span class="chip ok">HOY</span>' : ""}</div>
       <h3>${esc(p.evento_nombre)}</h3>
@@ -363,16 +367,9 @@ function renderProg() {
         <button class="btn sm" data-act="edit" data-id="${p.id}">Editar</button>
         <button class="btn sm" data-act="toggle" data-id="${p.id}">${p.activo ? "Desactivar" : "Activar"}</button>
         <button class="btn sm ghost" data-act="del" data-id="${p.id}">Borrar</button>
-      </div></div>`;
+      </div></div></div>`;
   }).join("");
-  const nxt = S.prog.find((p) => p.activo && p.faltan_s != null && p.evento_id !== live);
-  const nc = $("#nextCard");
-  if (nxt) {
-    nc.classList.remove("hidden");
-    nc.innerHTML = `<div><div class="muted">Próximo evento</div><h2>${esc(nxt.evento_nombre)}</h2>
-      <div class="muted">${esc(nxt.proxima)} · ${esc(recText(nxt))}</div></div>
-      <div class="big" id="nextLeft" data-left="${nxt.faltan_s}"></div>`;
-  } else nc.classList.add("hidden");
+  $("#nextCard").classList.add("hidden");
   tickProg();
 }
 function tickProg() {
