@@ -28,6 +28,7 @@ PORT=8090
 TYPE=""
 NODE=""
 PASSWORD=""
+KEPT_USERS=0
 APT=1
 CRON=1
 APACHE=1
@@ -200,6 +201,7 @@ if [ -n "$PASSWORD" ]; then
   hamna --set-password "$PASSWORD" >/dev/null
   c_ok "User admin ready"
 elif hamna --has-password; then
+  KEPT_USERS=1
   c_ok "Existing users kept"
 elif [ -t 0 ]; then
   while :; do
@@ -285,6 +287,7 @@ c_ok "Service $SERVICE running"
 
 # ── 6. Apache: same port as Allmon/Supermon, at /hamna/ ─────────────────────
 WEB_URL=""
+WEB_SCHEME="https"
 apache_conf() {
   cat <<CONF
 # HAMNA Web at http(s)://<node>/hamna/ (same port as Allmon3/AllScan/Supermon).
@@ -317,7 +320,7 @@ if [ "$APACHE" = 1 ]; then
         printf "\n# HAMNA Web\nInclude conf/extra/hamna-web.conf\n" >> /etc/httpd/conf/httpd.conf
       if apachectl -t >/dev/null 2>&1; then
         systemctl reload httpd 2>/dev/null || true
-        WEB_URL="/hamna/"; c_ok "Published by Apache (httpd) at /hamna/"
+        WEB_URL="/hamna/"; WEB_SCHEME="http"; c_ok "Published by Apache (httpd) at /hamna/"
       else
         sed -i '/conf\/extra\/hamna-web.conf/d' /etc/httpd/conf/httpd.conf
         c_warn "httpd rejected the configuration; /hamna/ was not published"
@@ -343,12 +346,14 @@ IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 echo
 c_ok "HAMNA Web ${NEW_VERSION} installed"
 echo
-[ -n "$WEB_URL" ] && echo "   Open in the browser:   http(s)://${IP:-NODE-IP}${WEB_URL}"
+[ -n "$WEB_URL" ] && echo "   Open in the browser:   ${WEB_SCHEME}://${IP:-NODE-IP}${WEB_URL}"
 echo "   Direct address:        http://${IP:-NODE-IP}:$PORT"
 echo
-echo "   Sign in with:          user admin"
+if [ "$KEPT_USERS" = 1 ]; then echo "   Sign in with:          your HAMNA users (unchanged)"
+else echo "   Sign in with:          user admin"; fi
 echo "   Change a password:     hamna-web-passwd [--user USER]"
-echo "   Update:                sudo $APP_DIR/update.sh"
+if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then echo "   Update:                sudo $APP_DIR/update.sh"
+else echo "   Update:                $APP_DIR/update.sh"; fi
 echo "   View the log:          journalctl -u $SERVICE -f"
 echo "   Uninstall:             sudo $APP_DIR/uninstall.sh"
 echo
