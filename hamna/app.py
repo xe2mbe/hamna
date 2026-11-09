@@ -7,11 +7,12 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts
+from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts, tz
 from .engine import engine
 from .web import App, HTTPError, jsonr, send_file
 
@@ -247,14 +248,7 @@ def status(req):
 
 
 def _timezone():
-    try:
-        tz = Path("/etc/timezone").read_text().strip()
-        if tz:
-            return tz
-    except Exception:
-        pass
-    real = os.path.realpath("/etc/localtime")
-    return real.split("zoneinfo/")[-1] if "zoneinfo/" in real else time.strftime("%Z")
+    return tz.node_zone() or time.strftime("%Z")
 
 
 @app.route("/api/info")
@@ -523,10 +517,35 @@ def evento_del(req, eid):
     return ok()
 
 
+# Preparar en segundo plano los audios de un evento en cuanto cambia (sección
+# agregada, programación guardada), para no esperar a los 20 min antes.
+_prep_busy = set()
+_prep_lock = threading.Lock()
+
+
+def _prep_bg(evento_id):
+    with _prep_lock:
+        if evento_id in _prep_busy:
+            return
+        _prep_busy.add(evento_id)
+
+    def work():
+        try:
+            n = engine.prepare_event(evento_id)
+            log.info("Audios del evento #%s listos (%s)", evento_id, n)
+        except Exception as e:
+            log.warning("No se pudieron preparar los audios del evento #%s: %s", evento_id, e)
+        finally:
+            with _prep_lock:
+                _prep_busy.discard(evento_id)
+    threading.Thread(target=work, daemon=True).start()
+
+
 @app.route("/api/eventos/<int:eid>/secciones", ("POST",))
 def evento_add_sec(req, eid):
     for sid in req.json().get("ids", []):
         db.add_seccion_to_evento(eid, int(sid))
+    _prep_bg(eid)
     return ok()
 
 
@@ -588,6 +607,17 @@ def programacion(req):
         nxt = engine.next_run(r, now) if r["activo"] else None
         r["proxima"] = nxt.strftime("%Y-%m-%d %H:%M") if nxt else None
         r["faltan_s"] = int((nxt - now).total_seconds()) if nxt else None
+        # Con zona propia: la hora en el nodo y si cambiará pronto (horario de verano)
+        r["zona"] = r.get("zona") or ""
+        r["hora_local"] = nxt.strftime("%H:%M") if nxt else r["hora"]
+        r["fecha_local"] = nxt.strftime("%Y-%m-%d") if nxt else r["fecha"]
+        r["cambio"] = None
+        if r["zona"] and nxt:
+            r["zona_nombre"] = tz.label(r["zona"])
+            for o in engine.occurrences(r, nxt, nxt + dt.timedelta(days=200)):
+                if o.strftime("%H:%M") != r["hora_local"]:
+                    r["cambio"] = {"fecha": o.strftime("%Y-%m-%d"), "hora_local": o.strftime("%H:%M")}
+                    break
         out.append(r)
     out.sort(key=lambda r: (r["faltan_s"] is None, r["faltan_s"] or 0))
     return jsonr(out)
@@ -605,17 +635,35 @@ def _prog_fields(b):
         raise ValueError("Hora inválida (HH:MM)")
     if rec not in ("ninguna", "diaria", "semanal", "lun-vie"):
         raise ValueError("Recurrencia inválida")
-    return eid, fecha, hora, rec, b.get("activo", True) not in (False, 0, "0", "false")
+    zona = (b.get("zona") or "").strip()
+    if zona == tz.node_zone():
+        zona = ""
+    if not tz.valid(zona):
+        raise ValueError("Zona horaria desconocida: " + zona)
+    return eid, fecha, hora, rec, b.get("activo", True) not in (False, 0, "0", "false"), zona
+
+
+@app.route("/api/zonas")
+def zonas(req):
+    return jsonr({"nodo": tz.node_zone(),
+                  "zonas": [{"id": z, "nombre": n} for z, n in tz.ZONAS if tz.valid(z)]})
 
 
 @app.route("/api/programacion", ("POST",))
 def prog_new(req):
-    return ok(id=db.insert_programacion(*_prog_fields(req.json())))
+    f = _prog_fields(req.json())
+    pid = db.insert_programacion(*f)
+    if f[4]:
+        _prep_bg(f[0])
+    return ok(id=pid)
 
 
 @app.route("/api/programacion/<int:pid>", ("PUT",))
 def prog_edit(req, pid):
-    db.update_programacion(pid, *_prog_fields(req.json()))
+    f = _prog_fields(req.json())
+    db.update_programacion(pid, *f)
+    if f[4]:
+        _prep_bg(f[0])
     return ok()
 
 

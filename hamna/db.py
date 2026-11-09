@@ -115,6 +115,10 @@ def init_db():
                 resultado  TEXT
             );
         """)
+        # Zona horaria de cada programación ('' = hora del nodo)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(programacion)")]
+        if "zona" not in cols:
+            c.execute("ALTER TABLE programacion ADD COLUMN zona TEXT DEFAULT ''")
         if c.execute("SELECT COUNT(*) FROM eventos_type").fetchone()[0] == 0:
             c.executemany("INSERT INTO eventos_type (nombre) VALUES (?)", [
                 ("Transmisión en Vivo",), ("Grabación",),
@@ -267,7 +271,7 @@ def set_contabilizable(eid, sid, value):
 def get_programacion(solo_activos=False):
     where = "WHERE p.activo = 1" if solo_activos else ""
     return rows("""
-        SELECT p.id, p.evento_id, p.fecha, p.hora, p.recurrencia, p.activo,
+        SELECT p.id, p.evento_id, p.fecha, p.hora, p.recurrencia, p.activo, p.zona,
                e.nombre AS evento_nombre, et.nombre AS evento_tipo
         FROM programacion p
         JOIN eventos e ON e.id = p.evento_id
@@ -276,14 +280,14 @@ def get_programacion(solo_activos=False):
         ORDER BY p.hora, p.fecha""")
 
 
-def insert_programacion(eid, fecha, hora, recurrencia="ninguna", activo=True):
-    return execute("INSERT INTO programacion (evento_id, fecha, hora, recurrencia, activo)"
-                   " VALUES (?,?,?,?,?)", (eid, fecha, hora, recurrencia, int(bool(activo))))
+def insert_programacion(eid, fecha, hora, recurrencia="ninguna", activo=True, zona=""):
+    return execute("INSERT INTO programacion (evento_id, fecha, hora, recurrencia, activo, zona)"
+                   " VALUES (?,?,?,?,?,?)", (eid, fecha, hora, recurrencia, int(bool(activo)), zona or ""))
 
 
-def update_programacion(pid, eid, fecha, hora, recurrencia, activo):
-    execute("UPDATE programacion SET evento_id=?, fecha=?, hora=?, recurrencia=?, activo=?"
-            " WHERE id=?", (eid, fecha, hora, recurrencia, int(bool(activo)), pid))
+def update_programacion(pid, eid, fecha, hora, recurrencia, activo, zona=""):
+    execute("UPDATE programacion SET evento_id=?, fecha=?, hora=?, recurrencia=?, activo=?, zona=?"
+            " WHERE id=?", (eid, fecha, hora, recurrencia, int(bool(activo)), zona or "", pid))
 
 
 def delete_programacion(pid):

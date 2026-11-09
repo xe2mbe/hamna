@@ -42,8 +42,12 @@ def _lock_for(key):
 
 
 def _run(cmd, timeout=900):
-    return subprocess.run([str(c) for c in cmd], stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, timeout=timeout)
+    cmd = [str(c) for c in cmd]
+    # Convertir audio es lo único pesado de HAMNA: prioridad baja para que
+    # Asterisk (el audio al aire) nunca espere por la CPU
+    if cmd and cmd[0] in ("ffmpeg", "sox", "mpg123") and shutil.which("nice"):
+        cmd = ["nice", "-n", "10"] + cmd
+    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
 
 
 def have(tool):
@@ -115,6 +119,18 @@ def _to_8k_ffmpeg(src, out, gain_db=None):
 
 
 def _lufs_ffmpeg(src):
+    """Sonoridad integrada (EBU R128) en mono. Se usa el filtro ebur128: da el
+    mismo valor que loudnorm pero sin el cálculo de picos reales a 192 kHz,
+    unas 7 veces más rápido (17 min de audio: ~1 min en una Pi 3 en vez de 7)."""
+    r = _run(["ffmpeg", "-hide_banner", "-nostats", "-i", src, "-af",
+              "aformat=channel_layouts=mono,ebur128=framelog=quiet", "-f", "null", "-"])
+    txt = r.stderr.decode(errors="ignore")
+    i = txt.rfind("Integrated loudness:")
+    m = re.search(r"I:\s*(-?[\d.]+)\s*LUFS", txt[i:] if i >= 0 else txt)
+    if m:
+        v = float(m.group(1))
+        return v if v > -70 else None
+    # Respaldo: ffmpeg muy viejo sin ebur128
     r = _run(["ffmpeg", "-hide_banner", "-nostats", "-i", src, "-af",
               "aformat=channel_layouts=mono,loudnorm=print_format=json", "-f", "null", "-"])
     txt = r.stderr.decode(errors="ignore")

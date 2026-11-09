@@ -22,7 +22,7 @@ import uuid
 from collections import deque
 from pathlib import Path
 
-from . import audio, backends, db, links, paths, settings, tts
+from . import audio, backends, db, links, paths, settings, tts, tz
 
 log = logging.getLogger("hamna.engine")
 
@@ -454,18 +454,32 @@ class Engine:
         return False
 
     @classmethod
-    def next_run(cls, row, now = None):
-        now = now or dt.datetime.now()
+    def occurrences(cls, row, start, end):
+        """Fechas-hora (en hora del nodo) en que toca una programación entre
+        start y end. La hora y los días se interpretan en la zona del evento
+        y se convierten para cada fecha: el cambio de horario se aplica solo."""
         try:
             h, m = map(int, (row.get("hora") or "")[:5].split(":"))
         except ValueError:
-            return None
-        for d in range(0, 8 if row.get("recurrencia") != "ninguna" else 400):
-            day = now.date() + dt.timedelta(days=d)
-            when = dt.datetime.combine(day, dt.time(h, m))
-            if when >= now.replace(second=0, microsecond=0) and cls.applies_today(row, day):
-                return when
-        return None
+            return []
+        zona = row.get("zona") or ""
+        d = tz.node_to_zone(start, zona).date() - dt.timedelta(days=1)
+        last = tz.node_to_zone(end, zona).date() + dt.timedelta(days=1)
+        out = []
+        while d <= last:
+            if cls.applies_today(row, d):
+                t = tz.to_node(dt.datetime.combine(d, dt.time(h, m)), zona)
+                if start <= t <= end:
+                    out.append(t)
+            d += dt.timedelta(days=1)
+        return out
+
+    @classmethod
+    def next_run(cls, row, now = None):
+        now = (now or dt.datetime.now()).replace(second=0, microsecond=0)
+        days = 8 if row.get("recurrencia") != "ninguna" else 400
+        occ = cls.occurrences(row, now, now + dt.timedelta(days=days))
+        return min(occ) if occ else None
 
     def scheduler_loop(self):
         log.info("Programador iniciado")
@@ -484,13 +498,13 @@ class Engine:
         now = dt.datetime.now()
         today = now.date()
         hhmm = now.strftime("%H:%M")
+        day0 = dt.datetime.combine(today, dt.time(0, 0))
+        todays = []
         for row in db.get_programacion(solo_activos=True):
-            if not self.applies_today(row, today):
-                continue
-            try:
-                h, m = map(int, row["hora"][:5].split(":"))
-            except ValueError:
-                continue
+            for occ in self.occurrences(row, day0, day0 + dt.timedelta(hours=23, minutes=59)):
+                todays.append((row, occ))
+        for row, occ in todays:
+            h, m = occ.hour, occ.minute
             mins_left = (h * 60 + m) - (now.hour * 60 + now.minute)
             self._tick_links(row, now, today, h, m)
             if 0 < mins_left <= 20:
@@ -498,7 +512,7 @@ class Engine:
                 if key not in self._prewarmed:
                     self._prewarmed.add(key)
                     threading.Thread(target=self._prewarm, args=(row,), daemon=True).start()
-            if row["hora"][:5] != hhmm:
+            if "{:02d}:{:02d}".format(h, m) != hhmm:
                 continue
             key = (row["id"], today, hhmm)
             if key in self._fired:

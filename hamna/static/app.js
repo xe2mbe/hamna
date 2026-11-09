@@ -399,10 +399,12 @@ function renderProg() {
     const strip = p === nxt ? `<div class="next-strip"><div><span class="lbl">Próximo evento</span>
         <small>${esc(p.proxima)}</small></div><div class="cd" id="nextLeft" data-left="${p.faltan_s}"></div></div>` : "";
     return `<div class="prog-slot ${p === nxt ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
-      <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora)}</span>
+      <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora)}${p.zona ? `<small class="zone">${esc(zoneShort(p))}</small>` : ""}</span>
         ${live === p.evento_id ? '<span class="chip live">AL AIRE</span>' : isToday ? '<span class="chip ok">HOY</span>' : ""}</div>
       <h3>${esc(p.evento_nombre)}</h3>
       <div class="meta">${esc(recText(p))}${p.evento_tipo ? " · " + esc(p.evento_tipo) : ""}</div>
+      ${p.zona ? `<div class="meta here">Aquí (hora del nodo): <b>${esc(p.hora_local)}</b></div>` : ""}
+      ${p.cambio ? `<div class="meta tz-warn">⚠ Desde el ${esc(p.cambio.fecha)} será a las ${esc(p.cambio.hora_local)} aquí (cambio de horario)</div>` : ""}
       <div class="meta" data-left="${p.faltan_s ?? ""}">${p.activo ? (p.proxima ? "Próxima: " + esc(p.proxima) + " · en <b class='left'>" + fmtLeft(p.faltan_s) + "</b>" : "Sin próximas fechas") : "Desactivada"}</div>
       ${progTimeline(p)}
       <div class="actions">
@@ -447,17 +449,27 @@ $("#btnNewProg").onclick = async () => {
   if (!S.eventos.length) return toast("Primero crea un evento en la pestaña Eventos", true);
   progForm(null);
 };
-function progForm(p) {
+function zoneShort(p) {
+  const n = p.zona_nombre || p.zona;
+  return n.split(" · ")[0].split(" (")[0];
+}
+async function progForm(p) {
   const today = (S.status ? S.status.now : new Date().toISOString()).slice(0, 10);
-  p = p || { evento_id: S.evSel || S.eventos[0].id, fecha: today, hora: "20:00", recurrencia: "semanal", activo: 1 };
+  p = p || { evento_id: S.evSel || S.eventos[0].id, fecha: today, hora: "20:00", recurrencia: "semanal", activo: 1, zona: "" };
+  if (!S.zonas) { try { S.zonas = await api("api/zonas"); } catch { S.zonas = { nodo: "", zonas: [] }; } }
+  const zs = S.zonas.zonas.slice();
+  if (p.zona && !zs.some((z) => z.id === p.zona)) zs.push({ id: p.zona, nombre: p.zona });
   openModal(p.id ? "Editar programación" : "Programar evento", `
     <form id="pf">
       <label>Evento<select name="evento_id">${S.eventos.map((e) =>
         `<option value="${e.id}" ${e.id === p.evento_id ? "selected" : ""}>${esc(e.nombre)}</option>`).join("")}</select></label>
       <div class="grid2">
         <label>Fecha (o primera fecha)<input type="date" name="fecha" value="${esc(p.fecha)}" required></label>
-        <label>Hora del nodo<input type="time" name="hora" value="${esc(p.hora)}" required></label>
+        <label>Hora<input type="time" name="hora" value="${esc(p.hora)}" required></label>
       </div>
+      <label>Zona horaria del programa<select name="zona">${zs.map((z) =>
+        `<option value="${esc(z.id)}" ${z.id === (p.zona || "") ? "selected" : ""}>${esc(z.nombre)}</option>`).join("")}</select>
+        <small>La hora y el día se toman en esa zona y HAMNA los convierte a la hora del nodo para cada fecha: si esa zona cambia de horario, el evento se recorre solo. Zona del nodo: ${esc(S.zonas.nodo || "—")}.</small></label>
       <label>Se repite<select name="recurrencia">${Object.entries(REC).map(([k, v]) =>
         `<option value="${k}" ${k === p.recurrencia ? "selected" : ""}>${v}</option>`).join("")}</select>
         <small id="recHint"></small></label>
@@ -472,7 +484,7 @@ function progForm(p) {
   f.onsubmit = async (e) => {
     e.preventDefault();
     const data = { evento_id: +f.evento_id.value, fecha: f.fecha.value, hora: f.hora.value,
-      recurrencia: f.recurrencia.value, activo: f.activo.checked };
+      recurrencia: f.recurrencia.value, activo: f.activo.checked, zona: f.zona.value };
     await run(() => api("api/programacion" + (p.id ? "/" + p.id : ""), { method: p.id ? "PUT" : "POST", json: data }), "Guardado");
     closeModal(); loadProg();
   };
@@ -1273,7 +1285,7 @@ const hm = (s) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; 
 function progDays(p) {
   if (p.recurrencia === "diaria") return [0, 1, 2, 3, 4, 5, 6];
   if (p.recurrencia === "lun-vie") return [1, 2, 3, 4, 5];
-  return [new Date(p.fecha + "T12:00").getDay()];
+  return [new Date((p.fecha_local || p.fecha) + "T12:00").getDay()];
 }
 const durMin = (p) => Math.round((p.duracion || 0) / 60);
 // Tareas que caen cerca de un evento: {spec: [{e, off, days}], periodic: [{e, n}]}
@@ -1286,7 +1298,7 @@ function progCrons(p, entries) {
     const hits = new Map();
     let n = 0;
     for (const d of pd) {
-      const s = d * 1440 + hm(p.hora);
+      const s = d * 1440 + hm(p.hora_local || p.hora);
       for (const t of e.times) {
         let off = (((t - s) % WEEK) + WEEK) % WEEK;
         if (off > WEEK / 2) off -= WEEK;
@@ -1304,7 +1316,7 @@ function progCrons(p, entries) {
 }
 const p2 = (x) => String(x).padStart(2, "0");
 function clock(p, off) {
-  const t = hm(p.hora) + off, d = Math.floor(t / 1440), m = ((t % 1440) + 1440) % 1440;
+  const t = hm(p.hora_local || p.hora) + off, d = Math.floor(t / 1440), m = ((t % 1440) + 1440) % 1440;
   return `${p2(Math.floor(m / 60))}:${p2(m % 60)}` + (d < 0 ? " (día anterior)" : d > 0 ? " (día siguiente)" : "");
 }
 const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} h` + (m % 60 ? ` ${m % 60} min` : "") : `${m} min`);
