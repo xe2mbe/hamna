@@ -593,8 +593,12 @@ async function loadEvento(id) {
         </span>
       </div>`).join("") : `<p class="empty">Este evento no tiene secciones.</p>`}</div>
     <div class="row gap" style="margin-top:12px"><button class="btn" id="evAdd">+ Agregar secciones</button></div>
-    <div class="links" id="evLinks"></div>`;
+    <div class="links" id="evLinks"></div>
+    <div class="links" id="evSync"></div>
+    <div class="links" id="evShare"></div>`;
   renderLinks(ev);
+  renderSync(ev);
+  renderShare(ev);
   $("#evTx").onclick = () => txStart(ev.id, ev.nombre);
   $("#evEdit").onclick = () => eventoForm(ev);
   $("#evDel").onclick = async () => {
@@ -1741,6 +1745,147 @@ $("#btnCloseOthers").onclick = async () => {
   if (!(await confirmBox("¿Cerrar todas tus sesiones en otros equipos?", "Cerrar las demás"))) return;
   try { await run(() => api("api/mis-sesiones/otras", { method: "POST" }), "Listo: solo queda esta sesión"); loadMyAccount(); } catch {}
 };
+
+/* ── Sincronizar desde otro nodo / compartir con otros nodos ───────────────── */
+const DIAS_CORTOS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const fmtTs = (ts) => {
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
+function syncSched(c) {
+  const parts = [];
+  const dias = (c.dias || "").split(",").filter((x) => x !== "").map(Number);
+  if (c.hora && dias.length) parts.push((dias.length === 7 ? "Todos los días" : dias.map((d) => DIAS[d]).join(", ")) + " a las " + c.hora);
+  if (+c.antes_horas > 0) parts.push(`${+c.antes_horas} h antes de cada programación`);
+  return parts.length ? parts.join(" · ") : "Solo a mano";
+}
+async function renderSync(ev) {
+  const box = $("#evSync"); if (!box) return;
+  let d;
+  try { d = await api(`api/eventos/${ev.id}/sincronizacion`); } catch { box.innerHTML = ""; return; }
+  const c = d.config;
+  if (!c) {
+    box.innerHTML = isAdmin() ? `<h3>Sincronización desde otro nodo</h3>
+      <p class="muted" style="margin:0 0 8px">Trae las secciones y audios de un evento de otro HAMNA (por ejemplo, el Boletín Dominical del hub) y los mantiene al día solo.</p>
+      <button class="btn" id="syncCfg">⇅ Configurar sincronización</button>` : "";
+    const b = $("#syncCfg"); if (b) b.onclick = () => syncForm(ev, null);
+    return;
+  }
+  const estado = d.ocupado ? '<span class="chip warn">Sincronizando…</span>'
+    : c.ultimo ? (c.ok ? '<span class="chip ok">OK</span>' : '<span class="chip live">Error</span>') : '<span class="chip">Nunca</span>';
+  const locales = d.secciones.filter((s) => s.sincronizada);
+  box.innerHTML = `<h3>Sincronización desde otro nodo</h3>
+    <div class="sync-card">
+      <div class="sync-row"><span class="k">Origen</span><span><b>${esc(c.remoto || "—")}</b> <small class="muted">${esc(c.url)}</small></span></div>
+      <div class="sync-row"><span class="k">Programación</span><span>${esc(syncSched(c))}${c.activo ? "" : ' <span class="chip warn">Pausada</span>'}</span></div>
+      <div class="sync-row"><span class="k">Última vez</span><span>${estado} ${esc(fmtTs(c.ultimo))} <small class="muted">${esc(c.resultado || "")}</small></span></div>
+      <div class="row gap wrap" style="margin-top:10px">
+        <button class="btn primary sm" id="syncNow" ${d.ocupado ? "disabled" : ""}>⇅ Sincronizar ahora</button>
+        ${isAdmin() ? `<button class="btn sm" id="syncEdit">Editar</button><button class="btn sm ghost" id="syncDel">Quitar</button>` : ""}
+      </div>
+      ${locales.length ? `<details class="tl"><summary>Secciones sincronizadas (${locales.length})</summary>
+        ${locales.map((s) => `<div class="sync-sec"><span><span class="chip ${esc(s.tipo)}">${esc(s.tipo)}</span> ${esc(s.nombre)}</span>
+          ${isAdmin() ? `<label class="check" style="margin:0" title="Una sección local no se sobreescribe al sincronizar">
+            <input type="checkbox" data-local="${s.id}" ${s.local ? "checked" : ""}> 📌 Local</label>`
+            : (s.local ? '<span class="chip">📌 Local</span>' : "")}</div>`).join("")}
+        <p class="muted" style="margin:6px 0 0;font-size:.82rem">📌 Local = propia de este nodo: la sincronización no la cambia (p. ej. una Entrada con el nombre de tu estación).</p></details>` : ""}
+    </div>`;
+  $("#syncNow").onclick = async () => {
+    try { await run(() => api(`api/eventos/${ev.id}/sincronizar`, { method: "POST" }), "Sincronizando…"); } catch { return; }
+    const t = setInterval(async () => {
+      let s; try { s = await api(`api/eventos/${ev.id}/sincronizacion`); } catch { clearInterval(t); return; }
+      if (!s.ocupado) {
+        clearInterval(t);
+        toast(s.config && s.config.ok ? "Sincronizado: " + s.config.resultado : "La sincronización falló: " + ((s.config && s.config.resultado) || ""), !(s.config && s.config.ok));
+        if (S.evSel === ev.id) loadEvento(ev.id);
+      }
+    }, 3000);
+    renderSync(ev);
+  };
+  const e = $("#syncEdit"); if (e) e.onclick = () => syncForm(ev, c);
+  const del = $("#syncDel"); if (del) del.onclick = async () => {
+    if (!(await confirmBox("¿Quitar la sincronización? Las secciones que ya se trajeron se quedan en el evento.", "Quitar"))) return;
+    try { await run(() => api(`api/eventos/${ev.id}/sincronizacion`, { method: "DELETE" }), "Sincronización quitada"); renderSync(ev); } catch {}
+  };
+  box.onchange = async (x) => {
+    const cb = x.target.closest("[data-local]"); if (!cb) return;
+    try { await api(`api/eventos/${ev.id}/sincronizacion/local`, { method: "PUT", json: { seccion_id: +cb.dataset.local, local: cb.checked } }); toast("Guardado"); }
+    catch (err) { toast(err.message, true); cb.checked = !cb.checked; }
+  };
+}
+function syncForm(ev, c) {
+  c = c || { url: "", dias: "0", hora: "07:00", antes_horas: 2, activo: 1 };
+  const dias = new Set((c.dias || "").split(",").filter((x) => x !== "").map(Number));
+  openModal("Sincronización desde otro nodo", `<form id="sfForm" autocomplete="off">
+    <label>Dirección de HAMNA en el nodo de origen<input name="url" value="${esc(c.url)}" required placeholder="https://299081.nodes.allstarlink.org/hamna/">
+      <small>La misma dirección con la que se entra a su página.</small></label>
+    <label>Código de acceso<input name="codigo" placeholder="${c.token_set ? "(guardado; pega uno nuevo para cambiarlo)" : "hs_…"}" ${c.token_set ? "" : "required"}>
+      <small>Lo genera un administrador del nodo de origen en su evento → «Compartir con otros nodos».</small></label>
+    <div class="row gap wrap"><button type="button" class="btn sm" id="sfProbe">Probar conexión</button><span id="sfProbeMsg" class="muted"></span></div>
+    <h3>Cuándo sincronizar</h3>
+    <div class="days">${DIAS_CORTOS.map((n, i) => `<label><input type="checkbox" name="d${i}" ${dias.has(i) ? "checked" : ""}> ${n}</label>`).join("")}</div>
+    <div class="grid2" style="margin-top:10px">
+      <label>A las (hora del nodo)<input type="time" name="hora" value="${esc(c.hora || "")}"></label>
+      <label>Y además, horas antes de cada programación de este evento<input type="number" name="antes" min="0" max="72" step="0.5" value="${esc(c.antes_horas ?? 0)}"><small>0 = no.</small></label>
+    </div>
+    <label class="check"><input type="checkbox" name="activo" ${c.activo ? "checked" : ""}> Sincronización automática activa</label>
+    <p class="muted" style="font-size:.84rem">Siempre puedes sincronizar a mano con «Sincronizar ahora». Si el origen no responde, se conserva lo de la vez anterior.</p>
+    <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div>
+  </form>`);
+  const f = $("#sfForm");
+  let probe = null;
+  $("#sfProbe").onclick = async () => {
+    const b = $("#sfProbe"); busy(b, true, "Probando…");
+    try {
+      probe = await api("api/sincronizacion/probar", { method: "POST", json: { url: f.url.value, codigo: f.codigo.value, evento_id: ev.id } });
+      $("#sfProbeMsg").innerHTML = `✅ <b>${esc(probe.evento)}</b>${probe.numero ? " #" + esc(probe.numero) : ""} · ${probe.secciones} secciones · ${probe.audios_mb} MB` +
+        (probe.huella ? `<br><small>Certificado ${esc(probe.huella.slice(0, 16))}… (se guardará para comprobarlo cada vez)</small>` : "");
+    } catch (e) { probe = null; $("#sfProbeMsg").textContent = "❌ " + e.message; }
+    finally { busy(b, false); }
+  };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { url: f.url.value.trim(), codigo: f.codigo.value.trim(), hora: f.hora.value, antes_horas: +f.antes.value || 0,
+      activo: f.activo.checked, dias: DIAS_CORTOS.map((_, i) => (f["d" + i].checked ? i : null)).filter((x) => x !== null),
+      huella: probe ? probe.huella : "", remoto: probe ? probe.evento : (c.remoto || "") };
+    try {
+      await api(`api/eventos/${ev.id}/sincronizacion`, { method: "PUT", json: body });
+      closeModal(); toast("Sincronización guardada"); renderSync(ev);
+    } catch (err) { toast(err.message, true); }
+  };
+}
+async function renderShare(ev) {
+  const box = $("#evShare"); if (!box) return;
+  if (!isAdmin()) { box.innerHTML = ""; return; }
+  let d; try { d = await api(`api/eventos/${ev.id}/compartir`); } catch { box.innerHTML = ""; return; }
+  box.innerHTML = `<h3>Compartir con otros nodos</h3>
+    <p class="muted" style="margin:0 0 8px">Un código de acceso deja que otro HAMNA traiga las secciones y audios de este evento (solo lectura, solo este evento).</p>
+    ${d.codigos.map((k) => `<div class="link-row"><span class="when">${esc(k.etiqueta || "Código #" + k.id)}</span>
+      <span class="muted" style="font-size:.85rem">creado ${esc(fmtTs(k.creado))} · ${k.ultimo_uso ? "último uso " + esc(fmtTs(k.ultimo_uso)) + " desde " + esc(k.ultima_ip || "?") : "sin usar"}</span>
+      <span class="mini"><button class="btn" data-revoke="${k.id}" title="Revocar">✕</button></span></div>`).join("")}
+    <button class="btn" id="shareNew">+ Crear código de acceso</button>`;
+  $("#shareNew").onclick = async () => {
+    openModal("Nuevo código de acceso", `<form id="shForm"><label>¿Para quién es?<input name="etiqueta" placeholder="Nodo de Tijuana" maxlength="60"></label>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Crear</button></div></form>`);
+    $("#shForm").onsubmit = async (e) => {
+      e.preventDefault();
+      let r; try { r = await api(`api/eventos/${ev.id}/compartir`, { method: "POST", json: { etiqueta: e.target.etiqueta.value } }); } catch (err) { toast(err.message, true); return; }
+      const here = location.origin + location.pathname.replace(/[^/]*$/, "");
+      openModal("Código de acceso creado", `<p>Pásalo al otro nodo. <b>Solo se muestra esta vez.</b></p>
+        <label>Dirección de este HAMNA<input readonly value="${esc(here)}" onclick="this.select()"></label>
+        <label>Código de acceso<input readonly value="${esc(r.codigo)}" onclick="this.select()" translate="no"></label>
+        <p class="muted" style="font-size:.84rem">En el otro nodo: evento → «Sincronización desde otro nodo» → pega los dos datos. Puedes revocarlo cuando quieras.</p>
+        <div class="modal-actions"><button class="btn primary" onclick="closeModal()">Listo</button></div>`);
+      renderShare(ev);
+    };
+  };
+  box.onclick = async (x) => {
+    const b = x.target.closest("[data-revoke]"); if (!b) return;
+    if (!(await confirmBox("¿Revocar este código? El nodo que lo usa ya no podrá sincronizar.", "Revocar"))) return;
+    try { await run(() => api("api/compartir/" + b.dataset.revoke, { method: "DELETE" }), "Código revocado"); renderShare(ev); } catch {}
+  };
+}
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */
 (async () => {

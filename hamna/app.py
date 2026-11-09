@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .web import App, HTTPError, jsonr, send_file
 
@@ -29,6 +29,8 @@ def init_app():
         cfg = settings.save({"secret_key": binascii.hexlify(os.urandom(32)).decode()})
     app.secret = cfg["secret_key"]
     auth.init()
+    share.init()
+    sync.init()
     app.roles = auth.ROLES
     app.user_loader = lambda req: auth.user_for(req.token, req.ip)
 
@@ -604,7 +606,11 @@ def programacion(req):
             conex[eid] = db.get_conexiones(eid)
         r["duracion"] = durs.get(eid) or 0
         r["conexiones"] = conex[eid]
-        nxt = engine.next_run(r, now) if r["activo"] else None
+        try:
+            nxt = engine.next_run(r, now) if r["activo"] else None
+        except Exception as e:
+            log.warning("Programación #%s: %s", r["id"], e)
+            nxt = None
         r["proxima"] = nxt.strftime("%Y-%m-%d %H:%M") if nxt else None
         r["faltan_s"] = int((nxt - now).total_seconds()) if nxt else None
         # Con zona propia: la hora en el nodo y si cambiará pronto (horario de verano)
@@ -648,6 +654,125 @@ def actualizaciones(req):
     d = updates.check(force=req.query.get("forzar") == "1")
     d["sabor"] = backends.detect_flavor()
     return jsonr(d)
+
+
+# ── Compartir un evento con otros nodos (el que comparte) ────────────────────
+@app.route("/api/eventos/<int:eid>/compartir", rol="admin")
+def compartir_list(req, eid):
+    return jsonr({"codigos": share.codes(eid)})
+
+
+@app.route("/api/eventos/<int:eid>/compartir", ("POST",), rol="admin")
+def compartir_new(req, eid):
+    if not db.get_evento(eid):
+        raise ValueError("El evento no existe")
+    token = share.create(eid, req.json().get("etiqueta") or "")
+    log.info("%s creó un código para compartir el evento #%s", req.user["usuario"], eid)
+    return ok(codigo=token)
+
+
+@app.route("/api/compartir/<int:cid>", ("DELETE",), rol="admin")
+def compartir_del(req, cid):
+    share.revoke(cid)
+    return ok()
+
+
+def _share_event(req):
+    """Evento al que da acceso el código del encabezado X-HAMNA-Share."""
+    if auth.locked_for("share", req.ip):
+        raise HTTPError(429, "Demasiados intentos")
+    eid = share.event_for(req.headers.get("X-HAMNA-Share", ""), req.ip)
+    if not eid:
+        auth._fail("share", req.ip)
+        time.sleep(1)
+        raise HTTPError(401, "Código de acceso inválido")
+    return eid
+
+
+@app.route("/api/remoto/evento", auth=False)
+def remoto_evento(req):
+    eid = _share_event(req)
+    data = share.payload(eid)
+    if not data:
+        raise HTTPError(404, "El evento ya no existe")
+    return jsonr(data)
+
+
+@app.route("/api/remoto/audio/<int:sid>", auth=False)
+def remoto_audio(req, sid):
+    eid = _share_event(req)
+    p = share.file_for(eid, sid)
+    if not p:
+        raise HTTPError(404, "Esa sección no tiene audio")
+    return send_file(p, "application/octet-stream")
+
+
+# ── Sincronizar un evento desde otro nodo (el que recibe) ────────────────────
+def _sync_out(eid):
+    c = sync.get_config(eid)
+    out = {"config": None, "secciones": [], "ocupado": sync.busy(eid)}
+    if c:
+        c = dict(c)
+        c["token_set"] = bool(c.pop("token", ""))
+        out["config"] = c
+        m = sync.mapping(eid)
+        for s in db.get_secciones_by_evento(eid):
+            r = m.get(s["id"])
+            out["secciones"].append({"id": s["id"], "nombre": s["nombre"], "tipo": s.get("tipo"),
+                                     "sincronizada": bool(r), "local": bool(r and r["local"])})
+    return out
+
+
+@app.route("/api/eventos/<int:eid>/sincronizacion")
+def sync_get(req, eid):
+    return jsonr(_sync_out(eid))
+
+
+@app.route("/api/eventos/<int:eid>/sincronizacion", ("PUT",), rol="admin")
+def sync_put(req, eid):
+    b = req.json()
+    sync.save_config(eid, b.get("url") or "", (b.get("codigo") or "").strip(), b.get("huella") or "",
+                     b.get("remoto") or "", b.get("dias") or [], (b.get("hora") or "").strip(),
+                     b.get("antes_horas") or 0, b.get("activo", True) not in (False, 0, "0"))
+    log.info("%s configuró la sincronización del evento #%s desde %s", req.user["usuario"], eid, b.get("url"))
+    return ok(**_sync_out(eid))
+
+
+@app.route("/api/eventos/<int:eid>/sincronizacion", ("DELETE",), rol="admin")
+def sync_del(req, eid):
+    sync.delete_config(eid)
+    return ok()
+
+
+@app.route("/api/sincronizacion/probar", ("POST",), rol="admin")
+def sync_probe(req):
+    b = req.json()
+    cfg = None
+    codigo = (b.get("codigo") or "").strip()
+    if not codigo and b.get("evento_id"):
+        cfg = sync.get_config(int(b["evento_id"]))
+        codigo = cfg["token"] if cfg else ""
+    if not codigo:
+        raise ValueError("Falta el código de acceso")
+    return ok(**sync.probe(b.get("url") or "", codigo))
+
+
+@app.route("/api/eventos/<int:eid>/sincronizar", ("POST",))
+def sync_now(req, eid):
+    if not sync.get_config(eid):
+        raise ValueError("Este evento no tiene sincronización configurada")
+    if sync.busy(eid):
+        raise ValueError("Ya se está sincronizando")
+    log.info("%s pidió sincronizar el evento #%s", req.user["usuario"], eid)
+    sync.run_bg(eid, "manual · " + req.user["usuario"])
+    return ok()
+
+
+@app.route("/api/eventos/<int:eid>/sincronizacion/local", ("PUT",), rol="admin")
+def sync_local(req, eid):
+    b = req.json()
+    sync.set_local(eid, int(b.get("seccion_id") or 0), bool(b.get("local")))
+    return ok(**_sync_out(eid))
 
 
 @app.route("/api/zonas")

@@ -357,6 +357,14 @@ legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; padding: 0; 
 .chip.asl { background: var(--accent-soft); color: var(--accent); }
 .chip.irlp { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 
+/* Sincronización entre nodos */
+.sync-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface2); }
+.sync-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 3px 0; font-size: .9rem; }
+.sync-row .k { color: var(--text3); font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding-top: 2px; }
+.sync-row small { display: block; overflow-wrap: anywhere; }
+.sync-sec { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
+.sync-sec:last-of-type { border-bottom: 0; }
+
 /* Cron */
 .cron-list { display: grid; gap: 16px; margin-top: 12px; }
 .cron-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);

@@ -501,7 +501,17 @@ class Engine:
         day0 = dt.datetime.combine(today, dt.time(0, 0))
         todays = []
         for row in db.get_programacion(solo_activos=True):
-            for occ in self.occurrences(row, day0, day0 + dt.timedelta(hours=23, minutes=59)):
+            try:
+                occs = self.occurrences(row, day0, day0 + dt.timedelta(hours=23, minutes=59))
+            except Exception as e:
+                # Una programación con un problema (p. ej. zona ilegible) no detiene a las demás
+                key = (row["id"], today, "err")
+                if key not in self._fired:
+                    self._fired.add(key)
+                    self.note("Programación «{}»: no se pudo calcular ({}). Revísala.".format(
+                        row.get("evento_nombre"), e), "error")
+                continue
+            for occ in occs:
                 todays.append((row, occ))
         for row, occ in todays:
             h, m = occ.hour, occ.minute
@@ -525,6 +535,11 @@ class Engine:
                 self.start_event(row["evento_id"], origen="programado")
             except Exception as e:
                 self.note("Programador: no se pudo iniciar «{}»: {}".format(row['evento_nombre'], e), "error")
+        try:
+            from . import sync
+            sync.tick(now)
+        except Exception:
+            log.exception("Error al revisar las sincronizaciones")
         # olvidar disparos de otros días
         self._fired = {k for k in self._fired if k[1] == today}
         self._prewarmed = {k for k in self._prewarmed if k[1] == today}

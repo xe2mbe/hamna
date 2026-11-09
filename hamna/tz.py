@@ -124,9 +124,13 @@ def to_node(naive, zone):
     """Hora `naive` de la zona `zone` → hora local del nodo (naive)."""
     if not zone or zone == node_zone():
         return naive
+    ts = None
     if ZoneInfo is not None:
-        ts = naive.replace(tzinfo=ZoneInfo(zone)).timestamp()
-    else:
+        try:
+            ts = naive.replace(tzinfo=ZoneInfo(zone)).timestamp()
+        except Exception:
+            ts = None                       # sin datos de zona en Python: usar el archivo del sistema
+    if ts is None:
         ts = _local_to_ts_tzif(zone, naive)
     return dt.datetime.fromtimestamp(ts).replace(microsecond=0)
 
@@ -137,7 +141,10 @@ def node_to_zone(naive_local, zone):
         return naive_local
     ts = time.mktime(naive_local.timetuple())
     if ZoneInfo is not None:
-        return dt.datetime.fromtimestamp(ts, ZoneInfo(zone)).replace(tzinfo=None)
+        try:
+            return dt.datetime.fromtimestamp(ts, ZoneInfo(zone)).replace(tzinfo=None)
+        except Exception:
+            pass
     return dt.datetime(1970, 1, 1) + dt.timedelta(seconds=ts + _offset_at(zone, ts))
 
 
