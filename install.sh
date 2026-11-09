@@ -221,9 +221,20 @@ fi
 if [ "$RUN_USER" = root ]; then RUNPFX=""; else RUNPFX="runuser -u $RUN_USER --"; fi
 cat > /usr/local/bin/hamna-web-passwd <<EOF
 #!/bin/sh
-# Changes the password of a HAMNA Web user (admin unless another is given).
-# Usage: hamna-web-passwd [--user USER] [PASSWORD]   A missing user is created as administrator.
-cd $APP_DIR && exec $RUNPFX env HAMNA_DATA=$DATA_DIR PYTHONIOENCODING=utf-8 $PY -m hamna --set-password "\$@"
+# Changes the password of a HAMNA Web user and signs out its sessions.
+#   hamna-web-passwd                 user admin; asks for the new password
+#   hamna-web-passwd USER            that user; asks for the new password
+#   hamna-web-passwd USER PASSWORD   without asking (it stays in the shell history!)
+#   hamna-web-passwd --create USER   create USER as administrator if missing
+CREATE=""
+if [ "\${1:-}" = "--create" ]; then CREATE="--create"; shift; fi
+if [ "\${1:-}" = "--user" ]; then shift; fi
+USER_NAME="\${1:-admin}"; [ \$# -gt 0 ] && shift
+cd $APP_DIR || exit 1
+if [ \$# -gt 0 ]; then
+  exec $RUNPFX env HAMNA_DATA=$DATA_DIR PYTHONIOENCODING=utf-8 $PY -m hamna --set-password "\$1" --user "\$USER_NAME" \$CREATE
+fi
+exec $RUNPFX env HAMNA_DATA=$DATA_DIR PYTHONIOENCODING=utf-8 $PY -m hamna --set-password --user "\$USER_NAME" \$CREATE
 EOF
 chmod 755 /usr/local/bin/hamna-web-passwd
 
@@ -351,7 +362,7 @@ echo "   Direct address:        http://${IP:-NODE-IP}:$PORT"
 echo
 if [ "$KEPT_USERS" = 1 ]; then echo "   Sign in with:          your HAMNA users (unchanged)"
 else echo "   Sign in with:          user admin"; fi
-echo "   Change a password:     hamna-web-passwd [--user USER]"
+echo "   Change a password:     hamna-web-passwd USER"
 if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then echo "   Update:                sudo $APP_DIR/update.sh"
 else echo "   Update:                $APP_DIR/update.sh"; fi
 echo "   View the log:          journalctl -u $SERVICE -f"

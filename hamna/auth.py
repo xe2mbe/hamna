@@ -303,23 +303,29 @@ def change_own_password(user, actual, nueva):
     revoke_user(u["id"], except_sid=user.get("sid"))
 
 
+def user_exists(usuario):
+    init()
+    return bool(db.row("SELECT id FROM usuarios WHERE usuario=? COLLATE NOCASE", ((usuario or "").strip(),)))
+
+
 def set_password_cli(usuario, password):
-    """Desde la terminal del nodo (hamna-web-passwd): crea el usuario como
-    administrador si no existe, lo activa y cierra sus sesiones."""
+    """From the node's terminal (hamna-web-passwd): sets the password, re-enables
+    the user and signs out its sessions; a missing user is created as admin.
+    Messages in English: HamVOIP's terminal only handles ASCII."""
     init()
     usuario = (usuario or "admin").strip()
     if not USER_RX.match(usuario):
-        raise ValueError("Usuario inválido")
+        raise ValueError("Invalid user name: 2 to 32 letters, numbers, dot, dash or underscore")
     if len(password) < 6:
-        raise ValueError("Debe tener al menos 6 caracteres")
+        raise ValueError("The password must be at least 6 characters")
     u = db.row("SELECT * FROM usuarios WHERE usuario=? COLLATE NOCASE", (usuario,))
     if u:
         db.execute("UPDATE usuarios SET password_hash=?, activo=1 WHERE id=?", (hash_password(password), u["id"]))
         revoke_user(u["id"])
-        return "contraseña cambiada; sus sesiones abiertas se cerraron"
+        return "password changed; its open sessions were signed out"
     db.execute("INSERT INTO usuarios (usuario, nombre, rol, password_hash) VALUES (?,?,?,?)",
-               (usuario, "Administrador" if usuario == "admin" else usuario, "admin", hash_password(password)))
-    return "creado como administrador"
+               (usuario, "Administrator" if usuario == "admin" else usuario, "admin", hash_password(password)))
+    return "created as administrator"
 
 
 def has_admin():

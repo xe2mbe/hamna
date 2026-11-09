@@ -64,7 +64,7 @@ curl -sL https://raw.githubusercontent.com/xe2mbe/hamna/main/update.sh | sudo ba
 
 | Tarea | Comando |
 |---|---|
-| Cambiar contraseña (o recuperar el acceso) | `sudo hamna-web-passwd [--user USUARIO]` — si el usuario no existe se crea como administrador; cierra sus sesiones |
+| Cambiar contraseña (o recuperar el acceso) | `sudo hamna-web-passwd USUARIO` — pide la contraseña sin mostrarla y cierra las sesiones de ese usuario; si no existe, pregunta antes de crearlo como administrador |
 | Ver bitácora | `journalctl -u hamna-web -f` |
 | Reiniciar | `sudo systemctl restart hamna-web` |
 | Desinstalar | `sudo /opt/hamna-web/uninstall.sh` (agrega `--delete-data` para borrar todo) |
