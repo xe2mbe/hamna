@@ -27,15 +27,14 @@ La versión web de HAMNA Desktop. Corre **dentro del nodo** (AllStarLink o IRLP)
 
 ## Instalación
 
-Copia `hamna-web-1.0.0.tar.gz` al nodo y, como root (o con `sudo`):
+En el nodo, como root (o con `sudo`):
 
 ```bash
-tar xzf hamna-web-1.0.0.tar.gz
-cd hamna-web-1.0.0
-./install.sh
+cd /tmp && curl -sL https://github.com/xe2mbe/hamna/archive/refs/heads/main.tar.gz | tar xz
+sudo bash hamna-main/install.sh
 ```
 
-El instalador:
+El instalador (sus mensajes y opciones están en inglés):
 
 1. Detecta si el nodo es **AllStarLink 3**, **HamVOIP**, ASL2 o **IRLP**, y el número de nodo.
 2. No necesita paquetes de Python: solo Python 3.5 o más nuevo (HamVOIP trae 3.5).
@@ -43,18 +42,32 @@ El instalador:
 4. Copia el programa a `/opt/hamna-web`. Los datos van a `/var/lib/hamna`.
 5. Crea el usuario `admin` y pide su contraseña (si no hay terminal, genera una y la muestra). Los demás usuarios se crean desde la página, en Ajustes → Usuarios.
 6. Crea el servicio `hamna-web` y abre el puerto 8090 en el firewall si hay uno activo.
+7. Si el nodo tiene Apache (Allmon3, AllScan, Supermon), publica la página en **`http(s)://IP-DEL-NODO/hamna/`**, en el mismo puerto: no hay que abrir otro.
 
-Después abre `http://IP-DEL-NODO:8090`.
+Después abre `https://IP-DEL-NODO/hamna/` (o `http://IP-DEL-NODO:8090`).
 
-Opciones: `--tipo asl|irlp`, `--nodo 12345`, `--puerto 8090`, `--password CLAVE`, `--sin-paquetes`, `--sin-cron`.
-Para actualizar, vuelve a ejecutar `install.sh` con la versión nueva. Tus eventos y audios se conservan.
+Opciones de `install.sh`: `--type asl|irlp`, `--node 12345`, `--port 8090`, `--password CLAVE`, `--no-packages`, `--no-cron`, `--no-apache`, `--force`. Las opciones anteriores en español (`--tipo`, `--sin-paquetes`…) siguen funcionando.
+
+### Actualizar
+
+```bash
+sudo /opt/hamna-web/update.sh
+```
+
+o, en nodos con una versión anterior a la 1.6.5:
+
+```bash
+curl -sL https://raw.githubusercontent.com/xe2mbe/hamna/main/update.sh | sudo bash
+```
+
+(En HamVOIP, sin `sudo`.) Baja la última versión de GitHub y corre su `install.sh`: se niega a instalar si algo está al aire o preparando audio, respalda antes los datos y el programa en `/var/backups/hamna/` (guarda los últimos 5) y conserva eventos, audios, usuarios y ajustes. En **Ajustes → Sistema** la página avisa cuando hay una versión nueva y muestra este comando.
 
 | Tarea | Comando |
 |---|---|
 | Cambiar contraseña (o recuperar el acceso) | `sudo hamna-web-passwd [--user USUARIO]` — si el usuario no existe se crea como administrador; cierra sus sesiones |
 | Ver bitácora | `journalctl -u hamna-web -f` |
 | Reiniciar | `sudo systemctl restart hamna-web` |
-| Desinstalar | `sudo /opt/hamna-web/uninstall.sh` (agrega `--borrar-datos` para borrar todo) |
+| Desinstalar | `sudo /opt/hamna-web/uninstall.sh` (agrega `--delete-data` para borrar todo) |
 
 ## Cómo sale al aire
 
@@ -95,7 +108,7 @@ Cada evento puede conectar o desconectar enlaces antes de empezar y al terminar 
 
 La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab de root y de asterisk, y en IRLP `custom/custom.crons` (el crontab de repeater se vuelve a armar solo cada día a las 3:00 con `irlp.crons` + `custom.crons`). `/etc/crontab` y `/etc/cron.d` se muestran en solo lectura.
 
-Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Un administrador de la página puede programar comandos como root**: dale ese rol solo a quien corresponda, usa contraseñas fuertes y no expongas el puerto a internet. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--sin-cron`.
+Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Un administrador de la página puede programar comandos como root**: dale ese rol solo a quien corresponda, usa contraseñas fuertes y no expongas el puerto a internet. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--no-cron`.
 
 ## Diferencias con HAMNA Desktop
 

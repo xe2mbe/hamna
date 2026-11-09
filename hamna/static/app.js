@@ -1048,10 +1048,8 @@ $("#btnPw").onclick = async () => {
 };
 /* ── Actualizaciones (GitHub) ─────────────────────────────────────────────── */
 function updCmd(d) {
-  const tgz = `${d.url}/archive/refs/heads/main.tar.gz`;
-  if (d.sabor === "hamvoip")
-    return `cd /tmp && rm -rf hamna-main && curl -sL ${tgz} | tar xz && bash hamna-main/install.sh --sin-paquetes`;
-  return `cd /tmp && rm -rf hamna-main && curl -sL ${tgz} | tar xz && sudo bash hamna-main/install.sh --sin-paquetes`;
+  const raw = `https://raw.githubusercontent.com/${d.repo}/main/update.sh`;
+  return d.sabor === "hamvoip" ? `curl -sL ${raw} | bash` : `curl -sL ${raw} | sudo bash`;
 }
 async function loadUpdates(force) {
   const box = $("#updBox");
