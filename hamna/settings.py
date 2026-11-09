@@ -51,13 +51,23 @@ DEFAULTS = {
     "pause_volume": 95,
     "keep_originals": True,       # False: al subir se guarda solo la versión para el aire
 
+    # Avisos por Telegram
+    "tg_enabled": False,
+    "tg_token": "",
+    "tg_chat": "",
+    "tg_on_error": True,
+    "tg_on_preflight": True,
+    "tg_on_sync": True,
+    "tg_on_start": False,
+    "tg_on_end": False,
+
     # Seguridad
     "password_hash": "",
     "secret_key": "",
 }
 
 # Claves que nunca se mandan al navegador
-SECRET_KEYS = {"password_hash", "secret_key", "azure_key"}
+SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token"}
 
 _lock = threading.Lock()
 _cache = None
@@ -116,4 +126,5 @@ def public():
     cfg = load()
     out = {k: v for k, v in cfg.items() if k not in SECRET_KEYS}
     out["azure_key_set"] = bool(cfg.get("azure_key"))
+    out["tg_token_set"] = bool(cfg.get("tg_token"))
     return out

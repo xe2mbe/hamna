@@ -16,13 +16,14 @@ siguiente tramo arranca retroceso_secs antes del corte.
 """
 import datetime as dt
 import logging
+import shutil
 import threading
 import time
 import uuid
 from collections import deque
 from pathlib import Path
 
-from . import audio, backends, db, links, paths, settings, tts, tz
+from . import audio, backends, db, links, notify, paths, settings, tts, tz
 
 log = logging.getLogger("hamna.engine")
 
@@ -294,6 +295,7 @@ class Engine:
                   secciones=[{"id": s["id"], "nombre": s["nombre"], "tipo": s["tipo"],
                               "duracion": float(s["duracion"] or 0)} for s in secs])
         self.note("Iniciando «{}» ({}) por {}".format(ev['nombre'], origen, be.name))
+        notify.send("inicio", "▶ Inicia <b>{}</b> ({})".format(notify.esc(ev["nombre"]), notify.esc(origen)))
         for t in self._post_timers.pop(ev["id"], []):
             t.cancel()      # desconexiones pendientes de una corrida anterior
         try:
@@ -339,6 +341,13 @@ class Engine:
             raise
         finally:
             db.historial_fin(hid, result)
+            if result.startswith("error") or result == "incompleto":
+                notify.send("error", "❌ <b>{}</b> terminó con error\n{}".format(
+                    notify.esc(ev["nombre"]), notify.esc(result)))
+            else:
+                notify.send("fin", "{} <b>{}</b> {}".format(
+                    "⏹" if result == "detenido" else "✅", notify.esc(ev["nombre"]),
+                    "fue detenido" if result == "detenido" else "terminó"))
             try:
                 self._links_after(ev, cfg)
             except Exception as e:
@@ -524,6 +533,11 @@ class Engine:
             h, m = occ.hour, occ.minute
             mins_left = (h * 60 + m) - (now.hour * 60 + now.minute)
             self._tick_links(row, now, today, h, m)
+            if 0 < mins_left <= 30:
+                key = (row["id"], today, "previa")
+                if key not in self._prewarmed:
+                    self._prewarmed.add(key)
+                    threading.Thread(target=self._preflight, args=(row, occ), daemon=True).start()
             if 0 < mins_left <= 20:
                 key = (row["id"], today)
                 if key not in self._prewarmed:
@@ -542,6 +556,8 @@ class Engine:
                 self.start_event(row["evento_id"], origen="programado")
             except Exception as e:
                 self.note("Programador: no se pudo iniciar «{}»: {}".format(row['evento_nombre'], e), "error")
+                notify.send("error", "❌ No se pudo iniciar <b>{}</b> ({})\n{}".format(
+                    notify.esc(row["evento_nombre"]), hhmm, notify.esc(e)))
         try:
             from . import sync
             sync.tick(now)
@@ -572,6 +588,44 @@ class Engine:
             self._pre_done[row["evento_id"]] = (time.monotonic(), done)
             threading.Thread(target=self._link, args=(a, settings.load(), "previa"),
                              daemon=True).start()
+
+    def _preflight(self, row, when):
+        """Revisión antes de un evento programado: si algo falla, avisa por Telegram."""
+        problemas = []
+        try:
+            cfg = settings.load()
+            secs = db.get_secciones_by_evento(row["evento_id"])
+            if not secs:
+                problemas.append("El evento no tiene secciones")
+            sin_audio = [s["nombre"] for s in secs if not self._file_of(s) and not (s.get("texto_tts") or "").strip()]
+            if sin_audio:
+                problemas.append("Secciones sin audio: " + ", ".join(sin_audio))
+            regen = [s for s in secs if s.get("regenerar_antes") and (s.get("texto_tts") or "").strip()]
+            if regen and cfg.get("tts_engine") == "azure" and not cfg.get("azure_key"):
+                problemas.append("Hay secciones de voz para regenerar y falta la clave de Azure")
+            try:
+                good, msg = backends.make(cfg).test()
+                if not good:
+                    problemas.append("El nodo no responde: " + str(msg))
+            except Exception as e:
+                problemas.append("No pude revisar el nodo: {}".format(e))
+            libre = shutil.disk_usage(str(paths.data_dir())).free
+            if libre < 200 * 2**20:
+                problemas.append("Queda poco disco: {} MB".format(libre // 2**20))
+            try:
+                from . import sync
+                c = sync.get_config(row["evento_id"])
+                if c and c["ultimo"] and not c["ok"]:
+                    problemas.append("La última sincronización falló: " + (c["resultado"] or ""))
+            except Exception:
+                pass
+        except Exception as e:
+            problemas.append("La revisión falló: {}".format(e))
+        if problemas:
+            self.note("Revisión previa de «{}»: {}".format(row["evento_nombre"], "; ".join(problemas)), "warn")
+            notify.send("previa", "⚠ Revisión previa: <b>{}</b> sale a las {}\n• {}".format(
+                notify.esc(row["evento_nombre"]), when.strftime("%H:%M"),
+                "\n• ".join(notify.esc(p) for p in problemas)), dedupe="previa:{}:{}".format(row["id"], when))
 
     def _prewarm(self, row):
         try:

@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, backends, cron, db, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .web import App, HTTPError, jsonr, send_file
 
@@ -775,6 +775,20 @@ def sync_local(req, eid):
     return ok(**_sync_out(eid))
 
 
+# ── Avisos por Telegram ──────────────────────────────────────────────────────
+@app.route("/api/avisos/chats", ("POST",), rol="admin")
+def avisos_chats(req):
+    return ok(**notify.find_chats(req.json().get("token")))
+
+
+@app.route("/api/avisos/probar", ("POST",), rol="admin")
+def avisos_probar(req):
+    b = req.json()
+    notify.send_now(notify.header() + "\n✅ Prueba de avisos de HAMNA Web (enviada por {}).".format(
+        notify.esc(req.user["usuario"])), b.get("token"), b.get("chat"))
+    return ok()
+
+
 @app.route("/api/zonas")
 def zonas(req):
     return jsonr({"nodo": tz.node_zone(),
@@ -847,10 +861,11 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int}
-BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals"}
+BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
+             "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "station_name", "tts_engine", "azure_region",
-            "azure_voice", "azure_style", "espeak_voice"}
+            "azure_voice", "azure_style", "espeak_voice", "tg_chat"}
 
 
 @app.route("/api/ajustes")
@@ -871,7 +886,7 @@ def ajustes_save(req):
             upd[k] = v if isinstance(v, bool) else truthy(v)
         elif k in STR_KEYS:
             upd[k] = str(v).strip()
-        elif k == "azure_key" and str(v).strip():
+        elif k in ("azure_key", "tg_token") and str(v).strip():
             upd[k] = str(v).strip()
     if upd.get("node") and not re.match(r"^[A-Za-z0-9]{1,10}$", upd["node"]):
         raise ValueError("Número de nodo inválido")

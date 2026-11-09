@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HAMNA Web</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ef4444'/%3E%3Cpath d='M8 8a11 11 0 0 0 0 16M24 8a11 11 0 0 1 0 16' stroke='%233b82f6' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="static/app.css?v=1.8.1">
+<link rel="stylesheet" href="static/app.css?v=1.9.0">
 </head>
 <body>
 
@@ -154,6 +154,7 @@
           <button data-set="pausas">Tiempos y pausas</button>
           <button data-set="audio">Nivel de audio</button>
           <button data-set="usuarios">Usuarios</button>
+          <button data-set="avisos">Avisos</button>
           <button data-set="seguridad">Mi cuenta</button>
           <button data-set="sistema">Sistema</button>
         </aside>
@@ -276,6 +277,32 @@
             <div class="row gap"><button type="button" class="btn" id="btnCompactar">Convertir los ya subidos y borrar originales</button></div>
           </fieldset>
 
+          <fieldset data-set="avisos" class="hidden">
+            <legend>Avisos por Telegram</legend>
+            <p class="muted" style="margin-top:0">Te avisa en Telegram cuando algo falla, para que no te enteres hasta que alguien pregunte por qué no salió el boletín.</p>
+            <label class="check"><input type="checkbox" name="tg_enabled"> Enviar avisos por Telegram</label>
+            <details class="tl" style="margin:4px 0 14px"><summary>Cómo crear el bot (2 minutos)</summary>
+              <ol style="margin:8px 0 0;padding-left:20px;font-size:.88rem;line-height:1.6">
+                <li>En Telegram, abre <b>@BotFather</b> y envíale <code>/newbot</code>. Ponle un nombre (p. ej. «HAMNA Hub RCG»).</li>
+                <li>BotFather te da un <b>token</b> (algo como <code>123456:ABC-…</code>): pégalo abajo.</li>
+                <li>Escríbele cualquier cosa a tu bot (o agrégalo a un grupo y escribe ahí) y presiona <b>Buscar mi chat</b>.</li>
+                <li>Guarda los ajustes y presiona <b>Enviar prueba</b>.</li>
+              </ol></details>
+            <label>Token del bot<input name="tg_token" type="password" autocomplete="off" translate="no"></label>
+            <label>Chat que recibe los avisos
+              <div class="row gap"><input name="tg_chat" placeholder="ID del chat o del grupo" translate="no"><button type="button" class="btn sm" id="btnTgChats">Buscar mi chat</button></div>
+              <small id="tgChatsMsg"></small>
+            </label>
+            <div id="tgChats" class="slist hidden" style="margin-bottom:14px"></div>
+            <h3>Qué avisar</h3>
+            <label class="check"><input type="checkbox" name="tg_on_error"> ❌ Un evento no pudo iniciar o terminó con error</label>
+            <label class="check"><input type="checkbox" name="tg_on_preflight"> ⚠ Revisión 30 min antes de cada evento programado encontró un problema (secciones sin audio, nodo que no responde, falta la clave de Azure, poco disco, sincronización fallida)</label>
+            <label class="check"><input type="checkbox" name="tg_on_sync"> ❌ Falló una sincronización automática desde otro nodo</label>
+            <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Cada transmisión que empieza</label>
+            <label class="check"><input type="checkbox" name="tg_on_end"> ✅ Cada transmisión que termina</label>
+            <div class="row gap wrap"><button type="button" class="btn" id="btnTgTest">Enviar prueba</button><span id="tgTestMsg" class="muted"></span></div>
+          </fieldset>
+
           <fieldset data-set="seguridad" class="hidden">
             <legend>Mi cuenta</legend>
             <div class="me-card"><div class="avatar big" id="meAvatar">?</div><div><b id="meName"></b><small class="muted" id="meRole"></small></div></div>
@@ -355,7 +382,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.8.1"></script>
-<script src="static/app.js?v=1.8.1"></script>
+<script src="static/i18n.js?v=1.9.0"></script>
+<script src="static/app.js?v=1.9.0"></script>
 </body>
 </html>

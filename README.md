@@ -25,7 +25,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Qué hace
 
@@ -206,6 +206,17 @@ Al sincronizar:
 
 El nodo que recibe necesita llegar al puerto 443 (o 80) del nodo que comparte.
 
+### Avisos por Telegram
+
+En **Ajustes → Avisos** (administradores) HAMNA puede mandarte un mensaje de Telegram cuando algo falla:
+
+- ❌ un evento no pudo iniciar o terminó con error;
+- ⚠ la **revisión 30 minutos antes** de cada evento programado encontró un problema: secciones sin audio, el nodo no responde, falta la clave de Azure para las voces que se regeneran, poco disco, o la última sincronización falló;
+- ❌ falló una sincronización automática desde otro nodo;
+- opcional: cada transmisión que empieza y termina.
+
+Para configurarlo: crea un bot con **@BotFather** (`/newbot`), pega su token, escríbele algo al bot (o agrégalo a un grupo) y usa **Buscar mi chat**; guarda y prueba con **Enviar prueba**. Cada mensaje dice de qué estación y nodo viene; el mismo aviso no se repite en 15 minutos, y los envíos van en segundo plano (nunca detienen una transmisión).
+
 ### Usuarios y seguridad
 
 | Rol | Puede |
@@ -300,3 +311,4 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `share.py` / `sync.py` | Compartir y sincronizar eventos entre nodos |
 | `sysmon.py` | Monitor del equipo |
 | `updates.py` | Aviso de actualizaciones |
+| `notify.py` | Avisos por Telegram |

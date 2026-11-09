@@ -940,9 +940,11 @@ async function loadAjustes() {
   for (const el of f.elements) {
     if (!el.name || !(el.name in S.cfg)) continue;
     if (el.type === "checkbox") el.checked = !!S.cfg[el.name];
-    else if (el.name !== "azure_key") el.value = S.cfg[el.name] ?? "";
+    else if (el.name !== "azure_key" && el.name !== "tg_token") el.value = S.cfg[el.name] ?? "";
   }
   f.azure_key.placeholder = S.cfg.azure_key_set ? "•••••• (guardada; escribe para cambiarla)" : "Pega aquí tu clave";
+  f.tg_token.placeholder = S.cfg.tg_token_set ? "•••••• (guardado; escribe para cambiarlo)" : "123456789:ABC…";
+  f.tg_token.value = "";
   f.azure_key.value = "";
   $("#detectHint").textContent = `Detectado en este equipo: ${info.detectado.toUpperCase()}${info.nodo_detectado ? " · nodo " + info.nodo_detectado : ""}`;
   const names = { azure: "Azure", piper: "Piper", espeak: "eSpeak" };
@@ -968,7 +970,7 @@ $("#setForm").onsubmit = async (e) => {
   for (const el of f.elements) {
     if (!el.name || el.closest("#pauseSounds")) continue;
     if (el.type === "checkbox") data[el.name] = el.checked;
-    else if (el.name === "azure_key") { if (el.value.trim()) data.azure_key = el.value.trim(); }
+    else if (el.name === "azure_key" || el.name === "tg_token") { if (el.value.trim()) data[el.name] = el.value.trim(); }
     else data[el.name] = el.value;
   }
   const r = await run(() => api("api/ajustes", { method: "PUT", json: data }), "Ajustes guardados");
@@ -1885,6 +1887,33 @@ async function renderShare(ev) {
     try { await run(() => api("api/compartir/" + b.dataset.revoke, { method: "DELETE" }), "Código revocado"); renderShare(ev); } catch {}
   };
 }
+
+/* ── Avisos por Telegram ─────────────────────────────────────────────────── */
+$("#btnTgChats").onclick = async () => {
+  const f = $("#setForm"), b = $("#btnTgChats"); busy(b, true, "Buscando…");
+  try {
+    const r = await api("api/avisos/chats", { method: "POST", json: { token: f.tg_token.value.trim() } });
+    const box = $("#tgChats");
+    $("#tgChatsMsg").textContent = r.chats.length ? `Bot ${r.bot}: elige el chat` : `Bot ${r.bot}: todavía no hay mensajes. Escríbele algo al bot y vuelve a buscar.`;
+    box.classList.toggle("hidden", !r.chats.length);
+    box.innerHTML = r.chats.map((c) => `<div class="srow"><div class="sinfo"><b>${esc(c.nombre)}</b><small>${esc(c.tipo)} · ${esc(c.id)}</small></div>
+      <button type="button" class="btn sm" data-chat="${esc(c.id)}">Usar este</button></div>`).join("");
+  } catch (e) { $("#tgChatsMsg").textContent = "❌ " + e.message; }
+  finally { busy(b, false); }
+};
+$("#tgChats").onclick = (e) => {
+  const b = e.target.closest("[data-chat]"); if (!b) return;
+  $("#setForm").tg_chat.value = b.dataset.chat; $("#tgChats").classList.add("hidden");
+  $("#tgChatsMsg").textContent = "Listo. Guarda los ajustes.";
+};
+$("#btnTgTest").onclick = async () => {
+  const f = $("#setForm"), b = $("#btnTgTest"); busy(b, true, "Enviando…");
+  try {
+    await api("api/avisos/probar", { method: "POST", json: { token: f.tg_token.value.trim(), chat: f.tg_chat.value.trim() } });
+    $("#tgTestMsg").textContent = "✅ Enviado: revisa Telegram";
+  } catch (e) { $("#tgTestMsg").textContent = "❌ " + e.message; }
+  finally { busy(b, false); }
+};
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */
 (async () => {

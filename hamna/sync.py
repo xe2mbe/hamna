@@ -193,6 +193,11 @@ def run(eid, origen="manual"):
         db.execute("UPDATE sincronizaciones SET ultimo=?, resultado=?, ok=0 WHERE evento_id=?",
                    (time.time(), msg[:300], eid))
         log.warning("Sincronización del evento #%s (%s) falló: %s", eid, origen, msg)
+        if not str(origen).startswith("manual"):
+            from . import notify
+            ev = db.get_evento(eid) or {}
+            notify.send("sync", "❌ Falló la sincronización de <b>{}</b>\n{}".format(
+                notify.esc(ev.get("nombre", "#{}".format(eid))), notify.esc(msg)), dedupe="sync:{}".format(eid))
         raise
     finally:
         with _run_lock:
