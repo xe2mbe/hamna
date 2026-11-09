@@ -405,6 +405,17 @@ legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; padding: 0; 
 .ver { font-size: .68rem; font-weight: 600; color: var(--text3); background: var(--surface2);
   border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; margin-left: 2px; letter-spacing: .02em; }
 .ver:empty { display: none; }
+.ver.has-update { color: #fff; background: var(--ok); border-color: transparent; cursor: pointer; }
+.upd-box { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; background: var(--surface2); }
+.upd-box.new { border-color: color-mix(in srgb, var(--ok) 50%, var(--border)); }
+.upd-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upd-head b { font-size: 1.02rem; }
+.upd-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: .87rem; }
+.upd-list li { display: grid; grid-template-columns: 86px 1fr; gap: 8px; }
+.upd-list .d { color: var(--text3); font-variant-numeric: tabular-nums; }
+.upd-cmd { margin-top: 12px; font-size: .85rem; }
+.upd-cmd pre { margin: 6px 0 0; padding: 10px 12px; background: var(--input); border: 1px solid var(--border); border-radius: 10px;
+  white-space: pre-wrap; word-break: break-all; font: .8rem/1.5 ui-monospace, Consolas, monospace; }
 .login-ver { text-align: center; color: var(--text3); font-size: .75rem; margin: 10px 0 0 !important; }
 .login-ver:empty { display: none; }
 /* Monitor del equipo (estilo barra de MobaXterm) */

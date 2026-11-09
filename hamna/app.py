@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts, tz
+from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts, tz, updates
 from .engine import engine
 from .web import App, HTTPError, jsonr, send_file
 
@@ -641,6 +641,13 @@ def _prog_fields(b):
     if not tz.valid(zona):
         raise ValueError("Zona horaria desconocida: " + zona)
     return eid, fecha, hora, rec, b.get("activo", True) not in (False, 0, "0", "false"), zona
+
+
+@app.route("/api/actualizaciones", rol="admin")
+def actualizaciones(req):
+    d = updates.check(force=req.query.get("forzar") == "1")
+    d["sabor"] = backends.detect_flavor()
+    return jsonr(d)
 
 
 @app.route("/api/zonas")

@@ -119,6 +119,7 @@ async function start() {
   }
   applyRole();
   updateNodeLabel();
+  if (isAdmin()) api("api/actualizaciones").then(markUpdate).catch(() => {});
   S.polling = true;
   await poll();
   if (!S.clockTimer) S.clockTimer = setInterval(tickClock, 1000);
@@ -1024,8 +1025,51 @@ $("#btnPw").onclick = async () => {
     $("#pwOld").value = $("#pwNew").value = ""; loadMyAccount();
   } catch {}
 };
+/* ── Actualizaciones (GitHub) ─────────────────────────────────────────────── */
+function updCmd(d) {
+  const tgz = `${d.url}/archive/refs/heads/main.tar.gz`;
+  if (d.sabor === "hamvoip")
+    return `cd /tmp && rm -rf hamna-main && curl -sL ${tgz} | tar xz && bash hamna-main/install.sh --sin-paquetes`;
+  return `cd /tmp && rm -rf hamna-main && curl -sL ${tgz} | tar xz && sudo bash hamna-main/install.sh --sin-paquetes`;
+}
+async function loadUpdates(force) {
+  const box = $("#updBox");
+  if (!box) return;
+  if (!isAdmin()) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  if (force) box.innerHTML = '<p class="muted">Buscando actualizaciones…</p>';
+  let d;
+  try { d = await api("api/actualizaciones" + (force ? "?forzar=1" : "")); }
+  catch (e) {
+    box.className = "upd-box";
+    box.innerHTML = `<div class="upd-head"><span class="muted">${esc(e.message)}</span>
+      <button type="button" class="btn sm" id="btnUpd">↻ Buscar de nuevo</button></div>`;
+    $("#btnUpd").onclick = () => loadUpdates(true); return;
+  }
+  markUpdate(d);
+  box.className = "upd-box" + (d.hay_actualizacion ? " new" : "");
+  box.innerHTML = `<div class="upd-head">
+      <div>${d.hay_actualizacion ? `<b>Hay una versión nueva: v${esc(d.ultima)}</b>` : `<b>HAMNA Web está al día</b>`}
+        <div class="muted" style="font-size:.84rem">Instalada: v${esc(d.instalada)} · En GitHub: v${esc(d.ultima || "?")} · Consultado: ${esc(d.consultado)}</div></div>
+      <div class="row gap"><a class="btn sm ghost" href="${esc(d.url)}" target="_blank" rel="noopener">GitHub ↗</a>
+        <button type="button" class="btn sm" id="btnUpd">↻ Buscar de nuevo</button></div></div>
+    ${d.cambios.length ? `<ul class="upd-list">${d.cambios.map((c) =>
+      `<li><span class="d">${esc(c.fecha)}</span><span>${esc(c.titulo)}</span></li>`).join("")}</ul>` : ""}
+    ${d.hay_actualizacion ? `<div class="upd-cmd">Para instalarla, en la terminal del nodo:
+      <pre translate="no">${esc(updCmd(d))}</pre>
+      <span class="muted">Conserva los datos, usuarios y ajustes. Antes de correrlo, revisa que nada esté al aire.</span></div>` : ""}`;
+  $("#btnUpd").onclick = () => loadUpdates(true);
+}
+function markUpdate(d) {
+  const v = $("#appVer");
+  v.classList.toggle("has-update", !!(d && d.hay_actualizacion));
+  v.title = d && d.hay_actualizacion ? `Hay una versión nueva: v${d.ultima}` : "";
+}
+$("#appVer").onclick = () => { if ($("#appVer").classList.contains("has-update")) { S.setSec = "sistema"; showTab("ajustes"); } };
+
 async function loadSistema() {
   S.info = null;
+  loadUpdates(false);
   const i = await getInfo();
   const be = i.backend || {};
   const rows = [["Versión", "HAMNA Web " + i.version], ["Salida al aire", (be.backend || "").toUpperCase() + (be.mode ? " · " + be.mode : "")],
