@@ -308,6 +308,8 @@
     M(/^en (\d+.*)$/, (m, a) => "in " + a),
     M(/^(\d+) d (\d+) h$/, (m, a, b) => `${a} d ${b} h`),
     M(/^Total (.+) \/ (.+)$/, (m, a, b) => `Total ${a} / ${b}`),
+    M(/^Sección: faltan (.+) \/ (.+)$/, (m, a, b) => `Section: ${a} left / ${b}`),
+    M(/^Evento: faltan (.+) \/ (.+)$/, (m, a, b) => `Event: ${a} left / ${b}`),
     M(/^Asterisk rechazó «(.+)»: (.*)$/, (m, a, b) => `Asterisk rejected «${a}»: ${b}`),
     M(/^Asterisk no respondió para el nodo (\w+): (.*)$/, (m, a, b) => `Asterisk did not answer for node ${a}: ${b}`),
     M(/^El nodo (\w+) no está en rpt\.conf$/, (m, a) => `Node ${a} is not in rpt.conf`),

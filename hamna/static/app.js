@@ -330,8 +330,10 @@ async function poll() {
   const sp = sec && sec.duracion ? (s.sec_pos / sec.duracion) * 100 : 0;
   $("#barSec").style.width = (live ? Math.min(100, sp) : 0) + "%";
   $("#barTotal").style.width = (live && s.total ? Math.min(100, (s.elapsed / s.total) * 100) : 0) + "%";
-  $("#airSecTime").textContent = live && sec ? `${fmt(s.sec_pos)} / ${fmt(sec.duracion)}` : "";
-  $("#airTotalTime").textContent = live ? `Total ${fmt(s.elapsed)} / ${fmt(s.total)}` : "";
+  // Tiempo restante / duración (sección y evento completo)
+  const left = (a, b) => fmt(Math.max(0, (b || 0) - (a || 0)));
+  $("#airSecTime").textContent = live && sec ? `Sección: faltan ${left(s.sec_pos, sec.duracion)} / ${fmt(sec.duracion)}` : "";
+  $("#airTotalTime").textContent = live ? `Evento: faltan ${left(s.elapsed, s.total)} / ${fmt(s.total)}` : "";
   $("#ctlPause").classList.toggle("hidden", s.state === "manual_pause");
   $("#ctlResume").classList.toggle("hidden", s.state !== "manual_pause");
   $("#ctlPause").disabled = !(live && s.state === "tx");
