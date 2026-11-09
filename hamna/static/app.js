@@ -449,6 +449,30 @@ $("#btnNewProg").onclick = async () => {
   if (!S.eventos.length) return toast("Primero crea un evento en la pestaña Eventos", true);
   progForm(null);
 };
+/* "2026-11-08", "20:00", "America/Chicago" → "02:00" (hora UTC); +1/-1 si cambia de día */
+function zonedToUtc(fecha, hora, zone) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha || ""), h = /^(\d{2}):(\d{2})/.exec(hora || "");
+  if (!m || !h) return "";
+  const guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +h[1], +h[2]);
+  let utc = guess;
+  try {
+    if (zone) {
+      const fmt = new Intl.DateTimeFormat("en-US", { timeZone: zone, hourCycle: "h23",
+        year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const off = (t) => {   // minutos que la zona va adelantada a UTC en el instante t
+        const p = Object.fromEntries(fmt.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+        return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - t) / 60000;
+      };
+      utc = guess - off(guess) * 60000;
+      utc = guess - off(utc) * 60000;         // segunda vuelta por si cruza el cambio de horario
+    }
+  } catch { return ""; }
+  const d = new Date(utc), dd = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) -
+    Date.UTC(+m[1], +m[2] - 1, +m[3])) / 86400000);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` +
+    (dd ? (window.HAMNA_LANG === "es" ? (dd > 0 ? " del día siguiente" : " del día anterior")
+      : (dd > 0 ? " next day" : " previous day")) : "");
+}
 function zoneShort(p) {
   const n = p.zona_nombre || p.zona;
   return n.split(" · ")[0].split(" (")[0];
@@ -465,7 +489,7 @@ async function progForm(p) {
         `<option value="${e.id}" ${e.id === p.evento_id ? "selected" : ""}>${esc(e.nombre)}</option>`).join("")}</select></label>
       <div class="grid2">
         <label>Fecha (o primera fecha)<input type="date" name="fecha" value="${esc(p.fecha)}" required></label>
-        <label>Hora<input type="time" name="hora" value="${esc(p.hora)}" required></label>
+        <label>Hora <span class="utc-hint" id="utcHint" translate="no"></span><input type="time" name="hora" value="${esc(p.hora)}" required></label>
       </div>
       <label>Zona horaria del programa<select name="zona">${zs.map((z) =>
         `<option value="${esc(z.id)}" ${z.id === (p.zona || "") ? "selected" : ""}>${esc(z.nombre)}</option>`).join("")}</select>
@@ -480,7 +504,12 @@ async function progForm(p) {
   const f = $("#pf");
   const hint = () => { const d = new Date(f.fecha.value + "T12:00");
     $("#recHint").textContent = f.recurrencia.value === "semanal" && !isNaN(d) ? "Cada " + DIAS[d.getDay()] + " a las " + f.hora.value : ""; };
-  f.oninput = hint; hint();
+  // Hora en UTC entre paréntesis (respeta el horario de verano de esa fecha y zona)
+  const utc = () => {
+    const z = f.zona.value || S.zonas.nodo || "", u = zonedToUtc(f.fecha.value, f.hora.value, z);
+    $("#utcHint").textContent = u ? "(" + u.replace(/^(\d\d:\d\d)/, "$1 UTC") + ")" : "";
+  };
+  f.oninput = () => { hint(); utc(); }; f.onchange = utc; hint(); utc();
   f.onsubmit = async (e) => {
     e.preventDefault();
     const data = { evento_id: +f.evento_id.value, fecha: f.fecha.value, hora: f.hora.value,
