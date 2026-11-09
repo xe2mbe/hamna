@@ -461,6 +461,22 @@ body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
 .top-logo { height: 34px; max-width: 110px; object-fit: contain; }
 .top-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; }
 .top-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-mon { display: flex; gap: 12px; font-size: .8rem; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.top-mon b { color: var(--text); font-weight: 600; }
+.top-mon b.warn { color: var(--warn); } .top-mon b.bad { color: var(--danger); }
+.top-mon:has(#tmCpu:empty) { display: none; }
+/* Barra lateral: se desplaza si no cabe y se compacta en pantallas bajas */
+.side { overflow-y: auto; scrollbar-width: thin; }
+@media (max-height: 780px) and (min-width: 961px) {
+  .side { padding: 12px 12px; }
+  .side-brand { padding-bottom: 10px; margin-bottom: 8px; gap: 8px; }
+  .brand-logo { max-height: 44px; }
+  .tabs button { padding: 7px 12px; }
+  .side-mon { padding: 8px 8px 6px; gap: 4px; }
+  .side-user { padding: 8px; }
+  .side-foot { padding-top: 8px; }
+  .clock { font-size: 1.05rem; }
+}
 .top-clock { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.05rem; }
 .scrim { display: none; position: fixed; inset: 0; z-index: 29; background: rgba(5, 8, 14, .55);
   -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
@@ -505,6 +521,7 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   .lnk .tags { grid-column: 2 / -1; grid-row: 2; justify-content: flex-start; }
 }
 @media (max-width: 520px) {
+  .top-mon span:first-child { display: none; }
   .onair { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 10px 12px; }
   .onair-state { grid-column: 1; grid-row: 1; }
   .onair-ctl { grid-column: 2; grid-row: 1; gap: 4px; }

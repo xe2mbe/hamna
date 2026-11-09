@@ -151,6 +151,11 @@ function renderSys(d, ver) {
   setBar("#mbMem", mp); $("#mvMem").textContent = d.mem ? `${fmtB(d.mem.usada)} / ${fmtB(d.mem.total)}` : "—";
   const dp = d.disco && d.disco.total ? (d.disco.usada / d.disco.total) * 100 : null;
   setBar("#mbDisk", dp); $("#mvDisk").textContent = d.disco ? `${fmtB(d.disco.usada)} / ${fmtB(d.disco.total)}` : "—";
+  $("#tmCpu").textContent = d.cpu == null ? "—" : Math.round(d.cpu) + " %";
+  $("#tmCpu").className = d.cpu >= 90 ? "bad" : d.cpu >= 75 ? "warn" : "";
+  $("#tmTemp").textContent = d.temp == null ? "—" : Math.round(d.temp) + " °C";
+  $("#tmTemp").className = d.temp >= 80 ? "bad" : d.temp >= 70 ? "warn" : "";
+  $(".tm-temp").classList.toggle("hidden", d.temp == null);
   const t = $("#mvTemp");
   t.textContent = d.temp == null ? "—" : d.temp.toFixed(1) + " °C";
   t.className = d.temp >= 80 ? "bad" : d.temp >= 70 ? "warn" : "";
