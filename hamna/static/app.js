@@ -345,6 +345,10 @@ function renderProg() {
     $("#nextCard").classList.add("hidden");
     return;
   }
+  // Primero lo que está al aire; luego por la próxima hora (lo que sigue arriba);
+  // al final lo desactivado o sin fechas.
+  const rank = (p) => (live && p.evento_id === live ? -1 : p.activo && p.faltan_s != null ? p.faltan_s : Infinity);
+  S.prog = S.prog.slice().sort((a, b) => rank(a) - rank(b));
   el.innerHTML = S.prog.map((p) => {
     const isToday = p.proxima && p.proxima.startsWith(today);
     return `<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
@@ -361,7 +365,7 @@ function renderProg() {
         <button class="btn sm ghost" data-act="del" data-id="${p.id}">Borrar</button>
       </div></div>`;
   }).join("");
-  const nxt = S.prog.find((p) => p.activo && p.faltan_s != null);
+  const nxt = S.prog.find((p) => p.activo && p.faltan_s != null && p.evento_id !== live);
   const nc = $("#nextCard");
   if (nxt) {
     nc.classList.remove("hidden");
