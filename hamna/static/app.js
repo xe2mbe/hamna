@@ -124,7 +124,7 @@ async function start() {
 const DEFAULT_ICON = $("#favicon").href;
 function applyLogo(url) {
   S.logo = url || "";
-  for (const id of ["#brandLogo", "#loginLogo"]) {
+  for (const id of ["#brandLogo", "#loginLogo", "#topLogo"]) {
     const img = $(id);
     if (url) { if (img.getAttribute("src") !== url) img.src = url; img.classList.remove("hidden"); }
     else { img.removeAttribute("src"); img.classList.add("hidden"); }
@@ -172,7 +172,33 @@ $("#btnLogoDel").onclick = async () => {
 };
 
 /* ── Pestañas ────────────────────────────────────────────────────────────── */
-$$("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+$$("#tabs button").forEach((b) => (b.onclick = () => { showTab(b.dataset.tab); closeDrawer(); }));
+
+/* ── Menú de hamburguesa ──────────────────────────────────────────────────────
+   Computadora: la barra lateral se esconde y se recuerda. Celular: cajón. */
+const isMobile = () => matchMedia("(max-width: 960px)").matches;
+function syncMenuBtn() {
+  const open = isMobile() ? document.body.classList.contains("nav-open") : !document.body.classList.contains("nav-collapsed");
+  $("#btnMenu").setAttribute("aria-expanded", String(open));
+}
+function closeDrawer() { document.body.classList.remove("nav-open"); syncMenuBtn(); }
+$("#btnMenu").onclick = () => {
+  if (isMobile()) document.body.classList.toggle("nav-open");
+  else {
+    document.body.classList.remove("nav-collapsed");
+    try { localStorage.setItem("hamna.nav", "open"); } catch {}
+  }
+  syncMenuBtn();
+};
+$("#btnHideMenu").onclick = () => {
+  if (isMobile()) return closeDrawer();
+  document.body.classList.add("nav-collapsed");
+  try { localStorage.setItem("hamna.nav", "collapsed"); } catch {}
+  syncMenuBtn();
+};
+$("#scrim").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+try { if (localStorage.getItem("hamna.nav") === "collapsed") document.body.classList.add("nav-collapsed"); } catch {}
 const TABS = ["prog", "eventos", "secciones", "conexiones", "cron", "ajustes"];
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
@@ -190,6 +216,7 @@ function showTab(t) {
 
 function updateNodeLabel() {
   const c = S.cfg || {};
+  $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
   const be = c.backend === "auto" ? "" : (c.backend || "").toUpperCase();
   $("#nodeLabel").innerHTML = (c.station_name ? `<b>${esc(c.station_name)}</b>` : "") +
     esc([c.node ? `Nodo ${c.node}` : "", be].filter(Boolean).join(" · "));
@@ -217,6 +244,7 @@ function tickClock() {
   const loc = new Date(now + S.tzOff), utc = new Date(now);
   $("#clockLocal").textContent = `${pad2(loc.getUTCHours())}:${pad2(loc.getUTCMinutes())}:${pad2(loc.getUTCSeconds())}`;
   $("#clockUtc").textContent = `UTC ${pad2(utc.getUTCHours())}:${pad2(utc.getUTCMinutes())}`;
+  $("#clockTop").textContent = $("#clockLocal").textContent;
   if (!(S.status && S.status.on_air)) tickProg();
 }
 async function poll() {
@@ -238,6 +266,7 @@ async function poll() {
   const live = s.on_air;
   $("#onair").classList.toggle("live", live && s.state === "tx");
   $("#brandDot").classList.toggle("live", live && s.state === "tx");
+  $("#topDot").classList.toggle("live", live && s.state === "tx");
   const pill = $("#airPill");
   const map = { tx: ["AL AIRE", "tx"], gap: ["INTERVALO", "wait"], paused: ["PAUSA", "wait"],
     manual_pause: ["EN PAUSA", "wait"], preparing: ["PREPARANDO", "prep"], idle: ["FUERA DEL AIRE", ""] };

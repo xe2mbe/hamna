@@ -411,26 +411,38 @@ body:not(.rol-admin) #setNav button:not([data-set="seguridad"]),
 body:not(.rol-admin) #view-cron .btn:not(.ro) { display: none !important; }
 body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
 
-/* Tableta y celular: la barra lateral pasa arriba */
+
+/* Menú de hamburguesa: barra superior, barra lateral que se esconde y cajón en celular */
+.side { transition: transform .22s ease; }
+.side-close { position: absolute; top: 14px; right: 10px; width: 34px; height: 34px; color: var(--text3); }
+.side-brand { padding-right: 40px; }
+.topbar { display: none; position: sticky; top: 0; z-index: 25; height: 58px; align-items: center; gap: 12px;
+  padding: 0 16px; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg2) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.top-logo { height: 34px; max-width: 110px; object-fit: contain; }
+.top-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; }
+.top-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-clock { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.05rem; }
+.scrim { display: none; position: fixed; inset: 0; z-index: 29; background: rgba(5, 8, 14, .55);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+/* Computadora: barra lateral escondida */
+body.nav-collapsed .side { transform: translateX(-100%); box-shadow: none; }
+body.nav-collapsed .topbar { display: flex; }
+body.nav-collapsed main { margin-left: 0; }
+body.nav-collapsed .onair { left: 20px; }
+body.nav-collapsed .toast { left: 50%; }
+main, .onair { transition: margin-left .22s ease, left .22s ease; }
 @media (max-width: 960px) {
-  .side { position: sticky; top: 0; inset: auto; width: auto; height: auto; flex-direction: row; flex-wrap: wrap;
-    align-items: center; padding: 10px 14px; gap: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border);
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    background: color-mix(in srgb, var(--bg2) 90%, transparent); }
-  .side-brand { flex-direction: row; align-items: center; padding: 0; border: 0; margin: 0; flex: 1; min-width: 0; gap: 10px; }
-  .brand-logo { max-height: 38px; max-width: 110px; }
-  .side-id { min-width: 0; }
-  .node { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0; }
-  .node b { display: inline; font-size: .84rem; }
-  .node b::after { content: " · "; color: var(--text3); font-weight: 400; }
-  .side-foot { margin: 0; padding: 0; border: 0; gap: 8px; }
-  .side-user { order: 2; margin: 0; padding: 0; border: 0; gap: 6px; flex: none; }
-  .side-user .who { display: none; }
-  .side-user .avatar { width: 32px; height: 32px; font-size: .75rem; }
-  .clock { font-size: 1.05rem; text-align: right; }
-  .tabs { order: 3; flex: 1 1 100%; min-width: 0; flex-direction: row; overflow-x: auto; gap: 4px; scrollbar-width: none; }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tabs button { padding: 8px 12px; white-space: nowrap; gap: 8px; }
+  .topbar { display: flex; }
+  .side { width: min(290px, 86vw); transform: translateX(-100%); box-shadow: none; z-index: 30; }
+  body.nav-open .side { transform: none; box-shadow: var(--shadow-lg); }
+  body.nav-open .scrim { display: block; }
+  body.nav-open { overflow: hidden; }
+}
+
+/* Tableta y celular */
+@media (max-width: 960px) {
   main { margin-left: 0; padding: 20px 16px 200px; min-width: 0; }
   html, body { overflow-x: hidden; }
   .onair { left: 12px; right: 12px; bottom: 12px; }

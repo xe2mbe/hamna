@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HAMNA Web</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ef4444'/%3E%3Cpath d='M8 8a11 11 0 0 0 0 16M24 8a11 11 0 0 1 0 16' stroke='%233b82f6' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="static/app.css?v=1.3.0">
+<link rel="stylesheet" href="static/app.css?v=1.3.1">
 </head>
 <body>
 
@@ -25,7 +25,15 @@
 
 <!-- App -->
 <div id="app" class="hidden">
-  <aside class="side">
+  <header class="topbar" id="topbar">
+    <button class="btn icon ghost" id="btnMenu" title="Mostrar menú" aria-label="Mostrar menú" aria-controls="sideNav" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <img id="topLogo" class="top-logo hidden" alt="">
+    <div class="top-title"><span class="brand-dot" id="topDot"></span><b id="topStation">HAMNA Web</b></div>
+    <div class="top-clock" id="clockTop">--:--:--</div>
+  </header>
+  <div class="scrim" id="scrim"></div>
+  <aside class="side" id="sideNav">
+    <button class="btn icon ghost side-close" id="btnHideMenu" title="Esconder menú" aria-label="Esconder menú"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
     <div class="side-brand">
       <img id="brandLogo" class="brand-logo hidden" alt="">
       <div class="side-id">
@@ -332,6 +340,6 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/app.js?v=1.3.0"></script>
+<script src="static/app.js?v=1.3.1"></script>
 </body>
 </html>
