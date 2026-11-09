@@ -1426,7 +1426,9 @@ function linkAct(a) {
 }
 function progTimeline(p) {
   const dur = durMin(p), cx = p.conexiones || [];
-  const rel = progCrons(p, S.cronEntries || []);
+  // En la tarjeta del evento solo cuentan las tareas de usuarios (root, asterisk,
+  // IRLP); las del sistema (/etc/crontab, /etc/cron.d) se ven solo en la pestaña Cron
+  const rel = progCrons(p, (S.cronEntries || []).filter((e) => !e.key.startsWith("file:")));
   if (!cx.length && !rel.spec.length && !rel.periodic.length) return "";
   // rango para ordenar empates: antes → cron → inicio → fin → después
   const items = [{ off: 0, r: 2, ico: "▶", cls: "ev", html: `Inicia «${esc(p.evento_nombre)}»` },
