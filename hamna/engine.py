@@ -426,6 +426,13 @@ class Engine:
             ok = be.play(wav, info["total"], abort)
         finally:
             with self._lock:
+                # Guardar en qué segundo de la sección íbamos ANTES de borrar el
+                # reloj del tramo: la pausa manual reanuda desde aquí (antes
+                # reanudaba desde el inicio del tramo).
+                if self._seg_clock:
+                    t0, off, start, blen = self._seg_clock
+                    into = time.monotonic() - t0 - off
+                    self.st["sec_pos"] = start + min(max(into, 0.0), blen)
                 self._seg_clock = None
                 self.st["ptt"] = False
         if ok:
