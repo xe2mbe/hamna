@@ -24,16 +24,17 @@ def setup_logging():
     root.addHandler(sh)
 
 
-def set_password(pw):
-    from .web import hash_password
+def set_password(pw, usuario):
+    from . import auth
     if not pw:
-        pw = getpass.getpass("Contraseña nueva para HAMNA Web: ")
+        pw = getpass.getpass("Contraseña nueva para «{}» en HAMNA Web: ".format(usuario))
         if pw != getpass.getpass("Repítela: "):
             sys.exit("No coinciden.")
-    if len(pw) < 6:
-        sys.exit("Debe tener al menos 6 caracteres.")
-    settings.save({"password_hash": hash_password(pw)})
-    print("Contraseña guardada.")
+    try:
+        res = auth.set_password_cli(usuario, pw)
+    except ValueError as e:
+        sys.exit(str(e))
+    print("Usuario «{}»: {}.".format(usuario, res))
 
 
 def utf8_stdio():
@@ -55,14 +56,17 @@ def main():
                     help="cambia la contraseña y sale")
     ap.add_argument("--init", nargs="*", metavar="clave=valor",
                     help="guarda ajustes iniciales que aún no existan y sale (instalador)")
-    ap.add_argument("--has-password", action="store_true", help="sale con 0 si ya hay contraseña")
+    ap.add_argument("--user", default="admin", metavar="USUARIO",
+                    help="usuario para --set-password (por defecto admin; si no existe se crea como administrador)")
+    ap.add_argument("--has-password", action="store_true", help="sale con 0 si ya hay un administrador")
     a = ap.parse_args()
 
     if a.set_password is not None:
-        set_password(a.set_password or None)
+        set_password(a.set_password or None, a.user)
         return
     if a.has_password:
-        sys.exit(0 if settings.get("password_hash") else 1)
+        from . import auth
+        sys.exit(0 if auth.has_admin() else 1)
     if a.init is not None:
         upd = dict(kv.split("=", 1) for kv in a.init if "=" in kv)
         stored = {}

@@ -376,6 +376,41 @@ legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; padding: 0; 
 .chip.ev-rel.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
 .chip.muted-chip { background: transparent; border: 1px dashed var(--border2); color: var(--text3); }
 
+
+/* Usuario, cuentas y sesiones */
+.avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #a855f7));
+  color: #fff; font-weight: 700; font-size: .85rem; letter-spacing: .02em; }
+.avatar.big { width: 52px; height: 52px; font-size: 1.1rem; }
+.side-user { display: flex; align-items: center; gap: 10px; padding: 12px 8px; margin-top: auto;
+  border-top: 1px solid var(--border); }
+.side-user .who { min-width: 0; flex: 1; line-height: 1.25; }
+.side-user .who b { display: block; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-user .who small { color: var(--text3); font-size: .76rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-user + .side-foot { margin-top: 0; }
+.me-card { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; background: var(--surface2); margin-bottom: 6px; }
+.me-card b { display: block; font-size: 1.05rem; }
+.ulist, .slist { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.slist > p, .ulist > p { margin: 0; padding: 14px; }
+.urow, .srow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.urow:last-child, .srow:last-child { border-bottom: 0; }
+.urow:hover, .srow:hover { background: var(--surface2); }
+.urow.off { opacity: .6; }
+.uinfo, .sinfo { flex: 1; min-width: 0; }
+.uinfo small, .sinfo small { display: block; color: var(--text2); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; }
+.sico { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface2); color: var(--text2); flex: none; }
+.chip.rol-admin { background: color-mix(in srgb, #a855f7 18%, transparent); color: #c084fc; }
+.chip.rol-operador { background: var(--accent-soft); color: var(--accent); }
+.chip.rol-lectura { background: var(--surface2); color: var(--text2); }
+
+/* Lo que cada rol no puede usar se oculta (el servidor igual lo rechaza) */
+body.rol-lectura main .btn:not(.ro), body.rol-lectura #sesConnect,
+body.rol-lectura .onair-ctl .btn:not(#ctlLog), body.rol-lectura #tabs [data-tab="cron"] { display: none !important; }
+body.rol-lectura main input[type=checkbox] { pointer-events: none; }
+body:not(.rol-admin) #setNav button:not([data-set="seguridad"]),
+body:not(.rol-admin) #view-cron .btn:not(.ro) { display: none !important; }
+body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
+
 /* Tableta y celular: la barra lateral pasa arriba */
 @media (max-width: 960px) {
   .side { position: sticky; top: 0; inset: auto; width: auto; height: auto; flex-direction: row; flex-wrap: wrap;
@@ -389,6 +424,9 @@ legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; padding: 0; 
   .node b { display: inline; font-size: .84rem; }
   .node b::after { content: " · "; color: var(--text3); font-weight: 400; }
   .side-foot { margin: 0; padding: 0; border: 0; gap: 8px; }
+  .side-user { order: 2; margin: 0; padding: 0; border: 0; gap: 6px; flex: none; }
+  .side-user .who { display: none; }
+  .side-user .avatar { width: 32px; height: 32px; font-size: .75rem; }
   .clock { font-size: 1.05rem; text-align: right; }
   .tabs { order: 3; flex: 1 1 100%; min-width: 0; flex-direction: row; overflow-x: auto; gap: 4px; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }

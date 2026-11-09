@@ -156,31 +156,32 @@ command -v espeak-ng >/dev/null 2>&1 && TTS=espeak
 command -v asl-tts >/dev/null 2>&1 && TTS=piper
 hamna --init "backend=$TIPO" "node=$NODO" "tts_engine=$TTS"
 
-# ── 4. Contraseña ───────────────────────────────────────────────────────────
+# ── 4. Usuario administrador ────────────────────────────────────────────────
 if [ -n "$PASSWORD" ]; then
   hamna --set-password "$PASSWORD" >/dev/null
-  c_ok "Contraseña guardada"
+  c_ok "Usuario admin listo"
 elif hamna --has-password; then
-  c_ok "Se conserva la contraseña actual"
+  c_ok "Se conservan los usuarios actuales"
 elif [ -t 0 ]; then
   while :; do
-    printf "  Contraseña para entrar a la página: "; stty -echo; read -r P1; stty echo; echo
+    printf "  Contraseña del usuario admin de la página: "; stty -echo; read -r P1; stty echo; echo
     printf "  Repítela: "; stty -echo; read -r P2; stty echo; echo
     [ "$P1" = "$P2" ] && [ ${#P1} -ge 6 ] && break
     c_warn "No coinciden o tiene menos de 6 caracteres"
   done
   hamna --set-password "$P1" >/dev/null
-  c_ok "Contraseña guardada"
+  c_ok "Usuario admin listo"
 else
   P1=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10)
   hamna --set-password "$P1" >/dev/null
-  c_warn "Contraseña generada: $P1   (cámbiala en Ajustes > Seguridad)"
+  c_warn "Usuario: admin   Contraseña generada: $P1   (cámbiala en Ajustes > Mi cuenta)"
 fi
 
 if [ "$RUN_USER" = root ]; then RUNPFX=""; else RUNPFX="runuser -u $RUN_USER --"; fi
 cat > /usr/local/bin/hamna-web-passwd <<EOF
 #!/bin/sh
-# Cambia la contraseña de HAMNA Web
+# Cambia la contraseña de un usuario de HAMNA Web (admin si no se indica otro).
+# Uso: hamna-web-passwd [--user USUARIO] [CLAVE]   Si el usuario no existe, se crea como administrador.
 cd $APP_DIR && exec $RUNPFX env HAMNA_DATA=$DATA_DIR PYTHONIOENCODING=utf-8 $PY -m hamna --set-password "\$@"
 EOF
 chmod 755 /usr/local/bin/hamna-web-passwd
@@ -260,7 +261,8 @@ c_ok "HAMNA Web instalado"
 echo
 echo "   Abre en el navegador:  http://${IP:-IP-DEL-NODO}:$PORT"
 echo
-echo "   Cambiar contraseña:    hamna-web-passwd"
+echo "   Entrar con:            usuario admin"
+echo "   Cambiar contraseña:    hamna-web-passwd [--user USUARIO]"
 echo "   Ver bitácora:          journalctl -u $SERVICE -f"
 echo "   Desinstalar:           $APP_DIR/uninstall.sh"
 echo

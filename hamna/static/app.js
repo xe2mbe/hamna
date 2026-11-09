@@ -11,6 +11,7 @@ const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "
 
 const S = { tab: "prog", eventos: [], tipos: [], secciones: [], prog: [], evSel: null,
   status: null, cfg: null, info: null, setSec: "nodo" };
+try { S.setSec = new URLSearchParams(location.search).get("set") || localStorage.getItem("hamna.set") || "nodo"; } catch {}
 
 /* ── API ─────────────────────────────────────────────────────────────────── */
 async function api(path, { method = "GET", json, form } = {}) {
@@ -85,13 +86,21 @@ function showLogin() {
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
   S.polling = false; clearTimeout(S.pollTimer);
   clearInterval(S.clockTimer); S.clockTimer = null;
-  setTimeout(() => $("#loginPw").focus(), 50);
+  let last = ""; try { last = localStorage.getItem("hamna.user") || ""; } catch {}
+  if (last && !$("#loginUser").value) $("#loginUser").value = last;
+  setTimeout(() => ($("#loginUser").value ? $("#loginPw") : $("#loginUser")).focus(), 50);
 }
 $("#loginForm").onsubmit = async (e) => {
   e.preventDefault();
   $("#loginErr").textContent = "";
   const b = $("#loginForm button"); busy(b, true, "Entrando…");
-  try { await api("api/login", { method: "POST", json: { password: $("#loginPw").value } }); $("#loginPw").value = ""; start(); }
+  const usuario = $("#loginUser").value.trim();
+  try {
+    const r = await api("api/login", { method: "POST", json: { usuario, password: $("#loginPw").value } });
+    $("#loginPw").value = ""; S.me = r.usuario;
+    try { localStorage.setItem("hamna.user", usuario); } catch {}
+    start();
+  }
   catch (err) { $("#loginErr").textContent = err.message; }
   finally { busy(b, false); }
 };
@@ -99,6 +108,8 @@ $("#loginForm").onsubmit = async (e) => {
 async function start() {
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   try { S.cfg = await api("api/ajustes"); } catch { return; }
+  try { S.me = (await api("api/me")).usuario; } catch {}
+  applyRole();
   updateNodeLabel();
   S.polling = true;
   await poll();
@@ -166,6 +177,7 @@ const TABS = ["prog", "eventos", "secciones", "conexiones", "cron", "ajustes"];
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
   if (!TABS.includes(t)) t = "prog";
+  if (t === "cron" && S.me && S.me.rol === "lectura") t = "prog";
   if (S.tab === "conexiones" && t !== "conexiones") stopSesiones();
   S.tab = t;
   try { localStorage.setItem("hamna.tab", t); } catch {}
@@ -639,7 +651,7 @@ function renderSecciones() {
       <span class="num">${s.tiene_audio ? fmt(s.duracion) : "⚠"}</span>
       <span class="num">${s.usos}</span>
       <span class="mini">
-        <button class="btn" data-act="play" title="Escuchar aquí" ${s.tiene_audio ? "" : "disabled"}>▶</button>
+        <button class="btn ro" data-act="play" title="Escuchar aquí" ${s.tiene_audio ? "" : "disabled"}>▶</button>
         <button class="btn" data-act="air" title="Transmitir por el nodo" ${s.tiene_audio ? "" : "disabled"}>📡</button>
         <button class="btn" data-act="edit" title="Editar">✎</button>
         <button class="btn" data-act="del" title="Borrar">🗑</button>
@@ -761,11 +773,15 @@ function upload(url, fd, btn, bar) {
 /* ── Ajustes ─────────────────────────────────────────────────────────────── */
 $$("#setNav button").forEach((b) => (b.onclick = () => showSet(b.dataset.set)));
 function showSet(k) {
+  if (!isAdmin()) k = "seguridad";
   S.setSec = k;
+  try { localStorage.setItem("hamna.set", k); } catch {}
   $$("#setNav button").forEach((b) => b.classList.toggle("active", b.dataset.set === k));
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
-  $("#saveBar").classList.toggle("hidden", k === "seguridad" || k === "sistema");
+  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k));
   if (k === "sistema") loadSistema();
+  if (k === "seguridad") loadMyAccount();
+  if (k === "usuarios") loadUsers();
 }
 async function loadAjustes() {
   S.cfg = await api("api/ajustes");
@@ -879,10 +895,11 @@ $("#btnVoices").onclick = async () => {
   } catch (e) { toast(e.message, true); } finally { busy(b, false); }
 };
 $("#btnPw").onclick = async () => {
-  await run(() => api("api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada");
-  $("#pwOld").value = $("#pwNew").value = "";
+  try {
+    await run(() => api("api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada; tus otras sesiones se cerraron");
+    $("#pwOld").value = $("#pwNew").value = ""; loadMyAccount();
+  } catch {}
 };
-$("#btnLogout").onclick = async () => { await api("api/logout", { method: "POST" }).catch(() => {}); showLogin(); };
 async function loadSistema() {
   S.info = null;
   const i = await getInfo();
@@ -1397,6 +1414,132 @@ $("#sesConnect").onsubmit = async (e) => {
     f.destino.value = "";
     setTimeout(loadSesiones, 2500);
   } catch {} finally { busy(b, false); }
+};
+
+/* ── Usuarios, roles y sesiones ─────────────────────────────────────────────── */
+const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura" };
+const isAdmin = () => S.me && S.me.rol === "admin";
+const initials = (u) => ((u.nombre || u.usuario || "?").trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2) || "?").toUpperCase();
+function applyRole() {
+  const u = S.me || {};
+  document.body.classList.remove("rol-admin", "rol-operador", "rol-lectura");
+  if (u.rol) document.body.classList.add("rol-" + u.rol);
+  $("#userAvatar").textContent = initials(u);
+  $("#userName").textContent = u.nombre || u.usuario || "";
+  $("#userRole").textContent = (u.usuario ? u.usuario + " · " : "") + (ROL_TXT[u.rol] || "");
+}
+async function logoutNow() {
+  await api("api/logout", { method: "POST" }).catch(() => {});
+  S.me = null; showLogin();
+}
+$("#btnSideLogout").onclick = logoutNow;
+$("#btnLogout").onclick = logoutNow;
+
+function uaShort(ua) {
+  ua = ua || "";
+  const b = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : /curl|python/i.test(ua) ? "Programa" : "Navegador";
+  const o = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iPhone/iPad" : /Windows/.test(ua) ? "Windows"
+    : /Mac OS X/.test(ua) ? "Mac" : /Linux/.test(ua) ? "Linux" : "";
+  return o ? `${b} en ${o}` : b;
+}
+function ago(ts) {
+  const s = Math.max(0, Math.round((Date.now() + (S.skew || 0)) / 1000 - ts));
+  if (s < 90) return "ahora";
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+  return `hace ${Math.round(s / 86400)} d`;
+}
+function sessionRows(list, mine, showUser) {
+  if (!list.length) return '<p class="muted">No hay sesiones abiertas.</p>';
+  return list.map((s) => `<div class="srow">
+      <div class="sico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+      <div class="sinfo"><b>${esc(uaShort(s.agente))}</b>${s.id === mine ? ' <span class="chip ok">Esta sesión</span>' : ""}
+        <small>${showUser ? `<b>${esc(s.nombre || s.usuario)}</b> (${esc(s.usuario)}) · ` : ""}${esc(s.ip || "IP desconocida")} · activa ${ago(s.ultima)} · entró ${ago(s.creada)}</small></div>
+      ${s.id === mine ? "" : `<button type="button" class="btn sm danger-soft" data-close-ses="${s.id}">Cerrar</button>`}
+    </div>`).join("");
+}
+async function loadMyAccount() {
+  const u = S.me || {};
+  $("#meAvatar").textContent = initials(u);
+  $("#meName").textContent = u.nombre || u.usuario || "";
+  $("#meRole").textContent = `${u.usuario || ""} · ${ROL_TXT[u.rol] || ""}`;
+  try {
+    const r = await api("api/mis-sesiones");
+    $("#mySessions").innerHTML = sessionRows(r.sesiones, r.mi_sesion, false);
+  } catch (e) { $("#mySessions").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+}
+async function loadUsers() {
+  let r;
+  try { r = await api("api/usuarios"); } catch (e) { $("#userList").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  S.users = r.usuarios;
+  $("#userList").innerHTML = r.usuarios.map((u) => `<div class="urow ${u.activo ? "" : "off"}">
+      <div class="avatar">${esc(initials(u))}</div>
+      <div class="uinfo"><b>${esc(u.nombre || u.usuario)}</b>${u.id === r.yo ? ' <span class="chip ok">Tú</span>' : ""}
+        <small>${esc(u.usuario)} · ${u.ultimo_acceso ? "último acceso " + esc(u.ultimo_acceso.slice(0, 16)) : "nunca ha entrado"}${u.sesiones ? ` · ${u.sesiones} sesión${u.sesiones > 1 ? "es" : ""} abierta${u.sesiones > 1 ? "s" : ""}` : ""}</small></div>
+      <span class="chip rol-${u.rol}">${esc(u.rol_nombre)}</span>
+      ${u.activo ? "" : '<span class="chip warn">Desactivado</span>'}
+      <div class="mini"><button type="button" class="btn" data-uedit="${u.id}" title="Editar">✎</button>
+        ${u.id === r.yo ? "" : `<button type="button" class="btn" data-udel="${u.id}" title="Borrar">🗑</button>`}</div>
+    </div>`).join("");
+  $("#allSessions").innerHTML = sessionRows(r.sesiones, r.mi_sesion, true);
+  const lk = r.bloqueos || [];
+  $("#lockBox").classList.toggle("hidden", !lk.length);
+  $("#lockBox").innerHTML = lk.length ? `<div class="tl-warn row gap wrap" style="justify-content:space-between;margin-top:14px">
+      <span>🔒 Bloqueados por intentos fallidos: ${lk.map((l) => esc(l.clave.replace("|", " desde ")) + ` (${Math.ceil(l.segundos / 60)} min)`).join(", ")}</span>
+      <button type="button" class="btn sm" id="btnUnlock">Desbloquear</button></div>` : "";
+}
+function userForm(u) {
+  const isNew = !u;
+  u = u || { usuario: "", nombre: "", rol: "operador", activo: 1 };
+  openModal(isNew ? "Nuevo usuario" : "Editar usuario", `<form id="ufForm" autocomplete="off">
+      <div class="grid2">
+        <label>Usuario<input name="usuario" value="${esc(u.usuario)}" ${isNew ? "required" : "disabled"} pattern="[A-Za-z0-9._\\-]{2,32}" autocapitalize="off" spellcheck="false">
+          <small>Para entrar. Letras, números, punto o guion.</small></label>
+        <label>Nombre<input name="nombre" value="${esc(u.nombre || "")}" placeholder="Pedro · XE2ABC"></label>
+      </div>
+      <label>Rol<select name="rol">${Object.entries(ROL_TXT).map(([k, v]) => `<option value="${k}" ${u.rol === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>${isNew ? "Contraseña" : "Contraseña nueva"}<input name="password" type="password" autocomplete="new-password" minlength="8" ${isNew ? "required" : ""} placeholder="${isNew ? "" : "Déjala vacía para no cambiarla"}">
+        <small>Al menos 8 caracteres.${isNew ? "" : " Si la cambias, se cierran sus sesiones."}</small></label>
+      ${isNew ? "" : `<label class="check"><input type="checkbox" name="activo" ${u.activo ? "checked" : ""}> Activo (si lo desactivas, sale de inmediato y no puede entrar)</label>`}
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn primary">${isNew ? "Crear usuario" : "Guardar"}</button></div>
+    </form>`);
+  $("#ufForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, body = { nombre: f.nombre.value, rol: f.rol.value };
+    if (f.password.value) body.password = f.password.value;
+    try {
+      if (isNew) { body.usuario = f.usuario.value.trim(); await api("api/usuarios", { method: "POST", json: body }); }
+      else { body.activo = f.activo.checked; await api("api/usuarios/" + u.id, { method: "PUT", json: body }); }
+      closeModal(); toast(isNew ? "Usuario creado" : "Usuario guardado"); loadUsers();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+$("#btnUserNew").onclick = () => userForm(null);
+$("#userList").onclick = async (e) => {
+  const ed = e.target.closest("[data-uedit]"), del = e.target.closest("[data-udel]");
+  if (ed) return userForm(S.users.find((u) => u.id === +ed.dataset.uedit));
+  if (del) {
+    const u = S.users.find((x) => x.id === +del.dataset.udel);
+    if (!(await confirmBox(`¿Borrar el usuario «${u.usuario}»? Se cierran sus sesiones. Si solo quieres quitarle el acceso por un tiempo, mejor desactívalo.`, "Borrar"))) return;
+    try { await run(() => api("api/usuarios/" + u.id, { method: "DELETE" }), "Usuario borrado"); loadUsers(); } catch {}
+  }
+};
+$("#lockBox").onclick = async (e) => {
+  if (!e.target.closest("#btnUnlock")) return;
+  try { await run(() => api("api/usuarios/desbloquear", { method: "POST" }), "Desbloqueado"); loadUsers(); } catch {}
+};
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-close-ses]"); if (!b) return;
+  try {
+    await run(() => api("api/mis-sesiones/" + b.dataset.closeSes, { method: "DELETE" }), "Sesión cerrada");
+    if (S.setSec === "usuarios") loadUsers(); else loadMyAccount();
+  } catch {}
+});
+$("#btnCloseOthers").onclick = async () => {
+  if (!(await confirmBox("¿Cerrar todas tus sesiones en otros equipos?", "Cerrar las demás"))) return;
+  try { await run(() => api("api/mis-sesiones/otras", { method: "POST" }), "Listo: solo queda esta sesión"); loadMyAccount(); } catch {}
 };
 
 /* ── Arranque ────────────────────────────────────────────────────────────── */

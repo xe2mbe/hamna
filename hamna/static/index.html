@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HAMNA Web</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ef4444'/%3E%3Cpath d='M8 8a11 11 0 0 0 0 16M24 8a11 11 0 0 1 0 16' stroke='%233b82f6' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="static/app.css?v=1.2.1">
+<link rel="stylesheet" href="static/app.css?v=1.3.0">
 </head>
 <body>
 
@@ -16,7 +16,8 @@
     <p id="loginStation" class="login-station hidden"></p>
     <div class="brand big"><span class="brand-dot"></span>HAMNA <b>Web</b></div>
     <p class="muted">Automatización de redes para tu nodo</p>
-    <label>Contraseña<input type="password" id="loginPw" autocomplete="current-password" required autofocus></label>
+    <label>Usuario<input id="loginUser" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+    <label>Contraseña<input type="password" id="loginPw" autocomplete="current-password" required></label>
     <button class="btn primary wide" type="submit">Entrar</button>
     <p id="loginErr" class="err"></p>
   </form>
@@ -40,6 +41,11 @@
       <button data-tab="cron"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Cron</span></button>
       <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Ajustes</span></button>
     </nav>
+    <div class="side-user" id="sideUser">
+      <div class="avatar" id="userAvatar">?</div>
+      <div class="who"><b id="userName"></b><small id="userRole"></small></div>
+      <button class="btn icon ghost" id="btnSideLogout" title="Cerrar sesión" aria-label="Cerrar sesión"><svg viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button>
+    </div>
     <div class="side-foot">
       <div class="clock"><span id="clockLocal">--:--:--</span><small id="clockUtc">UTC --:--</small></div>
       <button class="btn icon ghost" id="btnTheme" title="Tema claro / oscuro" aria-label="Cambiar tema"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg></button>
@@ -88,7 +94,7 @@
         <div><h1>Conexiones</h1><p class="sub" id="sesSub">Nodos conectados en este momento</p></div>
         <div class="row gap">
           <select id="sesNodo" class="hidden" title="Nodo local"></select>
-          <button class="btn" id="btnSesReload">↻ Actualizar</button>
+          <button class="btn ro" id="btnSesReload">↻ Actualizar</button>
         </div>
       </div>
       <div class="stats" id="sesStats"></div>
@@ -113,7 +119,7 @@
     <section class="view hidden" id="view-cron">
       <div class="view-head">
         <div><h1>Tareas de cron</h1><p class="sub">Lo que el sistema del nodo corre a horas fijas</p></div>
-        <button class="btn" id="btnCronReload">↻ Recargar</button>
+        <button class="btn ro" id="btnCronReload">↻ Recargar</button>
       </div>
       <p class="muted">Las tareas programadas del sistema del nodo (boletines, hora, conexiones). Cada cambio guarda antes un respaldo en <code>/var/backups/hamna-cron/</code>. Cuidado: lo que pongas aquí corre con los permisos de ese usuario.</p>
       <div id="cronList" class="cron-list"><p class="empty">Cargando…</p></div>
@@ -128,7 +134,8 @@
           <button data-set="voz">Voz (TTS)</button>
           <button data-set="pausas">Tiempos y pausas</button>
           <button data-set="audio">Nivel de audio</button>
-          <button data-set="seguridad">Seguridad</button>
+          <button data-set="usuarios">Usuarios</button>
+          <button data-set="seguridad">Mi cuenta</button>
           <button data-set="sistema">Sistema</button>
         </aside>
         <form class="settings-body" id="setForm" autocomplete="off">
@@ -251,10 +258,32 @@
           </fieldset>
 
           <fieldset data-set="seguridad" class="hidden">
-            <legend>Seguridad</legend>
-            <label>Contraseña actual<input type="password" id="pwOld" autocomplete="current-password"></label>
-            <label>Contraseña nueva<input type="password" id="pwNew" autocomplete="new-password"></label>
-            <div class="row gap"><button type="button" class="btn" id="btnPw">Cambiar contraseña</button><button type="button" class="btn ghost" id="btnLogout">Cerrar sesión</button></div>
+            <legend>Mi cuenta</legend>
+            <div class="me-card"><div class="avatar big" id="meAvatar">?</div><div><b id="meName"></b><small class="muted" id="meRole"></small></div></div>
+            <h3>Cambiar contraseña</h3>
+            <div class="grid2">
+              <label>Contraseña actual<input type="password" id="pwOld" autocomplete="current-password"></label>
+              <label>Contraseña nueva<input type="password" id="pwNew" autocomplete="new-password" minlength="8"><small>Al menos 8 caracteres. Al cambiarla se cierran tus otras sesiones.</small></label>
+            </div>
+            <div class="row gap"><button type="button" class="btn primary" id="btnPw">Cambiar contraseña</button></div>
+            <h3>Mis sesiones abiertas</h3>
+            <div id="mySessions" class="slist"><p class="muted">Cargando…</p></div>
+            <div class="row gap wrap" style="margin-top:12px">
+              <button type="button" class="btn" id="btnCloseOthers">Cerrar las demás sesiones</button>
+              <button type="button" class="btn ghost" id="btnLogout">Cerrar esta sesión</button>
+            </div>
+          </fieldset>
+
+          <fieldset data-set="usuarios" class="hidden">
+            <legend>Usuarios</legend>
+            <div class="row gap wrap" style="justify-content:space-between;margin-bottom:14px">
+              <p class="muted" style="margin:0;max-width:640px"><b>Administrador</b>: todo. <b>Operador</b>: transmitir, programar, editar eventos y secciones, conectar nodos y ver el cron. <b>Solo lectura</b>: ver estado, programación, eventos y conexiones.</p>
+              <button type="button" class="btn primary" id="btnUserNew">+ Nuevo usuario</button>
+            </div>
+            <div id="userList" class="ulist"><p class="muted">Cargando…</p></div>
+            <div id="lockBox" class="hidden"></div>
+            <h3>Sesiones abiertas</h3>
+            <div id="allSessions" class="slist"></div>
           </fieldset>
 
           <fieldset data-set="sistema" class="hidden">
@@ -303,6 +332,6 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/app.js?v=1.2.1"></script>
+<script src="static/app.js?v=1.3.0"></script>
 </body>
 </html>

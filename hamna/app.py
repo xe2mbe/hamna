@@ -11,9 +11,9 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, backends, cron, db, links, paths, sessions, settings, tts
+from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, tts
 from .engine import engine
-from .web import App, HTTPError, check_password, hash_password, jsonr, send_file
+from .web import App, HTTPError, jsonr, send_file
 
 log = logging.getLogger("hamna.web")
 
@@ -27,6 +27,14 @@ def init_app():
     if not cfg.get("secret_key"):
         cfg = settings.save({"secret_key": binascii.hexlify(os.urandom(32)).decode()})
     app.secret = cfg["secret_key"]
+    auth.init()
+    app.roles = auth.ROLES
+    app.user_loader = lambda req: auth.user_for(req.token, req.ip)
+
+
+def require(req, rol):
+    if auth.ROLES.get((req.user or {}).get("rol"), 0) < auth.ROLES[rol]:
+        raise HTTPError(403, "Tu usuario no tiene permiso para esto")
 
 
 # ── Utilidades ────────────────────────────────────────────────────────────────
@@ -75,28 +83,94 @@ def index(req):
 
 @app.route("/api/login", ("POST",), auth=False)
 def login(req):
-    pw = req.json().get("password") or ""
-    h = settings.get("password_hash")
-    if not h:
-        raise HTTPError(403, "Aún no hay contraseña. En el nodo ejecuta: hamna-web-passwd")
-    if not check_password(h, pw):
-        time.sleep(1.5)
-        raise HTTPError(401, "Contraseña incorrecta")
-    req.login()
-    return ok()
+    b = req.json()
+    if not auth.has_admin():
+        raise HTTPError(403, "Aún no hay usuarios. En el nodo ejecuta: hamna-web-passwd")
+    try:
+        token, user = auth.login(b.get("usuario") or "admin", b.get("password") or "",
+                                 req.ip, req.headers.get("User-Agent", ""))
+    except auth.AuthError as e:
+        log.warning("Entrada fallida de «%s» desde %s: %s", (b.get("usuario") or "")[:32], req.ip, e)
+        raise HTTPError(401, str(e))
+    log.info("Entró %s (%s) desde %s", user["usuario"], user["rol"], req.ip)
+    req.login(token)
+    return ok(usuario=user)
 
 
 @app.route("/api/logout", ("POST",), auth=False)
 def logout(req):
+    auth.logout(req.token)
     req.logout()
     return ok()
 
 
 @app.route("/api/me", auth=False)
 def me(req):
+    u = req.user
     return jsonr({"auth": req.authed, "version": VERSION,
                   "station": settings.get("station_name") or "",
-                  "logo": _logo_url()})
+                  "logo": _logo_url(),
+                  "usuario": {k: u[k] for k in ("id", "usuario", "nombre", "rol", "rol_nombre")} if u else None})
+
+
+# ── Usuarios y sesiones abiertas ─────────────────────────────────────────────
+@app.route("/api/usuarios", rol="admin")
+def usuarios(req):
+    return jsonr({"usuarios": auth.users(), "sesiones": auth.sessions(),
+                  "bloqueos": auth.locked_list(), "roles": auth.ROL_NOMBRE, "yo": req.user["id"],
+                  "mi_sesion": req.user["sid"]})
+
+
+@app.route("/api/usuarios", ("POST",), rol="admin")
+def usuarios_crear(req):
+    b = req.json()
+    uid = auth.create_user(b.get("usuario"), b.get("nombre"), b.get("rol") or "operador", b.get("password"))
+    log.info("%s creó el usuario %s (%s)", req.user["usuario"], b.get("usuario"), b.get("rol"))
+    return ok(id=uid)
+
+
+@app.route("/api/usuarios/<int:uid>", ("PUT",), rol="admin")
+def usuarios_editar(req, uid):
+    b = req.json()
+    f = {k: b[k] for k in ("nombre", "rol", "activo", "password") if k in b}
+    if uid == req.user["id"] and (f.get("rol", "admin") != "admin" or f.get("activo") is False):
+        raise ValueError("No puedes quitarte el rol de administrador ni desactivarte a ti mismo")
+    auth.update_user(uid, cur_sid=req.user["sid"], **f)
+    log.info("%s modificó el usuario #%s (%s)", req.user["usuario"], uid, ", ".join(sorted(f)))
+    return ok()
+
+
+@app.route("/api/usuarios/<int:uid>", ("DELETE",), rol="admin")
+def usuarios_borrar(req, uid):
+    auth.delete_user(uid, req.user["id"])
+    log.info("%s borró el usuario #%s", req.user["usuario"], uid)
+    return ok()
+
+
+@app.route("/api/usuarios/desbloquear", ("POST",), rol="admin")
+def usuarios_desbloquear(req):
+    auth.unlock_all()
+    return ok()
+
+
+@app.route("/api/mis-sesiones", rol="lectura")
+def mis_sesiones(req):
+    return jsonr({"sesiones": auth.sessions(req.user["id"]), "mi_sesion": req.user["sid"]})
+
+
+@app.route("/api/mis-sesiones/<int:sid>", ("DELETE",), rol="lectura")
+def cerrar_sesion(req, sid):
+    if req.user["rol"] == "admin":
+        auth.revoke(sid)                   # el administrador puede cerrar cualquiera
+    else:
+        auth.revoke(sid, req.user["id"])
+    return ok()
+
+
+@app.route("/api/mis-sesiones/otras", ("POST",), rol="lectura")
+def cerrar_otras(req):
+    auth.revoke_user(req.user["id"], except_sid=req.user["sid"])
+    return ok()
 
 
 # ── Logo de la estación ──────────────────────────────────────────────────────
@@ -131,7 +205,7 @@ def logo(req):
     return r
 
 
-@app.route("/api/ajustes/logo", ("POST", "DELETE"))
+@app.route("/api/ajustes/logo", ("POST", "DELETE"), rol="admin")
 def ajustes_logo(req):
     cur = settings.get("logo_file") or ""
     dest = None
@@ -329,7 +403,7 @@ def seccion_aire(req, sid):
     return ok()
 
 
-@app.route("/api/secciones/compactar", ("POST",))
+@app.route("/api/secciones/compactar", ("POST",), rol="admin")
 def secciones_compactar(req):
     """Convierte todas las secciones al formato del aire y borra los originales."""
     if engine.status().get("on_air"):
@@ -467,14 +541,14 @@ def evento_cont(req, eid, sid):
 
 
 # ── Cron ─────────────────────────────────────────────────────────────────────
-@app.route("/api/cron")
+@app.route("/api/cron", rol="operador")
 def cron_list(req):
     if not cron.available():
         return jsonr({"disponible": False, "tablas": []})
     return jsonr({"disponible": True, "tablas": cron.list_tables()})
 
 
-@app.route("/api/cron", ("PUT",))
+@app.route("/api/cron", ("PUT",), rol="admin")
 def cron_save(req):
     b = req.json()
     tid, h, text = b.get("id") or "", b.get("hash") or "", b.get("texto")
@@ -546,7 +620,7 @@ def prog_del(req, pid):
 # ── Control de transmisión ───────────────────────────────────────────────────
 @app.route("/api/tx/start", ("POST",))
 def tx_start(req):
-    engine.start_event(int(req.json().get("evento_id") or 0), origen="manual")
+    engine.start_event(int(req.json().get("evento_id") or 0), origen="manual · " + req.user["usuario"])
     return ok()
 
 
@@ -596,7 +670,7 @@ def ajustes(req):
     return jsonr(settings.public())
 
 
-@app.route("/api/ajustes", ("PUT",))
+@app.route("/api/ajustes", ("PUT",), rol="admin")
 def ajustes_save(req):
     upd = {}
     for k, v in req.json().items():
@@ -629,6 +703,8 @@ def ajustes_sonido(req, kind):
     if not key:
         raise HTTPError(404)
     cur = settings.get(key) or ""
+    if req.method != "GET":
+        require(req, "admin")
     if req.method == "GET":
         if not cur:
             raise HTTPError(404)
@@ -646,19 +722,16 @@ def ajustes_sonido(req, kind):
     return ok(nombre=dest.name if dest else "")
 
 
-@app.route("/api/ajustes/password", ("POST",))
+@app.route("/api/ajustes/password", ("POST",), rol="lectura")
 def ajustes_password(req):
+    """Cada quien cambia su propia contraseña; cierra sus otras sesiones."""
     b = req.json()
-    if not check_password(settings.get("password_hash"), b.get("actual") or ""):
-        raise ValueError("La contraseña actual no coincide")
-    nueva = b.get("nueva") or ""
-    if len(nueva) < 6:
-        raise ValueError("La contraseña nueva debe tener al menos 6 caracteres")
-    settings.save({"password_hash": hash_password(nueva)})
+    auth.change_own_password(req.user, b.get("actual"), b.get("nueva"))
+    log.info("%s cambió su contraseña", req.user["usuario"])
     return ok()
 
 
-@app.route("/api/azure/voces", ("POST",))
+@app.route("/api/azure/voces", ("POST",), rol="admin")
 def azure_voces(req):
     cfg = settings.load()
     b = req.json()

@@ -84,6 +84,8 @@ class Request:
         self._json = None
         self.session = self._read_session()
         self.new_session = None
+        self.user = None            # lo llena App.user_loader
+        self.ip = ""
 
     # Sesión
     def _sign(self, data):
@@ -104,8 +106,12 @@ class Request:
         except Exception:
             return {}
 
-    def login(self):
-        self.new_session = {"auth": True, "exp": int(time.time()) + SESSION_DAYS * 86400}
+    def login(self, token):
+        self.new_session = {"t": token, "exp": int(time.time()) + SESSION_DAYS * 86400}
+
+    @property
+    def token(self):
+        return self.session.get("t") or ""
 
     def logout(self):
         self.new_session = {}
@@ -121,7 +127,7 @@ class Request:
 
     @property
     def authed(self):
-        return bool(self.session.get("auth"))
+        return bool(self.user)
 
     # Cuerpo
     def json(self):
@@ -234,14 +240,17 @@ class App:
         self.static_dir = str(static_dir)
         self.secret = "x"
         self.max_upload = 300 * 2**20
-        self.auth_check = None      # función(request) -> None o Response
+        self.user_loader = None     # función(request) -> usuario o None
+        self.roles = {}             # rol -> nivel
 
-    def route(self, pattern, methods=("GET",), auth=True):
+    def route(self, pattern, methods=("GET",), auth=True, rol=None):
+        """auth=False: pública. rol: mínimo necesario; si no se da, leer (GET)
+        pide 'lectura' y cambiar algo pide 'operador'."""
         rx = re.compile("^" + re.sub(r"<int:(\w+)>", r"(?P<\1>\\d+)",
                                      re.sub(r"<(\w+)>", r"(?P<\1>[^/]+)", pattern)) + "$")
 
         def deco(fn):
-            self.routes.append((rx, tuple(methods), fn, auth))
+            self.routes.append((rx, tuple(methods), fn, auth, rol))
             return fn
         return deco
 
@@ -252,7 +261,7 @@ class App:
                 raise HTTPError(404)
             return send_file(os.path.join(self.static_dir, name), cache=True)
         allowed = False
-        for rx, methods, fn, auth in self.routes:
+        for rx, methods, fn, auth, rol in self.routes:
             m = rx.match(req.path)
             if not m:
                 continue
@@ -265,6 +274,9 @@ class App:
                 # Defensa CSRF: otro sitio no puede mandar esta cabecera sin permiso
                 if req.method not in ("GET", "HEAD") and req.headers.get("X-HAMNA") != "1":
                     return jsonr({"ok": False, "error": "Petición rechazada"}, 403)
+                need = rol or ("lectura" if req.method in ("GET", "HEAD") else "operador")
+                if self.roles.get(req.user.get("rol"), 0) < self.roles.get(need, 99):
+                    return jsonr({"ok": False, "error": "Tu usuario no tiene permiso para esto"}, 403)
             kw = {k: (int(v) if v.isdigit() else v) for k, v in m.groupdict().items()}
             return fn(req, **kw)
         raise HTTPError(405 if allowed else 404)
@@ -298,6 +310,9 @@ class App:
                 req = None
                 try:
                     req = Request(self, app.secret)
+                    req.ip = self._client_ip()
+                    if app.user_loader:
+                        req.user = app.user_loader(req)
                     length = int(self.headers.get("Content-Length") or 0)
                     ctype = self.headers.get("Content-Type", "")
                     if ctype.startswith("multipart/form-data"):
@@ -317,8 +332,9 @@ class App:
                         req.form = {k: v[0] for k, v in parse_qs(req._raw.decode()).items()}
                     resp = app.dispatch(req)
                     if req.method in ("POST", "PUT", "DELETE") and req.path != "/api/login":
-                        log.info("%s %s desde %s → %s", req.method, req.path,
-                                 self._client_ip(), resp.status)
+                        who = req.user["usuario"] if req.user else "-"
+                        log.info("%s %s por %s desde %s → %s", req.method, req.path,
+                                 who, req.ip, resp.status)
                 except HTTPError as e:
                     msg = e.msg or {401: "Inicia sesión", 404: "No encontrado",
                                     405: "Método no permitido"}.get(e.code, "Error")

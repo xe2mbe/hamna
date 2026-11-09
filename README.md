@@ -18,7 +18,7 @@ El instalador:
 2. No necesita paquetes de Python: solo Python 3.5 o más nuevo (HamVOIP trae 3.5).
 3. En Debian/Raspbian (ASL3, IRLP) instala `ffmpeg` y `espeak-ng` con apt. En HamVOIP **no toca pacman**: usa `sox` y `mpg123`, que ya vienen.
 4. Copia el programa a `/opt/hamna-web`. Los datos van a `/var/lib/hamna`.
-5. Pide la contraseña de la página (si no hay terminal, genera una y la muestra).
+5. Crea el usuario `admin` y pide su contraseña (si no hay terminal, genera una y la muestra). Los demás usuarios se crean desde la página, en Ajustes → Usuarios.
 6. Crea el servicio `hamna-web` y abre el puerto 8090 en el firewall si hay uno activo.
 
 Después abre `http://IP-DEL-NODO:8090`.
@@ -28,7 +28,7 @@ Para actualizar, vuelve a ejecutar `install.sh` con la versión nueva. Tus event
 
 | Tarea | Comando |
 |---|---|
-| Cambiar contraseña | `sudo hamna-web-passwd` |
+| Cambiar contraseña (o recuperar el acceso) | `sudo hamna-web-passwd [--user USUARIO]` — si el usuario no existe se crea como administrador; cierra sus sesiones |
 | Ver bitácora | `journalctl -u hamna-web -f` |
 | Reiniciar | `sudo systemctl restart hamna-web` |
 | Desinstalar | `sudo /opt/hamna-web/uninstall.sh` (agrega `--borrar-datos` para borrar todo) |
@@ -72,7 +72,7 @@ Cada evento puede conectar o desconectar enlaces antes de empezar y al terminar 
 
 La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab de root y de asterisk, y en IRLP `custom/custom.crons` (el crontab de repeater se vuelve a armar solo cada día a las 3:00 con `irlp.crons` + `custom.crons`). `/etc/crontab` y `/etc/cron.d` se muestran en solo lectura.
 
-Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Quien tenga la contraseña de la página puede programar comandos como root**: usa una contraseña fuerte y no expongas el puerto a internet. Para no dar ese permiso, instala con `--sin-cron`.
+Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Un administrador de la página puede programar comandos como root**: dale ese rol solo a quien corresponda, usa contraseñas fuertes y no expongas el puerto a internet. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--sin-cron`.
 
 ## Diferencias con HAMNA Desktop
 
@@ -93,3 +93,18 @@ python -m hamna --port 8090
 ```
 
 El modo `simulado` no transmite nada, solo respeta los tiempos. Necesita `ffmpeg` en el PATH.
+
+## Usuarios
+
+Cada colega entra con su propio usuario. Roles:
+
+| Rol | Puede |
+|---|---|
+| Administrador | Todo: Ajustes, Cron, logo, usuarios |
+| Operador | Transmitir, programar, editar eventos y secciones, conectar y desconectar nodos, ver el cron |
+| Solo lectura | Ver estado, programación, eventos, secciones y conexiones |
+
+- La bitácora registra quién hizo cada cosa.
+- 5 contraseñas malas para un usuario desde una IP (o 20 desde una IP) la bloquean 15 minutos. El administrador puede desbloquear en Ajustes → Usuarios; reiniciar el servicio también limpia los bloqueos.
+- Las sesiones abiertas se ven en Ajustes → Mi cuenta (las propias) y Ajustes → Usuarios (todas) y se pueden cerrar. Cambiar la contraseña o desactivar a un usuario lo saca al instante.
+- Al actualizar desde una versión con contraseña única, esa contraseña pasa al usuario `admin`.
