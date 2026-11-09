@@ -11,7 +11,7 @@
 
 ## Cómo nació
 
-HAMNA nació en diciembre de 2024 en el **Radio Club Guadiana A.C.** (Durango, México) para transmitir el **Boletín Dominical de la Federación Mexicana de Radio Experimentadores (FMRE)**. Cada domingo alguien tenía que estar frente a la estación para poner el boletín al aire, cortarlo a tiempo para que los repetidores descansaran y retomarlo donde se quedó. La idea fue quitarle esa carga al operador y a la estación control: preparar el contenido con anticipación y que el equipo lo transmitiera solo, sin tener que estar presente.
+HAMNA nació en diciembre de 2024 en el **Radio Club Guadiana A.C.** (Durango, México) para transmitir el **Boletín Dominical de la Federación Mexicana de Radio Experimentadores (FMRE)**. Cada domingo un operador tenía que estar en vivo transmitiendo un material que, por lo general, ya estaba preparado con anterioridad. Cuando sus actividades o compromisos se lo impedían, el boletín a veces no se transmitía. HAMNA vino a automatizar esa parte: el material sale al aire solo, a su hora, y el operador queda libre para sus actividades. Lo único que queda pendiente es la toma de reportes, que puede hacerla cualquier operador.
 
 - **La versión primitiva (diciembre de 2024)** era un script en Python. Los mensajes de entrada y salida, los tiempos de transmisión y de pausa, la alerta antes de la pausa y el retroceso al reanudar se ajustaban en el código o en un archivo YAML. El PTT era físico: un pin GPIO (el 17) de la Raspberry Pi del nodo AllStar.
 - **HAMNA Desktop (2026)** lo convirtió en una aplicación con interfaz: eventos armados con secciones, voz sintética (Azure), nivelación del audio, pausas automáticas y programación semanal. Vive en [xe2mbe/hamna_desktop](https://github.com/xe2mbe/hamna_desktop).
