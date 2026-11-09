@@ -90,6 +90,10 @@ function showLogin() {
   if (last && !$("#loginUser").value) $("#loginUser").value = last;
   setTimeout(() => ($("#loginUser").value ? $("#loginPw") : $("#loginUser")).focus(), 50);
 }
+$$(".lang-pick button").forEach((b) => {
+  b.classList.toggle("on", b.dataset.lang === window.HAMNA_LANG);
+  b.onclick = () => window.hamnaSetLang(b.dataset.lang);
+});
 $("#loginForm").onsubmit = async (e) => {
   e.preventDefault();
   $("#loginErr").textContent = "";
@@ -109,6 +113,10 @@ async function start() {
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   try { S.cfg = await api("api/ajustes"); } catch { return; }
   try { S.me = (await api("api/me")).usuario; } catch {}
+  if (S.me) {
+    if (S.me.idioma && S.me.idioma !== window.HAMNA_LANG) { window.hamnaSetLang(S.me.idioma); return; }
+    if (!S.me.idioma) api("api/mi-idioma", { method: "PUT", json: { idioma: window.HAMNA_LANG } }).catch(() => {});
+  }
   applyRole();
   updateNodeLabel();
   S.polling = true;
@@ -470,8 +478,8 @@ async function loadEvento(id) {
           <small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio"}</small></span>
         <label class="check" title="Cuenta para {num_secciones}" style="margin:0"><input type="checkbox" data-cont ${s.contabilizable ? "checked" : ""}></label>
         <span class="mini">
-          <button class="btn" data-mv="-1" ${i === 0 ? "disabled" : ""} title="Subir">↑</button>
-          <button class="btn" data-mv="1" ${i === secs.length - 1 ? "disabled" : ""} title="Bajar">↓</button>
+          <button class="btn" data-mv="-1" ${i === 0 ? "disabled" : ""} title="Mover arriba">↑</button>
+          <button class="btn" data-mv="1" ${i === secs.length - 1 ? "disabled" : ""} title="Mover abajo">↓</button>
           <button class="btn" data-rm title="Quitar del evento">✕</button>
         </span>
       </div>`).join("") : `<p class="empty">Este evento no tiene secciones.</p>`}</div>
@@ -1488,8 +1496,14 @@ function sessionRows(list, mine, showUser) {
       ${s.id === mine ? "" : `<button type="button" class="btn sm danger-soft" data-close-ses="${s.id}">Cerrar</button>`}
     </div>`).join("");
 }
+$("#meLang").onchange = async (e) => {
+  const l = e.target.value;
+  try { await api("api/mi-idioma", { method: "PUT", json: { idioma: l } }); window.hamnaSetLang(l); }
+  catch (err) { toast(err.message, true); }
+};
 async function loadMyAccount() {
   const u = S.me || {};
+  $("#meLang").value = window.HAMNA_LANG;
   $("#meAvatar").textContent = initials(u);
   $("#meName").textContent = u.nombre || u.usuario || "";
   $("#meRole").textContent = `${u.usuario || ""} · ${ROL_TXT[u.rol] || ""}`;

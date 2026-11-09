@@ -101,6 +101,10 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .login-station { text-align: center; font-weight: 600; margin: 0 0 18px !important; }
 .login-card .brand { justify-content: center; }
 .login-card > p.muted { text-align: center; }
+.lang-pick { display: flex; justify-content: center; gap: 8px; margin-top: 4px; color: var(--text3); font-size: .85rem; }
+.lang-pick button { background: none; border: 0; color: var(--text2); font: inherit; cursor: pointer; padding: 2px 4px; border-radius: 6px; }
+.lang-pick button:hover { color: var(--text); }
+.lang-pick button.on { color: var(--accent); font-weight: 600; }
 
 /* Estructura: barra lateral + contenido */
 #app { min-height: 100vh; }

@@ -110,7 +110,13 @@ def me(req):
     return jsonr({"auth": req.authed, "version": VERSION,
                   "station": settings.get("station_name") or "",
                   "logo": _logo_url(),
-                  "usuario": {k: u[k] for k in ("id", "usuario", "nombre", "rol", "rol_nombre")} if u else None})
+                  "usuario": {k: u.get(k) for k in ("id", "usuario", "nombre", "rol", "rol_nombre", "idioma")} if u else None})
+
+
+@app.route("/api/mi-idioma", ("PUT",), rol="lectura")
+def mi_idioma(req):
+    auth.set_language(req.user["id"], (req.json().get("idioma") or "").lower())
+    return ok()
 
 
 # ── Usuarios y sesiones abiertas ─────────────────────────────────────────────

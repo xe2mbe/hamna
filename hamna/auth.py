@@ -65,6 +65,9 @@ def init():
             if old:
                 c.execute("INSERT INTO usuarios (usuario, nombre, rol, password_hash) VALUES (?,?,?,?)",
                           ("admin", "Administrador", "admin", old))
+        cols = [r[1] for r in c.execute("PRAGMA table_info(usuarios)")]
+        if "idioma" not in cols:
+            c.execute("ALTER TABLE usuarios ADD COLUMN idioma TEXT")
         c.execute("DELETE FROM sesiones_web WHERE expira < ?", (time.time(),))
 
 
@@ -280,6 +283,15 @@ def delete_user(uid, my_id):
         raise ValueError("Debe quedar al menos un administrador activo")
     db.execute("DELETE FROM sesiones_web WHERE usuario_id=?", (uid,))
     db.execute("DELETE FROM usuarios WHERE id=?", (uid,))
+
+
+IDIOMAS = ("en", "es")
+
+
+def set_language(uid, idioma):
+    if idioma not in IDIOMAS:
+        raise ValueError("Idioma no disponible")
+    db.execute("UPDATE usuarios SET idioma=? WHERE id=?", (idioma, uid))
 
 
 def change_own_password(user, actual, nueva):
