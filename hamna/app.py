@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, tts
+from . import VERSION, audio, auth, backends, cron, db, links, paths, sessions, settings, sysmon, tts
 from .engine import engine
 from .web import App, HTTPError, jsonr, send_file
 
@@ -241,6 +241,8 @@ def status(req):
     s["now"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     s["utc"] = dt.datetime.utcnow().strftime("%H:%M")
     s["ts"] = round(time.time(), 1)
+    s["sys"] = sysmon.snapshot()
+    s["version"] = VERSION
     return jsonr(s)
 
 

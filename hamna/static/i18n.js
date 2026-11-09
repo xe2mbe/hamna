@@ -233,6 +233,7 @@
     "Método no permitido": "Method not allowed", "Subida incompleta": "Incomplete upload", "Petición demasiado grande": "Request too large",
     "eSpeak no está instalado en este nodo": "eSpeak is not installed on this node",
     "Este nodo no tiene ffmpeg ni sox para convertir audio": "This node has neither ffmpeg nor sox to convert audio",
+    "Bajada": "Download", "Subida": "Upload", "Datos del equipo del nodo · se actualizan con el estado": "Node system data · updated with the status",
     "Idioma no disponible": "Language not available", "Logo guardado": "Logo saved", "Logo quitado": "Logo removed", "¿Quitar el logo?": "Remove the logo?",
   };
 

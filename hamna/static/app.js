@@ -128,6 +128,43 @@ async function start() {
   showTab(pedida === "sesiones" ? "conexiones" : pedida);   // nombre anterior
 }
 
+/* ── Monitor del equipo ──────────────────────────────────────────────────────
+   Los datos vienen en /api/status (sin consultas extra). */
+const fmtB = (b) => b == null ? "—" : b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : Math.round(b / 1e3) + " kB";
+const fmtRate = (b) => b == null ? "—" : b >= 125000 ? (b * 8 / 1e6).toFixed(1) + " Mb/s" : Math.round(b * 8 / 1e3) + " kb/s";
+function setBar(id, pct) {
+  const el = $(id); if (!el) return;
+  el.style.width = (pct == null ? 0 : Math.min(100, pct)) + "%";
+  el.className = pct >= 90 ? "bad" : pct >= 75 ? "warn" : "";
+}
+function renderSys(d, ver) {
+  if (ver && $("#appVer").textContent !== "v" + ver) $("#appVer").textContent = "v" + ver;
+  if (!d) { $("#sideMon").classList.add("hidden"); return; }
+  $("#sideMon").classList.remove("hidden");
+  const L = (es, en) => (window.HAMNA_LANG === "es" ? es : en);
+  $$("#sideMon [data-l]").forEach((el) => {
+    const k = el.dataset.l, en = { "Equipo": "System", "Disco": "Disk", "Temp.": "Temp.", "Carga": "Load" }[k];
+    el.textContent = window.HAMNA_LANG === "es" ? k : (en || k);
+  });
+  setBar("#mbCpu", d.cpu); $("#mvCpu").textContent = d.cpu == null ? "—" : Math.round(d.cpu) + " %";
+  const mp = d.mem && d.mem.total ? (d.mem.usada / d.mem.total) * 100 : null;
+  setBar("#mbMem", mp); $("#mvMem").textContent = d.mem ? `${fmtB(d.mem.usada)} / ${fmtB(d.mem.total)}` : "—";
+  const dp = d.disco && d.disco.total ? (d.disco.usada / d.disco.total) * 100 : null;
+  setBar("#mbDisk", dp); $("#mvDisk").textContent = d.disco ? `${fmtB(d.disco.usada)} / ${fmtB(d.disco.total)}` : "—";
+  const t = $("#mvTemp");
+  t.textContent = d.temp == null ? "—" : d.temp.toFixed(1) + " °C";
+  t.className = d.temp >= 80 ? "bad" : d.temp >= 70 ? "warn" : "";
+  const ld = $("#mvLoad");
+  ld.textContent = d.carga == null ? "—" : d.carga.toFixed(2);
+  ld.className = d.carga >= d.nucleos ? "bad" : d.carga >= d.nucleos * 0.75 ? "warn" : "";
+  $("#mvRx").textContent = fmtRate(d.rx_bps); $("#mvTx").textContent = fmtRate(d.tx_bps);
+  if (d.encendido_s != null) {
+    const s = d.encendido_s, dd = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60);
+    $("#monUp").textContent = L("encendido ", "up ") + (dd ? `${dd} d ${hh} h` : hh ? `${hh} h ${mm} min` : `${mm} min`);
+  }
+  $("#sideMon").title = L("Datos del equipo del nodo · se actualizan con el estado", "Node system data · updated with the status");
+}
+
 /* ── Logo ────────────────────────────────────────────────────────────────── */
 const DEFAULT_ICON = $("#favicon").href;
 function applyLogo(url) {
@@ -260,6 +297,7 @@ async function poll() {
   let s;
   try { s = await api("api/status"); } catch { schedulePoll(); return; }
   S.status = s;
+  renderSys(s.sys, s.version);
   if (s.ts) {
     // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
     const [d, t] = s.now.split(" "), [Y, M, D] = d.split("-").map(Number), [h, m, x] = t.split(":").map(Number);
@@ -1595,6 +1633,7 @@ $("#btnCloseOthers").onclick = async () => {
       $("#loginStation").textContent = me.station; $("#loginStation").classList.remove("hidden");
     }
     applyLogo(me.logo);
+    if (me.version) $("#loginVer").textContent = "HAMNA Web v" + me.version;
     me.auth ? start() : showLogin();
   } catch { showLogin(); }
 })();

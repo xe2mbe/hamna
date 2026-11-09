@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HAMNA Web</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ef4444'/%3E%3Cpath d='M8 8a11 11 0 0 0 0 16M24 8a11 11 0 0 1 0 16' stroke='%233b82f6' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="static/app.css?v=1.4.2">
+<link rel="stylesheet" href="static/app.css?v=1.5.0">
 </head>
 <body>
 
@@ -20,6 +20,7 @@
     <label>Contraseña<input type="password" id="loginPw" autocomplete="current-password" required></label>
     <button class="btn primary wide" type="submit">Entrar</button>
     <p id="loginErr" class="err"></p>
+    <p class="login-ver" id="loginVer" translate="no"></p>
     <div class="lang-pick" translate="no"><button type="button" data-lang="en">English</button><span>·</span><button type="button" data-lang="es">Español</button></div>
   </form>
 </section>
@@ -38,7 +39,7 @@
     <div class="side-brand">
       <img id="brandLogo" class="brand-logo hidden" alt="">
       <div class="side-id">
-        <div class="brand"><span class="brand-dot" id="brandDot"></span>HAMNA <b>Web</b></div>
+        <div class="brand"><span class="brand-dot" id="brandDot"></span>HAMNA <b>Web</b><span class="ver" id="appVer" translate="no"></span></div>
         <div class="node" id="nodeLabel"></div>
       </div>
     </div>
@@ -50,6 +51,14 @@
       <button data-tab="cron"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Cron</span></button>
       <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Ajustes</span></button>
     </nav>
+    <div class="side-mon" id="sideMon" translate="no">
+      <div class="mon-h"><span data-l="Equipo">Equipo</span><span id="monUp"></span></div>
+      <div class="mon-row"><span data-l="CPU">CPU</span><div class="mbar"><div id="mbCpu"></div></div><b id="mvCpu">—</b></div>
+      <div class="mon-row"><span data-l="RAM">RAM</span><div class="mbar"><div id="mbMem"></div></div><b id="mvMem">—</b></div>
+      <div class="mon-row"><span data-l="Disco">Disco</span><div class="mbar"><div id="mbDisk"></div></div><b id="mvDisk">—</b></div>
+      <div class="mon-pair"><span><i data-l="Temp.">Temp.</i> <b id="mvTemp">—</b></span><span><i data-l="Carga">Carga</i> <b id="mvLoad">—</b></span></div>
+      <div class="mon-pair"><span title="Bajada">↓ <b id="mvRx">—</b></span><span title="Subida">↑ <b id="mvTx">—</b></span></div>
+    </div>
     <div class="side-user" id="sideUser">
       <div class="avatar" id="userAvatar">?</div>
       <div class="who"><b id="userName"></b><small id="userRole"></small></div>
@@ -344,7 +353,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.4.2"></script>
-<script src="static/app.js?v=1.4.2"></script>
+<script src="static/i18n.js?v=1.5.0"></script>
+<script src="static/app.js?v=1.5.0"></script>
 </body>
 </html>
