@@ -1,4 +1,27 @@
-# HAMNA Web
+# HAMNA — HAM Net Automation
+
+> La radioafición siempre ha destacado por la creatividad y la innovación de sus operadores.
+> En este espíritu nace HAMNA (HAM Net Automation), un proyecto diseñado para facilitar y
+> modernizar las transmisiones en estaciones de radioaficionados, especialmente para boletines
+> y otros contenidos recurrentes que se graban o preparan con anticipación.
+
+## ¿Qué significa HAMNA?
+
+**HAM** (radioaficionado) + **N**et + **A**utomation: automatización de redes de radioaficionados. Una *net* es la reunión al aire de colegas a una hora fija, guiada por una estación control; HAMNA se encarga de la parte que se puede preparar con tiempo —boletines, anuncios, programas grabados— para que salga al aire sola, a su hora y respetando los repetidores.
+
+## Cómo nació
+
+HAMNA nació en diciembre de 2024 en el **Radio Club Guadiana A.C.** (Durango, México) para transmitir el **Boletín Dominical de la Federación Mexicana de Radio Experimentadores (FMRE)**. Cada domingo alguien tenía que estar frente a la estación para poner el boletín al aire, cortarlo a tiempo para que los repetidores descansaran y retomarlo donde se quedó. La idea fue quitarle esa carga al operador y a la estación control: preparar el contenido con anticipación y que el equipo lo transmitiera solo, sin tener que estar presente.
+
+- **La versión primitiva (diciembre de 2024)** era un script en Python. Los mensajes de entrada y salida, los tiempos de transmisión y de pausa, la alerta antes de la pausa y el retroceso al reanudar se ajustaban en el código o en un archivo YAML. El PTT era físico: un pin GPIO (el 17) de la Raspberry Pi del nodo AllStar.
+- **HAMNA Desktop (2026)** lo convirtió en una aplicación con interfaz: eventos armados con secciones, voz sintética (Azure), nivelación del audio, pausas automáticas y programación semanal. Vive en [xe2mbe/hamna_desktop](https://github.com/xe2mbe/hamna_desktop).
+- **HAMNA Web (noviembre de 2026)** —este repositorio— lleva todo eso **dentro del propio nodo**, sin una PC encendida: se administra desde el navegador, transmite directamente por AllStarLink o IRLP y se puede compartir con los colegas del club, cada uno con su usuario.
+
+Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamos que esta es una transmisión automatizada mediante la aplicación HAMNA, desarrollada por el Radio Club Guadiana A.C.»*
+
+---
+
+## HAMNA Web
 
 La versión web de HAMNA Desktop. Corre **dentro del nodo** (AllStarLink o IRLP) y automatiza redes y boletines: el operador sube los audios o escribe textos desde el navegador, arma eventos, los programa, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores.
 
