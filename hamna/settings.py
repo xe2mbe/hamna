@@ -17,6 +17,7 @@ DEFAULTS = {
     "irlp_key_cmd": "key",
     "irlp_unkey_cmd": "unkey",
     "irlp_player": "aplay",
+    "irlp_mode": "red",         # red (radio + reflector/nodo conectado) | local (solo el radio)
     "station_name": "",
     "logo_file": "",            # logo de la estación (en la carpeta de datos)
 

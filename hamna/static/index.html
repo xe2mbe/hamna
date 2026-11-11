@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.12.2">
+<link rel="stylesheet" href="static/app.css?v=1.13.0">
 </head>
 <body>
 
@@ -203,6 +203,12 @@
                 <label>Comando PTT OFF<input name="irlp_unkey_cmd"></label>
               </div>
               <label>Reproductor<input name="irlp_player"></label>
+              <label>Modo de reproducción en IRLP
+                <select name="irlp_mode">
+                  <option value="red">Radio + red — este nodo y el reflector o nodo conectado</option>
+                  <option value="local">Solo el radio — el transmisor de este nodo</option>
+                </select>
+              </label>
             </div>
             <div class="row gap wrap">
               <button type="button" class="btn" id="btnTestNode">Probar conexión</button>
@@ -387,7 +393,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.12.2"></script>
-<script src="static/app.js?v=1.12.2"></script>
+<script src="static/i18n.js?v=1.13.0"></script>
+<script src="static/app.js?v=1.13.0"></script>
 </body>
 </html>

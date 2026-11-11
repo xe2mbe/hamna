@@ -94,19 +94,29 @@ class Request:
         return base64.urlsafe_b64encode(
             hmac.new(self.secret.encode(), data, hashlib.sha256).digest()).decode().rstrip("=")
 
+    @property
+    def cookie_name(self):
+        """Un nombre por instalación: dos nodos en la misma dirección con distinto
+        puerto (p. ej. :80 y :8081) comparten cookies en el navegador, y con un
+        nombre común iniciar sesión en uno cerraba la sesión del otro."""
+        return "{}_{}".format(COOKIE, hashlib.sha256(
+            ("cookie:" + self.secret).encode()).hexdigest()[:8])
+
     def _read_session(self):
         raw = self.headers.get("Cookie", "")
-        m = re.search(r"(?:^|;\s*)" + COOKIE + r"=([^;]+)", raw)
-        if not m:
-            return {}
-        try:
-            payload, sig = m.group(1).rsplit(".", 1)
-            if not hmac.compare_digest(self._sign(payload.encode()), sig):
-                return {}
-            data = json.loads(base64.urlsafe_b64decode(payload + "==").decode())
-            return data if data.get("exp", 0) > time.time() else {}
-        except Exception:
-            return {}
+        # el nombre propio primero; el viejo (hamna_s) sirve mientras exista
+        for name in (self.cookie_name, COOKIE):
+            for m in re.finditer(r"(?:^|;\s*)" + name + r"=([^;]+)", raw):
+                try:
+                    payload, sig = m.group(1).rsplit(".", 1)
+                    if not hmac.compare_digest(self._sign(payload.encode()), sig):
+                        continue
+                    data = json.loads(base64.urlsafe_b64decode(payload + "==").decode())
+                    if data.get("exp", 0) > time.time():
+                        return data
+                except Exception:
+                    continue
+        return {}
 
     def login(self, token):
         self.new_session = {"t": token, "exp": int(time.time()) + SESSION_DAYS * 86400}
@@ -122,10 +132,10 @@ class Request:
         if self.new_session is None:
             return None
         if not self.new_session:
-            return "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax".format(COOKIE)
+            return "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax".format(self.cookie_name)
         payload = base64.urlsafe_b64encode(json.dumps(self.new_session).encode()).decode().rstrip("=")
         return "{}={}.{}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax".format(
-            COOKIE, payload, self._sign(payload.encode()), SESSION_DAYS * 86400)
+            self.cookie_name, payload, self._sign(payload.encode()), SESSION_DAYS * 86400)
 
     @property
     def authed(self):

@@ -7,7 +7,9 @@ hasta que abort() devuelve True.
 
   ASL       asterisk -rx "rpt localplay|playback <nodo> <archivo>"
             (ASL3, ASL2 y HamVOIP). app_rpt activa y suelta el PTT solo.
-  IRLP      $BIN/key → aplay → $BIN/unkey (con el entorno de IRLP)
+  IRLP      $BIN/key → aplay → $BIN/unkey (con el entorno de IRLP); en modo
+            "red" además manda el audio al reflector o nodo conectado
+            (ver irlpnet.py).
   simulado  solo espera; sirve para probar la interfaz sin radio.
 """
 import logging
@@ -17,7 +19,10 @@ import shlex
 import shutil
 import subprocess
 import time
+import uuid
 from pathlib import Path
+
+from . import irlpnet
 
 log = logging.getLogger("hamna.backend")
 
@@ -137,12 +142,52 @@ class ASLBackend(Backend):
 class IRLPBackend(Backend):
     name = "irlp"
 
-    def __init__(self, env_file, key_cmd="key", unkey_cmd="unkey", player="aplay", node=""):
+    def __init__(self, env_file, key_cmd="key", unkey_cmd="unkey", player="aplay", node="",
+                 mode="red"):
         self.env_file = env_file
         self.key_cmd = key_cmd
         self.unkey_cmd = unkey_cmd
         self.player = player
         self.node = node
+        self.mode = mode if mode in ("local", "red") else "red"
+        self._vars = None
+
+    def env(self):
+        """Variables de IRLP que hacen falta para la red (se leen una vez)."""
+        if self._vars is None:
+            code, out = self._sh('echo "$LOCAL|$BIN|$CALLSIGN|$STATIONID"')
+            parts = (out.splitlines()[-1] if out else "").split("|")
+            parts += [""] * (4 - len(parts))
+            v = dict(zip(("local", "bin", "callsign", "stationid"), parts[:4]))
+            if not v["local"] or not v["bin"]:
+                return v          # no se guarda: el entorno no cargó
+            self._vars = v
+        return self._vars
+
+    def net_target(self):
+        v = self.env()
+        return irlpnet.target(v["local"]) if v.get("local") else None
+
+    def _start_net(self, wav):
+        """Prepara el envío a la red si el nodo está conectado. Nunca detiene la transmisión."""
+        try:
+            t = self.net_target()
+            if not t:
+                return None, None
+            if not t["ip"]:
+                log.warning("[IRLP] %s", irlpnet.describe(t))
+                return None, None
+            v = self.env()
+            imike = os.path.join(v["bin"], "imike")
+            if not os.access(imike, os.X_OK):
+                log.warning("[IRLP] no encontré %s: solo sale por el radio local", imike)
+                return None, None
+            au = Path(wav).parent / ("irlp_" + uuid.uuid4().hex[:8] + ".au")
+            irlpnet.to_au(wav, au)
+            return irlpnet.Sender(t, imike, v["callsign"], v["stationid"]), au
+        except Exception as e:
+            log.warning("[IRLP] no se pudo preparar el envío a la red: %s", e)
+            return None, None
 
     def _sh(self, script, timeout=20):
         q = shlex.quote(self.env_file)
@@ -158,10 +203,22 @@ class IRLPBackend(Backend):
         return self._sh('"$BIN"/' + shlex.quote(self.unkey_cmd))
 
     def play(self, wav, dur, abort):
+        sender, au = self._start_net(wav) if self.mode == "red" else (None, None)
         code, out = self.key()
-        if code != 0:
-            raise RuntimeError("No se pudo activar el PTT (key): {}".format(out[:200]))
+        # key/unkey de IRLP salen con 1 aunque funcionen: solo es falla si no
+        # se pudo ejecutar (126/127) o si dijo algo.
+        if code in (126, 127) or (code != 0 and out):
+            if au:
+                au.unlink()
+            raise RuntimeError("No se pudo activar el PTT (key): {}".format(out[:200] or code))
         try:
+            if sender:
+                try:
+                    sender.start(au)
+                except Exception as e:
+                    log.warning("[IRLP] no se pudo mandar a la red: %s", e)
+                    sender.stop()
+                    sender = None
             cmd = [self.player, "-q", str(wav)] if self.player == "aplay" else \
                 shlex.split(self.player) + [str(wav)]
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -177,17 +234,27 @@ class IRLPBackend(Backend):
             if proc.returncode != 0:
                 err = proc.stderr.read().decode(errors="ignore")[:200] if proc.stderr else ""
                 raise RuntimeError("{} falló: {}".format(self.player, err))
+            if sender:
+                sender.finish()
             return True
         finally:
+            if sender:
+                sender.stop()
             self.unkey()
+            if au:
+                try:
+                    au.unlink()
+                except OSError:
+                    pass
 
     def info(self):
-        d = {"backend": self.name, "node": self.node}
+        d = {"backend": self.name, "node": self.node, "mode": self.mode}
         try:
-            code, out = self._sh('echo "$STATIONID|$( [ -f "$LOCAL/active" ] && cat "$LOCAL/active")"')
-            sid, _, active = out.partition("|")
-            d["stationid"] = sid
-            d["enlaces"] = active or "ninguno"
+            v = self.env()
+            d["stationid"] = v.get("stationid", "")
+            t = self.net_target()
+            d["enlaces"] = t["active"] if t else "ninguno"
+            d["red"] = irlpnet.describe(t) if self.mode == "red" else "apagado: solo el radio local"
         except Exception as e:
             d["error"] = str(e)
         return d
@@ -195,7 +262,13 @@ class IRLPBackend(Backend):
     def test(self):
         code, out = self._sh('[ -x "$BIN/key" ] && [ -x "$BIN/unkey" ] && echo "OK $STATIONID"')
         if out.startswith("OK"):
-            return True, "Scripts de IRLP encontrados ({})".format(out[3:])
+            msg = "Scripts de IRLP encontrados ({})".format(out[3:])
+            if self.mode == "red":
+                v = self.env()
+                if not os.access(os.path.join(v.get("bin", ""), "imike"), os.X_OK):
+                    return False, msg + ", pero falta $BIN/imike para mandar a la red"
+                msg += " · red: " + irlpnet.describe(self.net_target())
+            return True, msg
         return False, "No encontré $BIN/key y $BIN/unkey con {}".format(self.env_file)
 
 
@@ -242,5 +315,6 @@ def make(cfg):
     if kind == "irlp":
         return IRLPBackend(cfg.get("irlp_env", "/home/irlp/custom/environment"),
                            cfg.get("irlp_key_cmd", "key"), cfg.get("irlp_unkey_cmd", "unkey"),
-                           cfg.get("irlp_player", "aplay"), cfg.get("node", ""))
+                           cfg.get("irlp_player", "aplay"), cfg.get("node", ""),
+                           cfg.get("irlp_mode", "red"))
     return SimulatedBackend()

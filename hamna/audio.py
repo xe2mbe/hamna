@@ -50,8 +50,32 @@ def _run(cmd, timeout=900):
     return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
 
 
+_WORKS = {}
+
+
 def have(tool):
-    return bool(shutil.which(tool))
+    """¿Está el programa y además arranca? Un ffmpeg al que le faltan librerías
+    (pasó en un nodo IRLP con libraspberrypi0 de buster) cuenta como ausente,
+    y entonces se usa sox."""
+    path = shutil.which(tool)
+    if not path:
+        return False
+    if tool != "ffmpeg":
+        return True
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        mt = 0
+    if _WORKS.get(path, (None, None))[0] != mt:
+        try:
+            ok = subprocess.run([path, "-version"], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=15).returncode == 0
+        except Exception:
+            ok = False
+        if not ok:
+            log.warning("ffmpeg está instalado pero no arranca (¿faltan librerías?); uso sox")
+        _WORKS[path] = (mt, ok)
+    return _WORKS[path][1]
 
 
 def tools():

@@ -153,7 +153,18 @@ if [ "$APT" = 1 ] && command -v apt-get >/dev/null 2>&1; then
 elif [ "$FLAVOR" = HamVOIP ]; then
   c_info "HamVOIP: nothing is installed with pacman; using the system's sox and mpg123"
 fi
+FFMPEG_OK=0
 if command -v ffmpeg >/dev/null 2>&1; then
+  if ffmpeg -version >/dev/null 2>&1; then
+    FFMPEG_OK=1
+  else
+    c_warn "ffmpeg is installed but does not start: $(ffmpeg -version 2>&1 | head -1 | cut -c1-120)"
+    c_info "On a Pi with an old libraspberrypi0 (buster), fix it as root with:"
+    c_info "  for l in vchiq_arm vcos mmal_core mmal_util mmal_vc_client bcm_host vcsm; do ln -sf /opt/vc/lib/lib\$l.so /usr/lib/arm-linux-gnueabihf/lib\$l.so.0; done"
+    c_info "HAMNA uses sox meanwhile (no MP3 unless mpg123 is installed)"
+  fi
+fi
+if [ "$FFMPEG_OK" = 1 ]; then
   c_ok "Audio via ffmpeg (all formats, LUFS leveling)"
 elif command -v sox >/dev/null 2>&1; then
   command -v mpg123 >/dev/null 2>&1 && MP3=" and MP3 via mpg123" || MP3=" (no MP3: mpg123 is missing)"
@@ -293,6 +304,8 @@ if [ "$APACHE" = 1 ]; then
     if apache2ctl configtest >/dev/null 2>&1; then
       systemctl reload apache2 2>/dev/null || true
       WEB_URL="/hamna/"; c_ok "Published by Apache at /hamna/"
+      # Without mod_ssl (e.g. an IRLP node) Apache only serves http
+      [ -e /etc/apache2/mods-enabled/ssl.load ] || WEB_SCHEME="http"
     else
       a2disconf -q hamna-web >/dev/null 2>&1 || true
       c_warn "Apache rejected the configuration; /hamna/ was not published"

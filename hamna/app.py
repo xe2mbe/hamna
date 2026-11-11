@@ -902,7 +902,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
-            "irlp_unkey_cmd", "irlp_player", "station_name", "tts_engine", "azure_region",
+            "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat"}
 
 
@@ -928,6 +928,8 @@ def ajustes_save(req):
             upd[k] = str(v).strip()
     if upd.get("node") and not re.match(r"^[A-Za-z0-9]{1,10}$", upd["node"]):
         raise ValueError("Número de nodo inválido")
+    if upd.get("irlp_mode") not in (None, "red", "local"):
+        raise ValueError("Modo IRLP inválido")
     if upd.get("backend") not in (None, "auto", "asl", "irlp", "simulado"):
         raise ValueError("Tipo de nodo inválido")
     settings.save(upd)

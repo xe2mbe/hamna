@@ -169,12 +169,19 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 | Nodo | Cómo transmite | Usuario del servicio |
 |---|---|---|
 | ASL3 / HamVOIP | `asterisk -rx "rpt localplay\|playback <nodo> <archivo>"`; app_rpt activa y suelta el PTT. Detener/Pausa/Siguiente cortan con `rpt cmd <nodo> cop 24 0`. | `asterisk` en ASL3, `root` en HamVOIP |
-| IRLP | `$BIN/key` → `aplay` → `$BIN/unkey`, con el entorno de `/home/irlp/custom/environment`. Sale por el radio local, no por el reflector. | `repeater` |
+| IRLP | `$BIN/key` → `aplay` → `$BIN/unkey`, con el entorno de `/home/irlp/custom/environment`. En modo **Radio + red** (predeterminado) el mismo audio va además al reflector o nodo conectado. | `repeater` |
 
 **Modo de reproducción en ASL** (Ajustes → Nodo):
 
 - `localplay`: solo el transmisor de este nodo.
 - `playback`: este nodo **y todos los nodos enlazados**.
+
+**Modo de reproducción en IRLP** (Ajustes → Nodo):
+
+- **Radio + red** (predeterminado): este nodo **y el reflector o nodo conectado**, como `playback` en ASL.
+- **Solo el radio**: solo el transmisor de este nodo.
+
+IRLP solo manda a la red lo que entra por el receptor con COS, así que `aplay` por sí solo no llega al reflector. HAMNA usa el mismo `imike` de IRLP en modo archivo, con la identidad del nodo (`SPEAKFREE_CNAME` y `SPEAKFREE_ID`), y un relevo interno que lo reenvía al reflector desde un solo puerto y descarta la despedida RTCP (con ella el reflector olvida al emisor). imike comprime en el formato del canal (UNCOMP, ADPCM o GSM). La IP, el puerto y el formato salen de `local/calledip`, `local/udp_port` y `local/codec`, que IRLP escribe al conectar; en una llamada entrante de otro nodo IRLP no guarda la IP y el audio sale solo por el radio. Si algo de la parte de red falla, el radio sigue transmitiendo y queda anotado en la bitácora. Probado con el reflector de eco 9990.
 
 > **Importante (ASL3):** app_rpt solo manda el `playback` a los enlaces si el nodo tiene `duplex` mayor a 0 **o** `linktolink = yes`. En un hub con `duplex = 0`, agrega `linktolink = yes` en su estrofa de `rpt.conf` y reinicia Asterisk con `sudo systemctl restart asterisk` (nunca `rpt restart`). Sin eso, el audio suena en el hub pero los enlazados no lo oyen.
 
@@ -338,6 +345,7 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `web.py` | Servidor HTTP, sesiones y roles |
 | `engine.py` | Programador y transmisión |
 | `backends.py` | ASL / IRLP / simulado |
+| `irlpnet.py` | IRLP: el audio también al reflector o nodo conectado (imike + relevo) |
 | `audio.py` | Conversión y nivelación |
 | `tts.py` | Voces |
 | `auth.py` | Usuarios, sesiones y bloqueos |
