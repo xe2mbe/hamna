@@ -494,9 +494,9 @@ function renderProg() {
       ${progTimeline(p)}
       <div class="actions">
         <button class="btn sm primary" data-act="tx" data-id="${p.evento_id}" data-n="${esc(p.evento_nombre)}">📡 Transmitir ahora</button>
-        <button class="btn sm" data-act="edit" data-id="${p.id}">Editar</button>
-        <button class="btn sm" data-act="toggle" data-id="${p.id}">${p.activo ? "Desactivar" : "Activar"}</button>
-        <button class="btn sm ghost" data-act="del" data-id="${p.id}">Borrar</button>
+        <button class="btn sm ok-soft" data-act="edit" data-id="${p.id}">Editar</button>
+        <button class="btn sm neutral" data-act="toggle" data-id="${p.id}">${p.activo ? "Desactivar" : "Activar"}</button>
+        <button class="btn sm danger-soft" data-act="del" data-id="${p.id}">Borrar</button>
       </div></div></div>`;
   }).join("");
   $("#nextCard").classList.add("hidden");
@@ -656,8 +656,8 @@ async function loadEvento(id) {
       <div class="muted">${esc(ev.tipo || "")}</div></div>
       <div class="row gap wrap">
         <button class="btn primary" id="evTx">📡 Transmitir ahora</button>
-        <button class="btn" id="evEdit">Editar</button>
-        <button class="btn ghost" id="evDel">Borrar</button>
+        <button class="btn ok-soft" id="evEdit">Editar</button>
+        <button class="btn danger-soft" id="evDel">Borrar</button>
       </div>
     </div>
     <div class="totals"><span>Duración total <b>${fmt(tot)}</b></span>

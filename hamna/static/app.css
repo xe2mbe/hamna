@@ -73,6 +73,12 @@ code { font: .85em ui-monospace, SFMono-Regular, Consolas, monospace; }
   background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .btn.danger-soft:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
 .btn.ok { background: var(--ok); border-color: transparent; color: #fff; }
+.btn.ok-soft { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 9%, transparent); }
+.btn.ok-soft:hover { background: color-mix(in srgb, var(--ok) 18%, transparent); }
+.btn.neutral { color: var(--text2); border-color: color-mix(in srgb, var(--text3) 40%, transparent);
+  background: color-mix(in srgb, var(--text3) 12%, transparent); }
+.btn.neutral:hover { background: color-mix(in srgb, var(--text3) 22%, transparent); }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover { background: var(--hover); }
 .btn.sm { padding: 5px 11px; font-size: .84rem; border-radius: 8px; }
@@ -134,7 +140,7 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .tabs button:hover { background: var(--hover); color: var(--text); }
 .tabs button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .side-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 14px 8px 0; border-top: 1px solid var(--border); }
+  padding: 14px 8px 12px; border-top: 1px solid var(--border); }
 .side-foot .clock { flex: 1; min-width: 0; }
 .clock { font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
 .clock small { display: block; white-space: nowrap; color: var(--text3); font-size: .75rem; font-weight: 500; letter-spacing: 0; }
@@ -452,13 +458,12 @@ legend { font-size: 1.15rem; font-weight: 700; margin-bottom: 16px; padding: 0; 
 .mon-pair { display: flex; justify-content: space-between; gap: 8px; }
 .mon-pair i { font-style: normal; color: var(--text2); }
 .mon-pair b.warn { color: var(--warn); } .mon-pair b.bad { color: var(--danger); }
-.side-mon + .side-user { margin-top: 0; }
+.side-mon + .side-foot, .side-foot + .side-user { margin-top: 0; }
 .side-user { display: flex; align-items: center; gap: 10px; padding: 12px 8px; margin-top: auto;
   border-top: 1px solid var(--border); }
 .side-user .who { min-width: 0; flex: 1; line-height: 1.25; }
 .side-user .who b { display: block; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-user .who small { color: var(--text3); font-size: .76rem; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side-user + .side-foot { margin-top: 0; }
 .me-card { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; background: var(--surface2); margin-bottom: 6px; }
 .me-card b { display: block; font-size: 1.05rem; }
 .ulist, .slist { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
@@ -509,7 +514,7 @@ body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
   .tabs button { padding: 7px 12px; }
   .side-mon { padding: 8px 8px 6px; gap: 4px; }
   .side-user { padding: 8px; }
-  .side-foot { padding-top: 8px; }
+  .side-foot { padding-top: 8px; padding-bottom: 8px; }
   .clock { font-size: 1.05rem; }
 }
 .top-clock { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.05rem; }
