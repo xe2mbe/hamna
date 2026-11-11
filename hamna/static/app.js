@@ -1681,6 +1681,15 @@ function renderSesiones() {
   }
   const red = s.red || [];
   $("#sesRedWrap").classList.toggle("hidden", !red.length);
+  if (s.sistema === "irlp") {
+    // status.irlp.net: quién más está en el mismo reflector (se ve abierto)
+    if (red.length && !S.sesRedOpened) { $("#sesRedWrap").open = true; S.sesRedOpened = true; }
+    $("#sesRedTitle").textContent = `En ${s.activo} · ${red.length} ${red.length === 1 ? "nodo más" : "nodos más"}`;
+    $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.frecuencia, "conectado " + r.tiempo].filter(Boolean).join(" · "))}">
+      <b>${esc(r.nodo)} ${esc(r.indicativo || "")}</b><small>${esc(r.ubicacion || r.descripcion || "—")}</small></span>`).join("") +
+      `<p class="muted small" style="flex-basis:100%">Según status.irlp.net (se actualiza cada pocos minutos).</p>`;
+    return;
+  }
   $("#sesRedTitle").textContent = `Red completa · ${red.length} nodos más`;
   $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.ubicacion].filter(Boolean).join(" · "))}">
     <b>${esc(r.nodo)}</b><small>${esc(r.indicativo || "—")}</small></span>`).join("");

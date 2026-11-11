@@ -191,7 +191,7 @@
     // Conexiones
     "En reposo": "Idle", "Recibiendo": "Receiving", "Transmitiendo": "Transmitting", "Estado del nodo": "Node status",
     "Nadie transmitiendo": "Nobody transmitting", "Sin transmitir": "Not broadcasting",
-    "Preparando audio": "Preparing audio", "En pausa": "Paused", "Entre secciones": "Between sections", "Nodos en la red": "Nodes in the network",
+    "Preparando audio": "Preparing audio", "Según status.irlp.net (se actualiza cada pocos minutos).": "From status.irlp.net (updated every few minutes).", "En pausa": "Paused", "Entre secciones": "Between sections", "Nodos en la red": "Nodes in the network",
     "alcanzables a través de los enlaces": "reachable through the links", "No hay nodos conectados.": "No nodes connected.",
     "Hablando": "Talking", "Monitor": "Monitor", "↘ Entrante": "↘ Incoming", "↗ Saliente": "↗ Outgoing",
     "En modo simulado no hay enlaces que mostrar.": "In simulated mode there are no links to show.", "Sin conexión": "Not connected",
@@ -342,6 +342,7 @@
     M(/^(\d+) entrantes$/, (m, n) => n + " incoming"), M(/^(\d+) salientes$/, (m, n) => n + " outgoing"),
     M(/^Habla: (.+)$/, (m, w) => "Talking: " + w),
     M(/^Red completa · (\d+) nodos más$/, (m, n) => `Full network · ${n} more nodes`),
+    M(/^En (.+) · (\d+) nodos? más$/, (m, r, n) => `On ${r} · ${n} more node${n === "1" ? "" : "s"}`),
     M(/^Nodo (\w+) — nodos conectados en este momento$/, (m, n) => `Node ${n} — nodes connected right now`),
     M(/^Nodo (\w+) · (.+) — nodos conectados en este momento$/, (m, n, c) => `Node ${n} · ${c} — nodes connected right now`),
     M(/^Conectado a (.+)$/, (m, n) => "Connected to " + n),

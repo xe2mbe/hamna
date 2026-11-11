@@ -190,6 +190,53 @@ def _irlp_local(env):
     return local if local.startswith("/") and os.path.isdir(local) else default
 
 
+# ── Nodos en el mismo reflector (página pública de estado de IRLP) ──────────
+REF_URL = "https://status.irlp.net/index.php?PSTART=3"
+REF_EVERY = 60          # la página se actualiza cada pocos minutos
+_ref = {"t": 0.0, "data": {}, "error": "", "busy": False}
+_ref_lock = threading.Lock()
+
+
+def _ref_fetch():
+    import html as _html
+    import urllib.request
+    try:
+        req = urllib.request.Request(REF_URL, headers={"User-Agent": "HAMNA-Web"})
+        page = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "ignore")
+        data = {}
+        for row in re.finditer(r"<tr[^>]*>(.*?)</tr>", page, re.S):
+            cells = [_html.unescape(re.sub(r"<[^>]+>", "", c)).strip()
+                     for c in re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S)]
+            if len(cells) < 9 or not cells[0].isdigit():
+                continue
+            m = re.match(r"Linked to (\d{4})", cells[7])
+            if not m:
+                continue
+            data.setdefault(m.group(1), []).append({
+                "nodo": cells[0], "indicativo": cells[1], "descripcion": cells[2],
+                "ubicacion": ", ".join(x for x in (cells[3], cells[4]) if x),
+                "frecuencia": cells[5], "tiempo": cells[8]})
+        _ref.update(data=data, error="")
+    except Exception as e:
+        _ref["error"] = str(e)[:120]
+    finally:
+        _ref.update(t=time.time(), busy=False)
+
+
+def irlp_reflector_nodes(activo, own=""):
+    """Otros nodos conectados al mismo reflector o nodo, según status.irlp.net.
+    Se consulta en segundo plano como máximo una vez por minuto."""
+    with _ref_lock:
+        if time.time() - _ref["t"] > REF_EVERY and not _ref["busy"]:
+            _ref["busy"] = True
+            threading.Thread(target=_ref_fetch, daemon=True, name="irlp-estado").start()
+    key = re.sub(r"\D", "", activo or "")[-4:]
+    me = re.sub(r"\D", "", own or "")
+    nodes = [n for n in _ref["data"].get(key, []) if n["nodo"] != me] if key else []
+    return nodes, {"actualizado": int(time.time() - _ref["t"]) if _ref["t"] else None,
+                   "error": _ref["error"]}
+
+
 def _irlp_lines(env):
     """COS y PTT con cosstate/pttstate de IRLP (sirven con puerto paralelo o
     GPIO; salen con 1 si la línea está activa). None = no se pudo leer."""
@@ -224,9 +271,10 @@ def irlp_status(cfg):
         if t and t["ip"]:
             detalle = "{}:{} · {}".format(t["ip"], t["port"], t["codec"])
     cos, ptt = _irlp_lines(env)
+    red, red_info = irlp_reflector_nodes(activo, cfg.get("node") or "") if activo else ([], {})
     return {"sistema": "irlp", "nodo": cfg.get("node") or "", "activo": activo, "detalle": detalle,
-            "cos": cos, "ptt": ptt, "rx": bool(cos), "tx": bool(ptt),
-            "enlaces": [{"nodo": activo, "modo": "transceptor"}] if activo else [], "red": []}
+            "cos": cos, "ptt": ptt, "rx": bool(cos), "tx": bool(ptt), "red_info": red_info,
+            "enlaces": [{"nodo": activo, "modo": "transceptor"}] if activo else [], "red": red}
 
 
 def status(cfg, node=None):
