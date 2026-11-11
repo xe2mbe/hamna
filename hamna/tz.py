@@ -148,6 +148,24 @@ def node_to_zone(naive_local, zone):
     return dt.datetime(1970, 1, 1) + dt.timedelta(seconds=ts + _offset_at(zone, ts))
 
 
+def is_dst(zone, ts):
+    """True si la zona está en horario de verano en el instante ts.
+    Sin zona: la del nodo."""
+    if not zone:
+        return bool(time.localtime(ts).tm_isdst > 0)
+    if ZoneInfo is not None:
+        try:
+            d = dt.datetime.fromtimestamp(ts, ZoneInfo(zone)).dst()
+            return bool(d and d.total_seconds())
+        except Exception:
+            pass
+    trans, idx, types = _tzif(zone)
+    if not trans or ts < trans[0]:
+        return False
+    i = max(j for j in range(len(trans)) if trans[j] <= ts)
+    return bool(types[idx[i]][1])
+
+
 def label(zone):
     for z, l in ZONAS:
         if z == zone:

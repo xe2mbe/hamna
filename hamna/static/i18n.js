@@ -310,7 +310,9 @@
     M(/^Instalada: v(.+) · En GitHub: v(.+) · Consultado: (.+)$/, (m, a, b, c) => `Installed: v${a} · On GitHub: v${b} · Checked: ${c}`),
     M(/^No pude consultar GitHub: (.+)$/, (m, e) => "Could not reach GitHub: " + e),
     M(/^Aquí \(hora del nodo\):$/, () => "Here (node time):"),
-    M(/^⚠ Desde el (\S+) será a las (\S+) aquí \(cambio de horario\)$/, (m, d, h) => `⚠ From ${d} it will be at ${h} here (clock change)`),
+    M(/^A partir del (\d+) (\S+) (\d+) será a las (\S+) \((Horario de Verano|Horario de Invierno|cambio de horario)\)$/, (m, d, mes, y, h, k) =>
+      `Starting ${({ Ene: "Jan", Abr: "Apr", Ago: "Aug", Dic: "Dec" })[mes] || mes} ${d}, ${y} it will be at ${h} (${
+        ({ "Horario de Verano": "Daylight Saving Time", "Horario de Invierno": "Standard Time" })[k] || "clock change"})`),
     M(/^Zona horaria desconocida: (.+)$/, (m, z) => "Unknown time zone: " + z),
     M(/^La hora y el día se toman en esa zona y HAMNA los convierte a la hora del nodo para cada fecha: si esa zona cambia de horario, el evento se recorre solo\. Zona del nodo: (.+)\.$/,
       (m, z) => `Time and day are read in that zone and HAMNA converts them to node time for each date: if that zone changes its clocks, the event shifts on its own. Node zone: ${z}.`),

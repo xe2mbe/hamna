@@ -377,6 +377,13 @@ async function loadProg() {
   renderProg();
   loadCronEntries().then((ch) => { if (ch && S.tab === "prog") renderProg(); });
 }
+const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+function cambioText(c) {
+  const [y, m, d] = c.fecha.split("-").map(Number);
+  const h = { verano: " (Horario de Verano)", invierno: " (Horario de Invierno)" }[c.horario] || " (cambio de horario)";
+  return `A partir del ${d} ${MESES[m - 1]} ${y} será a las ${c.hora_local}${h}`;
+}
+
 function recText(p) {
   if (p.recurrencia === "semanal") return "Cada " + DIAS[new Date(p.fecha + "T12:00").getDay()];
   if (p.recurrencia === "ninguna") return "Una vez · " + p.fecha;
@@ -407,7 +414,7 @@ function renderProg() {
       <h3>${esc(p.evento_nombre)}</h3>
       <div class="meta">${esc(recText(p))}${p.evento_tipo ? " · " + esc(p.evento_tipo) : ""}</div>
       ${p.zona ? `<div class="meta here">Aquí (hora del nodo): <b>${esc(p.hora_local)}</b></div>` : ""}
-      ${p.cambio ? `<div class="meta tz-warn">⚠ Desde el ${esc(p.cambio.fecha)} será a las ${esc(p.cambio.hora_local)} aquí (cambio de horario)</div>` : ""}
+      ${p.cambio ? `<div class="meta tz-warn">${esc(cambioText(p.cambio))}</div>` : ""}
       <div class="meta" data-left="${p.faltan_s ?? ""}">${p.activo ? (p.proxima ? "Próxima: " + esc(p.proxima) + " · en <b class='left'>" + fmtLeft(p.faltan_s) + "</b>" : "Sin próximas fechas") : "Desactivada"}</div>
       ${progTimeline(p)}
       <div class="actions">

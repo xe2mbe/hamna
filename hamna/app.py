@@ -599,6 +599,19 @@ def programacion(req):
     out = []
     now = dt.datetime.now()
     durs = {e["id"]: e["duracion_total"] for e in db.get_eventos()}
+
+    def _horario(zona, antes, despues):
+        """'verano' o 'invierno' para la nueva hora: se mira la zona que
+        cambia de horario (la del evento o, si esa no cambia, la del nodo)."""
+        t0, t1 = time.mktime(antes.timetuple()), time.mktime(despues.timetuple())
+        for z in (zona, ""):
+            try:
+                a, b = tz.is_dst(z, t0), tz.is_dst(z, t1)
+            except Exception:
+                continue
+            if a != b:
+                return "verano" if b else "invierno"
+        return ""
     conex = {}
     for r in db.get_programacion():
         eid = r["evento_id"]
@@ -622,7 +635,8 @@ def programacion(req):
             r["zona_nombre"] = tz.label(r["zona"])
             for o in engine.occurrences(r, nxt, nxt + dt.timedelta(days=200)):
                 if o.strftime("%H:%M") != r["hora_local"]:
-                    r["cambio"] = {"fecha": o.strftime("%Y-%m-%d"), "hora_local": o.strftime("%H:%M")}
+                    r["cambio"] = {"fecha": o.strftime("%Y-%m-%d"), "hora_local": o.strftime("%H:%M"),
+                                   "horario": _horario(r["zona"], nxt, o)}
                     break
         out.append(r)
     out.sort(key=lambda r: (r["faltan_s"] is None, r["faltan_s"] or 0))
