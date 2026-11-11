@@ -25,7 +25,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Qué hace
 
@@ -33,6 +33,7 @@ HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y auto
 - **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona).
 - **Transmisión automática** por AllStarLink o IRLP, con nivel de audio parejo (-18 LUFS) y pausas automáticas para los repetidores.
 - **Conexiones automáticas** antes y después de cada evento, y una pestaña **Conexiones** para ver y controlar los enlaces del nodo en vivo.
+- **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos.
 - **Sincronización entre nodos**: otro HAMNA (por ejemplo, el que retransmite en otra ciudad) se trae solo las secciones y audios de un evento, cada semana.
 - **Usuarios con roles**, idioma por usuario (inglés o español), tema claro u oscuro y logo de la estación.
 - **Monitor del equipo** (CPU, RAM, disco, temperatura, red) y **aviso de actualizaciones** desde GitHub.
@@ -184,6 +185,18 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 "N min antes" se adelanta solo cuando el evento está programado; si lo lanzas a mano, se hace al iniciar. Las de "al terminar" corren también si detienes el evento.
 
+### Escuchar en vivo
+
+Con el botón **🔊 En vivo** de la barra superior se escucha el nodo desde la página, en la computadora o el celular: lo que transmite HAMNA, los reportes de los colegas y los nodos enlazados. Llega con 1 a 2 segundos de retraso, en calidad de radio (8 kHz) y gasta unos 64 kbps por persona. Pueden escuchar hasta 8 personas a la vez; cualquier usuario, incluso de solo lectura.
+
+Para activarlo, agrega esta línea en la sección de tu nodo en `/etc/asterisk/rpt.conf` (ASL3 y HamVOIP) y reinicia Asterisk **cuando no haya emisión** (`sudo systemctl restart asterisk`; en ASL3 nunca uses `rpt restart`):
+
+```
+outstreamcmd = /opt/hamna-web/bin/hamna-live
+```
+
+app_rpt le pasa el audio del nodo a ese pequeño programa, que lo reenvía a HAMNA Web dentro del mismo equipo (127.0.0.1:8091). Si HAMNA Web está apagado, el audio simplemente se descarta: nunca detiene a Asterisk. HAMNA lo convierte a µ-law solo mientras alguien escucha (≈1 % de CPU en una Raspberry Pi 4) y el navegador lo reproduce sin complementos. En **Ajustes → Sistema** se ve si llega audio y quién está escuchando.
+
 ### Sincronizar eventos entre nodos
 
 Sirve para que otro nodo retransmita un evento sin que nadie le pase los audios. Ejemplo: el nodo de Tijuana retransmite el Boletín Dominical que se arma en el hub.
@@ -312,3 +325,4 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `sysmon.py` | Monitor del equipo |
 | `updates.py` | Aviso de actualizaciones |
 | `notify.py` | Avisos por Telegram |
+| `live.py` | Audio en vivo (recibe de `bin/hamna-live`) |

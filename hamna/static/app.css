@@ -575,3 +575,13 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before { animation: none !important; transition: none !important; }
 }
+
+/* Escuchar en vivo */
+.live-btn { gap: 6px; margin-left: auto; }
+.live-btn.on { background: var(--danger, #d64545); color: #fff; border-color: transparent; }
+.live-btn.on .live-ico { animation: livepulse 1.2s ease-in-out infinite; }
+.live-btn.wait { opacity: .7; }
+@keyframes livepulse { 50% { opacity: .35; } }
+@media (max-width: 560px) { .live-btn .live-txt { display: none; } }
+.live-box h4 { margin: 0 0 6px; }
+.live-box pre { white-space: pre-wrap; word-break: break-all; }

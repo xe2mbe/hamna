@@ -181,6 +181,7 @@ cp -r "$SRC_DIR/hamna" "$APP_DIR/"
 rm -rf "$APP_DIR/bin" && mkdir -p "$APP_DIR/bin"
 cp "$SRC_DIR"/bin/hamna-* "$APP_DIR/bin/"
 sed -i "1s|.*|#!$PY -I|" "$APP_DIR/bin/hamna-cron"
+sed -i "1s|.*|#!$PY -I|" "$APP_DIR/bin/hamna-live"
 for f in install.sh update.sh uninstall.sh README.md; do [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$APP_DIR/"; done
 find "$APP_DIR" -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
 chown -R root:root "$APP_DIR"

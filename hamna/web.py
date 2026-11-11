@@ -152,7 +152,8 @@ class Request:
 
 class Response:
     def __init__(self, body=b"", status=200, ctype="application/json; charset=utf-8",
-                 headers=None, file=None, cache=False):
+                 headers=None, file=None, cache=False, stream=None):
+        self.stream = stream            # generador de bytes (audio en vivo)
         self.body = body
         self.status = status
         self.ctype = ctype
@@ -358,6 +359,25 @@ class App:
                 head_only = self.command == "HEAD"
                 hdrs = dict(resp.headers)
                 cookie = req.cookie_header() if req else None
+                if resp.stream is not None:
+                    self.close_connection = True
+                    self.send_response(resp.status)
+                    self.send_header("Content-Type", resp.ctype)
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("X-Accel-Buffering", "no")
+                    self.send_header("Connection", "close")
+                    for k, v in hdrs.items():
+                        self.send_header(k, v)
+                    if cookie:
+                        self.send_header("Set-Cookie", cookie)
+                    self.end_headers()
+                    try:
+                        if not head_only:
+                            for chunk in resp.stream:
+                                self.wfile.write(chunk)
+                    finally:
+                        resp.stream.close()
+                    return
                 if resp.file:
                     size = os.path.getsize(resp.file)
                     start, end, status = 0, size - 1, 200

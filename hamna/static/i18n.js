@@ -121,6 +121,11 @@
     "Contraseña cambiada; tus otras sesiones se cerraron": "Password changed; your other sessions were signed out",
     // Barra al aire
     "FUERA DEL AIRE": "OFF AIR", "AL AIRE": "ON AIR", "INTERVALO": "GAP", "PAUSA": "PAUSE", "EN PAUSA": "PAUSED", "PREPARANDO": "PREPARING",
+    "En vivo": "Live", "Escuchar el nodo en vivo": "Listen to the node live", "🔊 Audio en vivo": "🔊 Live audio",
+    "Para escuchar el nodo desde esta página, agrega esta línea en la sección de tu nodo en": "To listen to the node from this page, add this line to your node's section in",
+    "y reinicia Asterisk cuando no haya emisión:": "and restart Asterisk when nothing is on air:",
+    "Se cortó el audio en vivo": "The live audio stopped", "No se pudo conectar": "Could not connect",
+    "El audio en vivo no está activo en este nodo": "Live audio is not active on this node",
     "Pausa": "Pause", "Reanudar": "Resume", "Saltar espera": "Skip wait", "Siguiente sección": "Next section", "Detener": "Stop", "Bitácora": "Log",
     "¿Detener la transmisión?": "Stop the broadcast?", "Iniciando transmisión": "Starting broadcast",
     "📡 Transmitir": "📡 Transmit", "📡 Transmitir ahora": "📡 Transmit now", "Transmitiendo…": "Transmitting…", "Prueba al aire": "On-air test",
@@ -310,6 +315,9 @@
     M(/^Instalada: v(.+) · En GitHub: v(.+) · Consultado: (.+)$/, (m, a, b, c) => `Installed: v${a} · On GitHub: v${b} · Checked: ${c}`),
     M(/^No pude consultar GitHub: (.+)$/, (m, e) => "Could not reach GitHub: " + e),
     M(/^Aquí \(hora del nodo\):$/, () => "Here (node time):"),
+    M(/^(Recibiendo audio del nodo|Sin audio del nodo en los últimos segundos) · (\d+) personas? escuchando$/, (m, a, n) =>
+      (a.startsWith("Recibiendo") ? "Receiving audio from the node" : "No audio from the node in the last few seconds") + ` · ${n} listening`),
+    M(/^Ya hay (\d+) personas escuchando; intenta más tarde$/, (m, n) => `${n} people are already listening; try again later`),
     M(/^A partir del (\d+) (\S+) (\d+) será a las (\S+) \((Horario de Verano|Horario de Invierno|cambio de horario)\)$/, (m, d, mes, y, h, k) =>
       `Starting ${({ Ene: "Jan", Abr: "Apr", Ago: "Aug", Dic: "Dec" })[mes] || mes} ${d}, ${y} it will be at ${h} (${
         ({ "Horario de Verano": "Daylight Saving Time", "Horario de Invierno": "Standard Time" })[k] || "clock change"})`),

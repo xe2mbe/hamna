@@ -298,12 +298,91 @@ function tickClock() {
   $("#clockTop").textContent = $("#clockLocal").textContent;
   if (!(S.status && S.status.on_air)) tickProg();
 }
+// ── Escuchar en vivo ─────────────────────────────────────────────────────────
+// El nodo manda µ-law 8 kHz; aquí se decodifica y se reproduce con Web Audio.
+const LIVE = { on: false, ctx: null, ctrl: null, next: 0 };
+const MULAW = (() => {
+  const t = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const u = ~i & 0xff, exp = (u >> 4) & 7, s = (((u & 0x0f) << 3) + 0x84) << exp;
+    t[i] = ((u & 0x80) ? -(s - 0x84) : (s - 0x84)) / 32768;
+  }
+  return t;
+})();
+function renderLive(lv) {
+  const b = $("#btnLive");
+  if (!lv) return;
+  b.classList.toggle("hidden", !lv.configurado && !LIVE.on);
+  const box = $("#liveBox");
+  if (!box || box.closest(".hidden")) return;
+  const n = lv.oyentes.length;
+  const html = lv.configurado
+    ? `<div class="live-box"><h4>🔊 Audio en vivo</h4>
+        <div class="muted" style="font-size:.84rem">${lv.recibiendo ? "Recibiendo audio del nodo" : "Sin audio del nodo en los últimos segundos"} · ${n} ${n === 1 ? "persona escuchando" : "personas escuchando"}</div>
+        ${n ? `<ul class="upd-list">${lv.oyentes.map((o) => `<li><span class="d">${esc(o.usuario)}</span><span>${esc(o.ip)} · ${fmt(o.desde)}</span></li>`).join("")}</ul>` : ""}</div>`
+    : `<div class="live-box"><h4>🔊 Audio en vivo</h4>
+        <p class="muted" style="margin:0 0 6px">Para escuchar el nodo desde esta página, agrega esta línea en la sección de tu nodo en <code>/etc/asterisk/rpt.conf</code> y reinicia Asterisk cuando no haya emisión:</p>
+        <pre translate="no">outstreamcmd = /opt/hamna-web/bin/hamna-live</pre>${lv.error ? `<p class="muted">${esc(lv.error)}</p>` : ""}</div>`;
+  if (box.innerHTML !== html) box.innerHTML = html;
+}
+async function liveStart() {
+  const b = $("#btnLive");
+  LIVE.on = true;
+  b.classList.add("on", "wait");
+  b.title = "Detener";
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  LIVE.ctx = new Ctx();
+  LIVE.next = 0;
+  LIVE.ctrl = new AbortController();
+  try {
+    const r = await fetch("api/en-vivo", { credentials: "same-origin", signal: LIVE.ctrl.signal });
+    if (!r.ok) {
+      let msg = "No se pudo conectar";
+      try { msg = (await r.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
+    const rd = r.body.getReader();
+    for (;;) {
+      const { value, done } = await rd.read();
+      if (done || !LIVE.on) break;
+      if (value && value.length) livePlay(value);
+    }
+    if (LIVE.on) toast("Se cortó el audio en vivo", true);
+  } catch (e) {
+    if (LIVE.on && e.name !== "AbortError") toast(e.message, true);
+  }
+  liveStop();
+}
+function livePlay(bytes) {
+  const ctx = LIVE.ctx, buf = ctx.createBuffer(1, bytes.length, 8000), d = buf.getChannelData(0);
+  for (let i = 0; i < bytes.length; i++) d[i] = MULAW[bytes[i]];
+  const now = ctx.currentTime;
+  if (LIVE.next < now + 0.05) LIVE.next = now + 0.4;   // se vació el colchón: 0.4 s de margen
+  if (LIVE.next > now + 3) return;                     // demasiado atrasado: tirar este pedazo
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(LIVE.next);
+  LIVE.next += buf.duration;
+  $("#btnLive").classList.remove("wait");
+}
+function liveStop() {
+  LIVE.on = false;
+  try { LIVE.ctrl && LIVE.ctrl.abort(); } catch {}
+  try { LIVE.ctx && LIVE.ctx.close(); } catch {}
+  LIVE.ctx = LIVE.ctrl = null;
+  const b = $("#btnLive");
+  b.classList.remove("on", "wait");
+  b.title = "Escuchar el nodo en vivo";
+}
+
 async function poll() {
   clearTimeout(S.pollTimer);
   let s;
   try { s = await api("api/status"); } catch { schedulePoll(); return; }
   S.status = s;
   renderSys(s.sys, s.version);
+  renderLive(s.envivo);
   if (s.ts) {
     // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
     const [d, t] = s.now.split(" "), [Y, M, D] = d.split("-").map(Number), [h, m, x] = t.split(":").map(Number);
@@ -1513,6 +1592,7 @@ function applyTheme(th) {
   else delete document.documentElement.dataset.theme;
 }
 try { applyTheme(localStorage.getItem("hamna.theme")); } catch {}
+$("#btnLive").onclick = () => (LIVE.on ? liveStop() : liveStart());
 $("#btnTheme").onclick = () => {
   const cur = document.documentElement.dataset.theme ||
     (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
@@ -1635,6 +1715,7 @@ function applyRole() {
   $("#userRole").textContent = (u.usuario ? u.usuario + " · " : "") + (ROL_TXT[u.rol] || "");
 }
 async function logoutNow() {
+  liveStop();
   await api("api/logout", { method: "POST" }).catch(() => {});
   S.me = null; showLogin();
 }

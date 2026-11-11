@@ -14,7 +14,8 @@ from pathlib import Path
 
 from . import VERSION, audio, auth, backends, cron, db, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
-from .web import App, HTTPError, jsonr, send_file
+from .live import live
+from .web import App, HTTPError, Response, jsonr, send_file
 
 log = logging.getLogger("hamna.web")
 
@@ -246,7 +247,18 @@ def status(req):
     s["ts"] = round(time.time(), 1)
     s["sys"] = sysmon.snapshot()
     s["version"] = VERSION
+    s["envivo"] = live.status()
     return jsonr(s)
+
+
+# ── Escuchar en vivo ─────────────────────────────────────────────────────────
+@app.route("/api/en-vivo")
+def en_vivo(req):
+    if not live.started:
+        raise RuntimeError("El audio en vivo no está activo en este nodo")
+    gen = live.stream(req.ip, req.user["usuario"] if req.user else "-")
+    return Response(stream=gen, ctype="application/octet-stream",
+                    headers={"X-Audio-Format": "mulaw;rate=8000"})
 
 
 def _timezone():
