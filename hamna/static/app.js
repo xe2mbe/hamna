@@ -1613,7 +1613,8 @@ async function loadSesiones() {
     $("#sesList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
   }
   if (!S.sesTick) S.sesTick = setInterval(tickSesiones, 1000);
-  S.sesTimer = setTimeout(loadSesiones, SES_EVERY);
+  // IRLP: COS y PTT cambian rápido, se leen más seguido
+  S.sesTimer = setTimeout(loadSesiones, S.ses && S.ses.sistema === "irlp" ? 1500 : SES_EVERY);
 }
 const fmtUp = (s) => {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
@@ -1642,13 +1643,21 @@ function renderSesiones() {
   $("#sesSub").textContent = `Nodo ${s.nodo}${loc.indicativo ? " · " + loc.indicativo : ""} — nodos conectados en este momento`;
   const estado = s.tx ? ["Transmitiendo", "tx"] : s.rx ? ["Recibiendo", "rx"] : ["En reposo", ""];
   const talking = s.enlaces.filter((e) => e.transmitiendo);
+  const hm = s.hamna || {};
+  const hmTxt = !hm.on_air ? "Sin transmitir" : hm.state === "tx" ? "Transmitiendo" :
+    hm.state === "preparing" ? "Preparando audio" : (hm.state === "paused" || hm.state === "manual_pause") ? "En pausa" : "Entre secciones";
+  const line = (on, label, cls) => `<span class="chip ${on ? cls : ""}">${label} ${on == null ? "?" : on ? "●" : "○"}</span>`;
   $("#sesStats").innerHTML = s.sistema === "irlp" ? `
-    <div class="stat"><div class="k">IRLP</div><div class="v sm">${s.activo ? "Conectado a " + esc(s.activo) : "Sin conexión"}</div>${s.detalle ? `<div class="d">${esc(s.detalle)}</div>` : ""}</div>` : `
+    <div class="stat"><div class="k">IRLP</div><div class="v sm">${s.activo ? "Conectado a " + esc(s.activo) : "Sin conexión"}</div>${s.detalle ? `<div class="d">${esc(s.detalle)}</div>` : ""}</div>
+    <div class="stat ${estado[1]}"><div class="k">Radio</div><div class="v sm">${estado[0]}</div>
+      <div class="d row gap">${line(s.cos, "COS", "ok")}${line(s.ptt, "PTT", "live")}</div></div>
+    <div class="stat ${hm.on_air ? "tx" : ""}"><div class="k">HAMNA</div><div class="v sm">${hmTxt}</div>
+      <div class="d">${hm.on_air && hm.evento ? esc(hm.evento) : "&nbsp;"}</div></div>` : `
     <div class="stat"><div class="k">Enlaces directos</div><div class="v">${s.enlaces.length}</div>
       <div class="d">${s.enlaces.filter((e) => e.direccion === "IN").length} entrantes · ${s.enlaces.filter((e) => e.direccion === "OUT").length} salientes</div></div>
     <div class="stat"><div class="k">Nodos en la red</div><div class="v">${s.total_red}</div><div class="d">alcanzables a través de los enlaces</div></div>
     <div class="stat ${estado[1]}"><div class="k">Estado del nodo</div><div class="v sm">${estado[0]}</div>
-      <div class="d">${talking.length ? "Habla: " + talking.map((e) => esc(e.indicativo || e.nodo)).join(", ") : "Nadie transmitiendo"}</div></div>`;
+      <div class="d">${talking.length ? "Habla: " + talking.map((e) => esc(e.indicativo || e.nodo)).join(", ") : "Nadie transmitiendo"}${hm.on_air ? " · HAMNA al aire" : ""}</div></div>`;
   if (!s.enlaces.length) {
     $("#sesList").innerHTML = `<p class="empty">No hay nodos conectados.</p>`;
   } else {

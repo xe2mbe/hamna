@@ -876,7 +876,10 @@ def tx_cmd(req, cmd):
 # ── Sesiones (nodos conectados) ──────────────────────────────────────────────
 @app.route("/api/sesiones")
 def sesiones_get(req):
-    return jsonr(sessions.status(settings.load(), req.query.get("nodo")))
+    s = sessions.status(settings.load(), req.query.get("nodo"))
+    e = engine.status()
+    s["hamna"] = {"on_air": bool(e.get("on_air")), "state": e.get("state"), "evento": e.get("evento") or ""}
+    return jsonr(s)
 
 
 @app.route("/api/sesiones/<accion>", ("POST",))

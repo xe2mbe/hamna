@@ -190,7 +190,8 @@
     "Bienvenida": "Welcome", "Boletín dominical": "Sunday bulletin",
     // Conexiones
     "En reposo": "Idle", "Recibiendo": "Receiving", "Transmitiendo": "Transmitting", "Estado del nodo": "Node status",
-    "Nadie transmitiendo": "Nobody transmitting", "Nodos en la red": "Nodes in the network",
+    "Nadie transmitiendo": "Nobody transmitting", "Sin transmitir": "Not broadcasting",
+    "Preparando audio": "Preparing audio", "En pausa": "Paused", "Entre secciones": "Between sections", "Nodos en la red": "Nodes in the network",
     "alcanzables a través de los enlaces": "reachable through the links", "No hay nodos conectados.": "No nodes connected.",
     "Hablando": "Talking", "Monitor": "Monitor", "↘ Entrante": "↘ Incoming", "↗ Saliente": "↗ Outgoing",
     "En modo simulado no hay enlaces que mostrar.": "In simulated mode there are no links to show.", "Sin conexión": "Not connected",

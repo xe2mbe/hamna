@@ -190,6 +190,24 @@ def _irlp_local(env):
     return local if local.startswith("/") and os.path.isdir(local) else default
 
 
+def _irlp_lines(env):
+    """COS y PTT con cosstate/pttstate de IRLP (sirven con puerto paralelo o
+    GPIO; salen con 1 si la línea está activa). None = no se pudo leer."""
+    script = ('[ -f "$1" ] && . "$1" >/dev/null 2>&1; '
+              '"$BIN/cosstate" >/dev/null 2>&1; echo "c=$?"; '
+              '"$BIN/pttstate" >/dev/null 2>&1; echo "p=$?"')
+    try:
+        r = subprocess.run(["bash", "-c", script, "irlp", env], stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, timeout=5)
+        out = r.stdout.decode(errors="ignore")
+    except Exception:
+        return None, None
+    c = re.search(r"c=(\d+)", out)
+    p = re.search(r"p=(\d+)", out)
+    val = lambda m: None if not m or m.group(1) not in ("0", "1") else m.group(1) == "1"
+    return val(c), val(p)
+
+
 def irlp_status(cfg):
     env = cfg.get("irlp_env") or "/home/irlp/custom/environment"
     local = _irlp_local(env)
@@ -205,7 +223,9 @@ def irlp_status(cfg):
         t = irlpnet.target(local)
         if t and t["ip"]:
             detalle = "{}:{} · {}".format(t["ip"], t["port"], t["codec"])
+    cos, ptt = _irlp_lines(env)
     return {"sistema": "irlp", "nodo": cfg.get("node") or "", "activo": activo, "detalle": detalle,
+            "cos": cos, "ptt": ptt, "rx": bool(cos), "tx": bool(ptt),
             "enlaces": [{"nodo": activo, "modo": "transceptor"}] if activo else [], "red": []}
 
 
