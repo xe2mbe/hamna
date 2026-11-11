@@ -310,9 +310,8 @@ const MULAW = (() => {
   return t;
 })();
 function renderLive(lv) {
-  const b = $("#btnLive");
   if (!lv) return;
-  b.classList.toggle("hidden", !lv.configurado && !LIVE.on);
+  $$(".live-btn").forEach((b) => b.classList.toggle("hidden", !lv.configurado && !LIVE.on));
   const box = $("#liveBox");
   if (!box || box.closest(".hidden")) return;
   const n = lv.oyentes.length;
@@ -326,10 +325,8 @@ function renderLive(lv) {
   if (box.innerHTML !== html) box.innerHTML = html;
 }
 async function liveStart() {
-  const b = $("#btnLive");
   LIVE.on = true;
-  b.classList.add("on", "wait");
-  b.title = "Detener";
+  $$(".live-btn").forEach((b) => { b.classList.add("on", "wait"); b.title = "Detener"; });
   const Ctx = window.AudioContext || window.webkitAudioContext;
   LIVE.ctx = new Ctx();
   LIVE.next = 0;
@@ -364,16 +361,15 @@ function livePlay(bytes) {
   src.connect(ctx.destination);
   src.start(LIVE.next);
   LIVE.next += buf.duration;
-  $("#btnLive").classList.remove("wait");
+  if (LIVE.wait !== false) { $$(".live-btn").forEach((b) => b.classList.remove("wait")); LIVE.wait = false; }
 }
 function liveStop() {
   LIVE.on = false;
   try { LIVE.ctrl && LIVE.ctrl.abort(); } catch {}
   try { LIVE.ctx && LIVE.ctx.close(); } catch {}
   LIVE.ctx = LIVE.ctrl = null;
-  const b = $("#btnLive");
-  b.classList.remove("on", "wait");
-  b.title = "Escuchar el nodo en vivo";
+  LIVE.wait = true;
+  $$(".live-btn").forEach((b) => { b.classList.remove("on", "wait"); b.title = "Escuchar el nodo en vivo"; });
 }
 
 async function poll() {
@@ -1592,7 +1588,7 @@ function applyTheme(th) {
   else delete document.documentElement.dataset.theme;
 }
 try { applyTheme(localStorage.getItem("hamna.theme")); } catch {}
-$("#btnLive").onclick = () => (LIVE.on ? liveStop() : liveStart());
+$$(".live-btn").forEach((b) => { b.onclick = () => (LIVE.on ? liveStop() : liveStart()); });
 $("#btnTheme").onclick = () => {
   const cur = document.documentElement.dataset.theme ||
     (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");

@@ -121,7 +121,7 @@
     "Contraseña cambiada; tus otras sesiones se cerraron": "Password changed; your other sessions were signed out",
     // Barra al aire
     "FUERA DEL AIRE": "OFF AIR", "AL AIRE": "ON AIR", "INTERVALO": "GAP", "PAUSA": "PAUSE", "EN PAUSA": "PAUSED", "PREPARANDO": "PREPARING",
-    "En vivo": "Live", "Escuchar el nodo en vivo": "Listen to the node live", "🔊 Audio en vivo": "🔊 Live audio",
+    "En vivo": "Live", "Escuchar en vivo": "Listen live", "Escuchar el nodo en vivo": "Listen to the node live", "🔊 Audio en vivo": "🔊 Live audio",
     "Para escuchar el nodo desde esta página, agrega esta línea en la sección de tu nodo en": "To listen to the node from this page, add this line to your node's section in",
     "y reinicia Asterisk cuando no haya emisión:": "and restart Asterisk when nothing is on air:",
     "Se cortó el audio en vivo": "The live audio stopped", "No se pudo conectar": "Could not connect",

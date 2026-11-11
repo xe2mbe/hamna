@@ -582,6 +582,7 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 .live-btn.on .live-ico { animation: livepulse 1.2s ease-in-out infinite; }
 .live-btn.wait { opacity: .7; }
 @keyframes livepulse { 50% { opacity: .35; } }
-@media (max-width: 560px) { .live-btn .live-txt { display: none; } }
+.side-live { width: calc(100% - 24px); margin: 4px 12px 10px; justify-content: center; }
+@media (max-width: 560px) { .topbar .live-btn .live-txt { display: none; } }
 .live-box h4 { margin: 0 0 6px; }
 .live-box pre { white-space: pre-wrap; word-break: break-all; }
