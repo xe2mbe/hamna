@@ -576,13 +576,13 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   *, *::before { animation: none !important; transition: none !important; }
 }
 
-/* Escuchar en vivo */
-.live-btn { gap: 6px; margin-left: auto; }
-.live-btn.on { background: var(--danger, #d64545); color: #fff; border-color: transparent; }
+/* Escuchar en vivo (bocina junto al contador de la tarjeta al aire) */
+.air-sub { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 30px; }
+.air-sub .countdown:empty { display: none; }
+.live-btn.btn.icon { width: 30px; height: 30px; min-width: 30px; padding: 0; font-size: .95rem; background: var(--surface2); }
+.live-btn.on { background: var(--danger, #d64545) !important; color: #fff; border-color: transparent; }
 .live-btn.on .live-ico { animation: livepulse 1.2s ease-in-out infinite; }
 .live-btn.wait { opacity: .7; }
 @keyframes livepulse { 50% { opacity: .35; } }
-.side-live { width: calc(100% - 24px); margin: 4px 12px 10px; justify-content: center; }
-@media (max-width: 560px) { .topbar .live-btn .live-txt { display: none; } }
 .live-box h4 { margin: 0 0 6px; }
 .live-box pre { white-space: pre-wrap; word-break: break-all; }

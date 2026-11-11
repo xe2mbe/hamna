@@ -187,7 +187,7 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 ### Escuchar en vivo
 
-Con el botón **🔊 En vivo** de la barra superior se escucha el nodo desde la página, en la computadora o el celular: lo que transmite HAMNA, los reportes de los colegas y los nodos enlazados. Llega con 1 a 2 segundos de retraso, en calidad de radio (8 kHz) y gasta unos 64 kbps por persona. Pueden escuchar hasta 8 personas a la vez; cualquier usuario, incluso de solo lectura.
+Con la bocina **🔊** de la tarjeta de abajo (junto al contador) se escucha el nodo desde la página, en la computadora o el celular: lo que transmite HAMNA, los reportes de los colegas y los nodos enlazados. Llega con 1 a 2 segundos de retraso, en calidad de radio (8 kHz) y gasta unos 64 kbps por persona. Pueden escuchar hasta 8 personas a la vez; cualquier usuario, incluso de solo lectura.
 
 Para activarlo, agrega esta línea en la sección de tu nodo en `/etc/asterisk/rpt.conf` (ASL3 y HamVOIP) y reinicia Asterisk **cuando no haya emisión** (`sudo systemctl restart asterisk`; en ASL3 nunca uses `rpt restart`):
 
