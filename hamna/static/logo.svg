@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HAMNA">
+  <rect width="64" height="64" rx="14" fill="#0f1a33"/>
+  <path d="M34.95 12.8A23 23 0 0 1 51.2 29.05" stroke="#5b8cff" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M36.76 6.02A30 30 0 0 1 57.98 27.24" stroke="#5b8cff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".55"/>
+  <path d="M34.47 19.96A16 16 0 1 1 21 21.14" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M24.5 19.1L20.65 26.54L16.15 18.74Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M25 28L36.5 35L25 42Z" fill="#ef4444" stroke="#ef4444" stroke-width="2" stroke-linejoin="round"/>
+</svg>

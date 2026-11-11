@@ -1,3 +1,5 @@
+<p align="center"><img src="hamna/static/logo.svg" width="120" alt="Logo de HAMNA"></p>
+
 # HAMNA — HAM Net Automation
 
 > La radioafición siempre ha destacado por la creatividad y la innovación de sus operadores.
@@ -228,7 +230,7 @@ En **Ajustes → Avisos** (administradores) HAMNA puede mandarte un mensaje de T
 - ❌ falló una sincronización automática desde otro nodo;
 - opcional: cada transmisión que empieza y termina.
 
-Para configurarlo: crea un bot con **@BotFather** (`/newbot`), pega su token, escríbele algo al bot (o agrégalo a un grupo) y usa **Buscar mi chat**; guarda y prueba con **Enviar prueba**. Cada mensaje dice de qué estación y nodo viene; el mismo aviso no se repite en 15 minutos, y los envíos van en segundo plano (nunca detienen una transmisión).
+Para configurarlo: crea un bot con **@BotFather** (`/newbot`), pega su token, escríbele algo al bot (o agrégalo a un grupo) y usa **Buscar mi chat**; guarda y prueba con **Enviar prueba**. Para que los avisos lleguen con el logo de HAMNA, en @BotFather usa `/setuserpic` y mándale [`hamna/static/icon-512.png`](hamna/static/icon-512.png). Cada mensaje dice de qué estación y nodo viene; el mismo aviso no se repite en 15 minutos, y los envíos van en segundo plano (nunca detienen una transmisión).
 
 ### Usuarios y seguridad
 

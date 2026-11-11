@@ -1,2 +1,2 @@
 """HAMNA Web — automatización de redes (nets) para nodos AllStarLink e IRLP."""
-VERSION = "1.11.0"
+VERSION = "1.12.0"

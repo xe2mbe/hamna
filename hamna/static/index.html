@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HAMNA Web</title>
-<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23ef4444'/%3E%3Cpath d='M8 8a11 11 0 0 0 0 16M24 8a11 11 0 0 1 0 16' stroke='%233b82f6' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="static/app.css?v=1.11.0">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1a33'/%3E%3Cpath d='M38.16 15.09A18 18 0 1 1 23 16.41' stroke='%23fff' stroke-width='6' stroke-linecap='round' fill='none'/%3E%3Cpath d='M27.33 13.91L22.9 22.24L17.9 13.58Z' fill='%23fff' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M27 23L42 32L27 41Z' fill='%23ef4444' stroke='%23ef4444' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="static/icon-180.png">
+<link rel="manifest" href="static/manifest.webmanifest">
+<meta name="theme-color" content="#0f1a33">
+<link rel="stylesheet" href="static/app.css?v=1.12.0">
 </head>
 <body>
 
@@ -14,7 +17,7 @@
   <form id="loginForm" class="login-card">
     <img id="loginLogo" class="login-logo hidden" alt="">
     <p id="loginStation" class="login-station hidden"></p>
-    <div class="brand big"><span class="brand-dot"></span>HAMNA <b>Web</b></div>
+    <div class="brand big"><img class="brand-mark big" src="static/logo.svg" alt="">HAMNA <b>Web</b></div>
     <p class="muted">Automatización de redes para tu nodo</p>
     <label>Usuario<input id="loginUser" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
     <label>Contraseña<input type="password" id="loginPw" autocomplete="current-password" required></label>
@@ -30,7 +33,7 @@
   <header class="topbar" id="topbar">
     <button class="btn icon ghost" id="btnMenu" title="Mostrar menú" aria-label="Mostrar menú" aria-controls="sideNav" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <img id="topLogo" class="top-logo hidden" alt="">
-    <div class="top-title"><span class="brand-dot" id="topDot"></span><b id="topStation">HAMNA Web</b></div>
+    <div class="top-title"><img class="brand-mark" id="topDot" src="static/logo-mini.svg" alt=""><b id="topStation">HAMNA Web</b></div>
     <div class="top-mon" id="topMon" translate="no"><span title="CPU">CPU <b id="tmCpu">—</b></span><span class="tm-temp" title="Temp.">🌡 <b id="tmTemp">—</b></span></div>
     <div class="top-clock" id="clockTop">--:--:--</div>
   </header>
@@ -40,7 +43,7 @@
     <div class="side-brand">
       <img id="brandLogo" class="brand-logo hidden" alt="">
       <div class="side-id">
-        <div class="brand"><span class="brand-dot" id="brandDot"></span>HAMNA <b>Web</b><span class="ver" id="appVer" translate="no"></span></div>
+        <div class="brand"><img class="brand-mark" id="brandDot" src="static/logo-mini.svg" alt="">HAMNA <b>Web</b><span class="ver" id="appVer" translate="no"></span></div>
         <div class="node" id="nodeLabel"></div>
       </div>
     </div>
@@ -384,7 +387,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.11.0"></script>
-<script src="static/app.js?v=1.11.0"></script>
+<script src="static/i18n.js?v=1.12.0"></script>
+<script src="static/app.js?v=1.12.0"></script>
 </body>
 </html>

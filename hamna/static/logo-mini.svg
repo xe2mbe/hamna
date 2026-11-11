@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="HAMNA">
+  <rect width="64" height="64" rx="14" fill="#0f1a33"/>
+  <path d="M38.16 15.09A18 18 0 1 1 23 16.41" stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M27.33 13.91L22.9 22.24L17.9 13.58Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M27 23L42 32L27 41Z" fill="#ef4444" stroke="#ef4444" stroke-width="3" stroke-linejoin="round"/>
+</svg>

@@ -37,6 +37,8 @@ mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("audio/mpeg", ".mp3")
 mimetypes.add_type("audio/wav", ".wav")
 mimetypes.add_type("audio/ogg", ".ogg")
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 class HTTPError(Exception):

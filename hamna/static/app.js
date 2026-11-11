@@ -172,7 +172,6 @@ function renderSys(d, ver) {
 }
 
 /* ── Logo ────────────────────────────────────────────────────────────────── */
-const DEFAULT_ICON = $("#favicon").href;
 function applyLogo(url) {
   S.logo = url || "";
   for (const id of ["#brandLogo", "#loginLogo", "#topLogo"]) {
@@ -180,7 +179,6 @@ function applyLogo(url) {
     if (url) { if (img.getAttribute("src") !== url) img.src = url; img.classList.remove("hidden"); }
     else { img.removeAttribute("src"); img.classList.add("hidden"); }
   }
-  $("#favicon").href = url || DEFAULT_ICON;
   const pv = $("#logoPreview");
   if (pv) pv.innerHTML = url ? `<img src="${esc(url)}" alt="Logo">` : '<span class="muted">Sin logo</span>';
   const del = $("#btnLogoDel");

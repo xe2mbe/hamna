@@ -118,8 +118,9 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .brand { font-size: 1.12rem; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; font-weight: 600; }
 .brand b { color: var(--accent); font-weight: 700; }
 .brand.big { font-size: 1.55rem; }
-.brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text3); flex: none; }
-.brand-dot.live { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 30%, transparent); animation: pulse 1.2s infinite; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+.brand-mark.big { width: 44px; height: 44px; border-radius: 11px; }
+.brand-mark.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 55%, transparent); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
 .node { color: var(--text2); font-size: .84rem; margin-top: 4px; line-height: 1.35; }
 .node b { display: block; color: var(--text); font-weight: 600; font-size: .9rem; }
