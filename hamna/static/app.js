@@ -415,6 +415,7 @@ async function poll() {
   $("#ctlPause").disabled = !(live && s.state === "tx");
   $("#ctlSkip").disabled = !(live && (s.state === "paused" || s.state === "gap"));
   $("#ctlNext").disabled = !live || s.origen === "prueba";
+  $("#ctlPrev").disabled = !live || s.origen === "prueba" || s.state === "preparing";
   $("#ctlStop").disabled = !live;
   const logKey = s.log.length ? s.log.length + s.log[s.log.length - 1].t + s.log[s.log.length - 1].msg : "";
   if (logKey !== S.logKey) {   // reconstruir la bitácora solo si cambió
@@ -432,6 +433,7 @@ $("#ctlPause").onclick = () => txCmd("pause");
 $("#ctlResume").onclick = () => txCmd("resume");
 $("#ctlSkip").onclick = () => txCmd("skip_pause");
 $("#ctlNext").onclick = () => txCmd("next");
+$("#ctlPrev").onclick = () => txCmd("prev");
 $("#ctlStop").onclick = async () => { if (await confirmBox("¿Detener la transmisión?", "Detener")) txCmd("stop"); };
 $("#ctlLog").onclick = () => $("#airLog").classList.toggle("hidden");
 
@@ -484,11 +486,11 @@ function renderProg() {
     const strip = p === nxt ? `<div class="next-strip"><div><span class="lbl">Próximo evento</span>
         <small>${esc(p.proxima)}</small></div><div class="cd" id="nextLeft" data-left="${p.faltan_s}"></div></div>` : "";
     return `<div class="prog-slot ${p === nxt ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
-      <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora)}${p.zona ? `<small class="zone">${esc(zoneShort(p))}</small>` : ""}</span>
+      <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora_local || p.hora)}${p.nodo_zona_corta ? `<small class="zone">${esc(p.nodo_zona_corta)}</small>` : ""}</span>
         ${live === p.evento_id ? '<span class="chip live">AL AIRE</span>' : isToday ? '<span class="chip ok">HOY</span>' : ""}</div>
       <h3>${esc(p.evento_nombre)}</h3>
       <div class="meta">${esc(recText(p))}${p.evento_tipo ? " · " + esc(p.evento_tipo) : ""}</div>
-      ${p.zona ? `<div class="meta here">Aquí (hora del nodo): <b>${esc(p.hora_local)}</b></div>` : ""}
+      ${p.zona && p.zona !== p.nodo_zona ? `<div class="meta here">Se emite desde: <b>${esc(p.hora)} ${esc(p.zona_corta || zoneShort(p))}</b></div>` : ""}
       ${p.cambio ? `<div class="meta tz-warn">${esc(cambioText(p.cambio))}</div>` : ""}
       <div class="meta" data-left="${p.faltan_s ?? ""}">${p.activo ? (p.proxima ? "Próxima: " + esc(p.proxima) + " · en <b class='left'>" + fmtLeft(p.faltan_s) + "</b>" : "Sin próximas fechas") : "Desactivada"}</div>
       ${progTimeline(p)}

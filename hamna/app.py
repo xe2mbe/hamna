@@ -611,6 +611,8 @@ def programacion(req):
     out = []
     now = dt.datetime.now()
     durs = {e["id"]: e["duracion_total"] for e in db.get_eventos()}
+    nodo_zona = tz.node_zone()
+    nodo_corta = tz.short(nodo_zona) or time.strftime("%Z")
 
     def _horario(zona, antes, despues):
         """'verano' o 'invierno' para la nueva hora: se mira la zona que
@@ -641,8 +643,18 @@ def programacion(req):
         # Con zona propia: la hora en el nodo y si cambiará pronto (horario de verano)
         r["zona"] = r.get("zona") or ""
         r["hora_local"] = nxt.strftime("%H:%M") if nxt else r["hora"]
+        if not nxt and r["zona"]:
+            # Desactivada o sin fechas: convertir la hora como si fuera hoy
+            try:
+                h, m = map(int, r["hora"][:5].split(":"))
+                r["hora_local"] = tz.to_node(dt.datetime.combine(now.date(), dt.time(h, m)), r["zona"]).strftime("%H:%M")
+            except Exception:
+                pass
         r["fecha_local"] = nxt.strftime("%Y-%m-%d") if nxt else r["fecha"]
         r["cambio"] = None
+        r["zona_corta"] = tz.short(r["zona"])
+        r["nodo_zona"] = nodo_zona
+        r["nodo_zona_corta"] = nodo_corta
         if r["zona"] and nxt:
             r["zona_nombre"] = tz.label(r["zona"])
             for o in engine.occurrences(r, nxt, nxt + dt.timedelta(days=200)):

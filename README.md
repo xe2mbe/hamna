@@ -133,7 +133,7 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 
 - Cada evento programado tiene su **zona horaria**: la hora y el día se toman en esa zona y HAMNA los convierte a la hora del nodo **para cada fecha**. Si el programa es de San Antonio (America/Chicago) o Tijuana, el evento se recorre solo cuando esa zona cambia de horario. Sin zona, se usa la hora del nodo.
 - En la lista de zonas cada una dice su diferencia con UTC (p. ej. *EE. UU. centro (UTC−6, verano UTC−5)*), y junto al campo de hora se ve la hora en UTC.
-- La tarjeta muestra la hora del programa, la hora "aquí" y avisa del próximo cambio de horario (*"Desde el 2027-03-14 será a las 20:30 aquí"*).
+- La tarjeta muestra en grande la **hora del nodo** con su zona (*19:00 · CDMX/Monterrey*), debajo la hora de origen (*Se emite desde: 17:00 Tijuana*) y avisa del próximo cambio de horario (*"A partir del 17 Mar 2027 será a las 18:00 (Horario de Verano)"*).
 - La franja **Próximo evento** con la cuenta regresiva va encima de la tarjeta del evento que sigue.
 - La **línea de tiempo** de cada tarjeta muestra las conexiones del evento y las tareas del cron de los usuarios (root, asterisk, IRLP) que caen cerca; las del sistema (`/etc/cron.d`) solo se ven en la pestaña Cron.
 - Los audios de un evento se preparan (convierten y nivelan) **en cuanto** agregas secciones o guardas la programación, y otra vez 20 minutos antes de la hora.

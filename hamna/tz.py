@@ -166,6 +166,27 @@ def is_dst(zone, ts):
     return bool(types[idx[i]][1])
 
 
+# Nombre corto para las tarjetas ("18:00 · CDMX/Monterrey", "17:00 Tijuana")
+CORTOS = {
+    "America/Mexico_City": "CDMX/Monterrey", "America/Monterrey": "CDMX/Monterrey",
+    "America/Merida": "Mérida", "America/Cancun": "Cancún", "America/Hermosillo": "Sonora",
+    "America/Mazatlan": "Mazatlán", "America/Chihuahua": "Chihuahua",
+    "America/Ciudad_Juarez": "Cd. Juárez", "America/Matamoros": "Matamoros",
+    "America/Tijuana": "Tijuana", "America/Chicago": "Chicago", "America/Denver": "Denver",
+    "America/Phoenix": "Phoenix", "America/Los_Angeles": "Los Ángeles",
+    "America/New_York": "Nueva York", "America/Guatemala": "Guatemala",
+    "America/Bogota": "Bogotá", "America/Caracas": "Caracas", "America/Santiago": "Santiago",
+    "America/Argentina/Buenos_Aires": "Buenos Aires", "Europe/Madrid": "Madrid",
+    "Atlantic/Canary": "Canarias", "America/Belize": "Belice", "UTC": "UTC",
+}
+
+
+def short(zone):
+    if not zone:
+        return ""
+    return CORTOS.get(zone) or zone.split("/")[-1].replace("_", " ")
+
+
 def label(zone):
     for z, l in ZONAS:
         if z == zone:

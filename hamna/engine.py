@@ -29,6 +29,7 @@ log = logging.getLogger("hamna.engine")
 
 TAIL_MIN = 5.0     # no hacer una pausa si después quedan menos de 5 s
 LINK_SETTLE = 5.0  # segundos para que un enlace recién pedido se establezca
+PREV_RESTART_SECS = 5.0  # ⏮ con más de esto en la sección: vuelve a su inicio; si no, a la anterior
 
 
 class Stopped(Exception):
@@ -129,9 +130,11 @@ class Engine:
         return run
 
     def command(self, cmd):
-        if cmd not in ("stop", "next", "skip_pause", "pause", "resume"):
+        if cmd not in ("stop", "next", "prev", "skip_pause", "pause", "resume"):
             raise ValueError(cmd)
         if not self.busy():
+            return
+        if cmd == "prev" and self.st.get("origen") == "prueba":
             return
         self._cmd = cmd
         self._wake.set()
@@ -312,25 +315,44 @@ class Engine:
             if linked_at is not None:
                 self._wait(LINK_SETTLE - (time.monotonic() - linked_at))
 
-            for i, sec in enumerate(secs):
-                if i > 0:
+            def anterior(i):
+                """Índice de la sección con audio antes de i (o i si no hay)."""
+                for j in range(i - 1, -1, -1):
+                    if secs[j].get("_prep"):
+                        return j
+                return i
+
+            i, back = 0, False
+            while i < len(secs):
+                sec = secs[i]
+                if i > 0 and not back:
                     self._set(state="gap", cur_sec=i, sec_pos=0.0, ptt=False)
                     t0 = time.monotonic()
                     if sec.get("regenerar_antes") and sec.get("texto_tts"):
                         self._regen(sec, ev, secs, cfg)
                         self._sync_secs(secs)
                     gap = float(cfg.get("section_gap", 3))
-                    self._wait(gap - (time.monotonic() - t0), "skip_pause")
-                elif sec.get("regenerar_antes") and sec.get("texto_tts"):
+                    c = self._wait(gap - (time.monotonic() - t0), "skip_pause", "prev")
+                    if c == "prev":         # en el intervalo: repetir la que acaba de terminar
+                        i, back = anterior(i), True
+                        continue
+                elif i == 0 and not back and sec.get("regenerar_antes") and sec.get("texto_tts"):
                     self._regen(sec, ev, secs, cfg)
                     self._sync_secs(secs)
+                back = False
                 self._take("next", "skip_pause")
                 if not sec.get("_prep"):
                     self.note("«{}» no tiene audio; se omite".format(sec['nombre']), "warn")
+                    i += 1
                     continue
                 self._set(cur_sec=i, sec_pos=0.0)
                 self.note("Sección {}/{}: {}".format(i + 1, len(secs), sec['nombre']))
-                self._play_section(be, sec, cfg, pf)
+                if self._play_section(be, sec, cfg, pf) == "prev":
+                    j = anterior(i)
+                    self.note("Regresando a la sección anterior" if j != i else "Repitiendo la sección")
+                    i, back = j, True
+                    continue
+                i += 1
             result = "completo"
             self.note("«{}» terminó".format(ev['nombre']))
         except Stopped:
@@ -373,6 +395,14 @@ class Engine:
         rewind = float(cfg.get("retroceso_secs", 5)) if cfg.get("retroceso_enabled") else 0.0
         pos, resumed = 0.0, False
 
+        def atras(cur):
+            """⏮: con más de 5 s de sección vuelve a su inicio; si no, a la anterior."""
+            if cur > PREV_RESTART_SECS:
+                self.note("Desde el inicio de la sección")
+                self._set(sec_pos=0.0)
+                return 0.0
+            return None
+
         while pos < dur - 0.05:
             end = dur
             if pause_on and dur - pos > tx_time + TAIL_MIN:
@@ -392,6 +422,12 @@ class Engine:
 
             if res == "next":
                 return
+            if res == "prev":
+                p0 = atras(self.status()["sec_pos"])
+                if p0 is None:
+                    return "prev"
+                pos, resumed = p0, False
+                continue
             if res == "pause":
                 # Pausa manual: recordar dónde íbamos y esperar a que reanuden
                 cur = self.status()["sec_pos"]
@@ -399,9 +435,15 @@ class Engine:
                 self.note("Pausa manual")
                 c = None
                 while c is None:
-                    c = self._wait(3600, "resume", "next")
+                    c = self._wait(3600, "resume", "next", "prev")
                 if c == "next":
                     return
+                if c == "prev":
+                    p0 = atras(cur)
+                    if p0 is None:
+                        return "prev"
+                    pos, resumed = p0, False
+                    continue
                 pos = max(0.0, cur - rewind)
                 resumed = False
                 self.note("Reanudando")
@@ -411,9 +453,15 @@ class Engine:
             # Pausa automática
             self._set(state="paused", ptt=False, sec_pos=end)
             self.note("Pausa automática de {} s".format(int(float(cfg.get('pause_duration', 10)))))
-            c = self._wait(float(cfg.get("pause_duration", 10)), "skip_pause", "next")
+            c = self._wait(float(cfg.get("pause_duration", 10)), "skip_pause", "next", "prev")
             if c == "next":
                 return
+            if c == "prev":
+                p0 = atras(end)
+                if p0 is None:
+                    return "prev"
+                pos, resumed = p0, False
+                continue
             pos = max(0.0, end - rewind)
             resumed = True
 
@@ -426,7 +474,7 @@ class Engine:
 
         def abort():
             c = self._cmd
-            if c in ("stop", "next", "pause"):
+            if c in ("stop", "next", "prev", "pause"):
                 got["c"] = c
                 return True
             return False
@@ -446,7 +494,7 @@ class Engine:
                 self.st["ptt"] = False
         if ok:
             return "done"
-        return self._take("next", "pause") or "done"
+        return self._take("next", "prev", "pause") or "done"
 
     # ── Programador ──────────────────────────────────────────────────────────
     @staticmethod
