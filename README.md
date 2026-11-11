@@ -27,7 +27,23 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+
+### Capturas
+
+Tomadas del hub **299081** del Radio Club Guadiana.
+
+<p align="center"><img src="docs/img/pc-programacion.png" width="900" alt="Programación: próximos eventos con la hora del nodo y la de origen"></p>
+
+| Eventos y sus secciones | Biblioteca de secciones |
+|---|---|
+| <img src="docs/img/pc-eventos.png" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png" alt="Lista de secciones de audio y voz sintética"> |
+
+<p align="center"><img src="docs/img/pc-conexiones.png" width="900" alt="Conexiones: nodos enlazados en este momento"></p>
+
+**En el celular** — programación, menú y conexiones:
+
+<p align="center"><img src="docs/img/celular.png" width="900" alt="HAMNA Web en el celular"></p>
 
 ### Qué hace
 
