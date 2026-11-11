@@ -1,4 +1,9 @@
-<p align="center"><img src="hamna/static/logo.svg" width="120" alt="Logo de HAMNA"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/logo-completo-oscuro.svg">
+    <img src="docs/logo/logo-completo.svg" width="420" alt="HAMNA — HAM Net Automation">
+  </picture>
+</p>
 
 # HAMNA — HAM Net Automation
 
@@ -33,17 +38,17 @@ HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y auto
 
 Tomadas del hub **299081** del Radio Club Guadiana.
 
-<p align="center"><img src="docs/img/pc-programacion.png" width="900" alt="Programación: próximos eventos con la hora del nodo y la de origen"></p>
+<p align="center"><img src="docs/img/pc-programacion.png?v=1.12.2" width="900" alt="Programación: próximos eventos con la hora del nodo y la de origen"></p>
 
 | Eventos y sus secciones | Biblioteca de secciones |
 |---|---|
-| <img src="docs/img/pc-eventos.png" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png" alt="Lista de secciones de audio y voz sintética"> |
+| <img src="docs/img/pc-eventos.png?v=1.12.2" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png?v=1.12.2" alt="Lista de secciones de audio y voz sintética"> |
 
-<p align="center"><img src="docs/img/pc-conexiones.png" width="900" alt="Conexiones: nodos enlazados en este momento"></p>
+<p align="center"><img src="docs/img/pc-conexiones.png?v=1.12.2" width="900" alt="Conexiones: nodos enlazados en este momento"></p>
 
 **En el celular** — programación, menú y conexiones:
 
-<p align="center"><img src="docs/img/celular.png" width="900" alt="HAMNA Web en el celular"></p>
+<p align="center"><img src="docs/img/celular.png?v=1.12.2" width="900" alt="HAMNA Web en el celular"></p>
 
 ### Qué hace
 
