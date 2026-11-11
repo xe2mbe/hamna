@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.12.0">
+<link rel="stylesheet" href="static/app.css?v=1.12.1">
 </head>
 <body>
 
@@ -32,18 +32,17 @@
 <div id="app" class="hidden">
   <header class="topbar" id="topbar">
     <button class="btn icon ghost" id="btnMenu" title="Mostrar menú" aria-label="Mostrar menú" aria-controls="sideNav" aria-expanded="false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <img id="topLogo" class="top-logo hidden" alt="">
-    <div class="top-title"><img class="brand-mark" id="topDot" src="static/logo-mini.svg" alt=""><b id="topStation">HAMNA Web</b></div>
+    <div class="top-title"><img class="brand-mark" id="topDot" src="static/logo.svg" alt=""><b id="topStation">HAMNA Web</b></div>
     <div class="top-mon" id="topMon" translate="no"><span title="CPU">CPU <b id="tmCpu">—</b></span><span class="tm-temp" title="Temp.">🌡 <b id="tmTemp">—</b></span></div>
+    <img id="topLogo" class="top-logo hidden" alt="">
     <div class="top-clock" id="clockTop">--:--:--</div>
   </header>
   <div class="scrim" id="scrim"></div>
   <aside class="side" id="sideNav">
     <button class="btn icon ghost side-close" id="btnHideMenu" title="Esconder menú" aria-label="Esconder menú"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
     <div class="side-brand">
-      <img id="brandLogo" class="brand-logo hidden" alt="">
       <div class="side-id">
-        <div class="brand"><img class="brand-mark" id="brandDot" src="static/logo-mini.svg" alt="">HAMNA <b>Web</b><span class="ver" id="appVer" translate="no"></span></div>
+        <div class="brand"><img class="brand-mark lg" id="brandDot" src="static/logo.svg" alt=""><span class="brand-txt"><span>HAMNA <b>Web</b></span><span class="ver" id="appVer" translate="no"></span></span></div>
         <div class="node" id="nodeLabel"></div>
       </div>
     </div>
@@ -69,6 +68,7 @@
       <button class="btn icon ghost" id="btnSideLogout" title="Cerrar sesión" aria-label="Cerrar sesión"><svg viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button>
     </div>
     <div class="side-foot">
+      <img id="brandLogo" class="brand-logo hidden" alt="">
       <div class="clock"><span id="clockLocal">--:--:--</span><small id="clockUtc">UTC --:--</small></div>
       <button class="btn icon ghost" id="btnTheme" title="Tema claro / oscuro" aria-label="Cambiar tema"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg></button>
     </div>
@@ -387,7 +387,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.12.0"></script>
-<script src="static/app.js?v=1.12.0"></script>
+<script src="static/i18n.js?v=1.12.1"></script>
+<script src="static/app.js?v=1.12.1"></script>
 </body>
 </html>

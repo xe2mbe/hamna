@@ -112,14 +112,17 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
   background: var(--bg2); border-right: 1px solid var(--border); padding: 18px 14px; z-index: 30; }
 .side-brand { display: flex; flex-direction: column; gap: 12px; padding: 4px 8px 18px;
   border-bottom: 1px solid var(--border); margin-bottom: 14px; }
-.brand-logo { max-height: 64px; max-width: 100%; object-fit: contain; align-self: center; }
+.brand-logo { max-height: 44px; max-width: 80px; object-fit: contain; flex: none; }
 /* centrado en todo el ancho del menú (el bloque deja 40 px a la derecha para el botón de esconder) */
-@media (min-width: 961px) { .brand-logo { margin-right: -32px; } }
 .brand { font-size: 1.12rem; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; font-weight: 600; }
 .brand b { color: var(--accent); font-weight: 700; }
 .brand.big { font-size: 1.55rem; }
 .brand-mark { width: 26px; height: 26px; border-radius: 7px; flex: none; }
-.brand-mark.big { width: 44px; height: 44px; border-radius: 11px; }
+.brand-mark.big { width: 60px; height: 60px; border-radius: 14px; }
+.brand-mark.lg { width: 52px; height: 52px; border-radius: 12px; }
+.side-brand .brand { font-size: 1.2rem; gap: 12px; }
+.brand-txt > span:first-child { white-space: nowrap; }
+.brand-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; line-height: 1.1; }
 .brand-mark.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 55%, transparent); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
 .node { color: var(--text2); font-size: .84rem; margin-top: 4px; line-height: 1.35; }
@@ -130,10 +133,11 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
   transition: background .15s, color .15s; }
 .tabs button:hover { background: var(--hover); color: var(--text); }
 .tabs button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.side-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between;
+.side-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 14px 8px 0; border-top: 1px solid var(--border); }
+.side-foot .clock { flex: 1; min-width: 0; }
 .clock { font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
-.clock small { display: block; color: var(--text3); font-size: .75rem; font-weight: 500; letter-spacing: 0; }
+.clock small { display: block; white-space: nowrap; color: var(--text3); font-size: .75rem; font-weight: 500; letter-spacing: 0; }
 
 main { margin-left: var(--side); padding: 28px 32px 150px; }
 main > .view { max-width: 1180px; margin: 0 auto; }
@@ -487,8 +491,10 @@ body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
   padding: 0 16px; border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg2) 88%, transparent);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-.top-logo { height: 34px; max-width: 110px; object-fit: contain; }
-.top-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; }
+.top-logo { height: 34px; max-width: 110px; object-fit: contain; flex: none; }
+@media (max-width: 600px) { .top-logo { height: 28px; max-width: 60px; } .top-logo:not(.hidden) ~ .top-clock { font-size: .95rem; } #app:has(.top-logo:not(.hidden)) .top-mon { display: none; } }
+.top-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.top-title .brand-mark { width: 34px; height: 34px; border-radius: 9px; }
 .top-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-mon { display: flex; gap: 12px; font-size: .8rem; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .top-mon b { color: var(--text); font-weight: 600; }
@@ -499,7 +505,7 @@ body.rol-lectura #setForm .btn:not(.hidden) { display: inline-flex !important; }
 @media (max-height: 780px) and (min-width: 961px) {
   .side { padding: 12px 12px; }
   .side-brand { padding-bottom: 10px; margin-bottom: 8px; gap: 8px; }
-  .brand-logo { max-height: 44px; }
+  .brand-logo { max-height: 36px; }
   .tabs button { padding: 7px 12px; }
   .side-mon { padding: 8px 8px 6px; gap: 4px; }
   .side-user { padding: 8px; }
