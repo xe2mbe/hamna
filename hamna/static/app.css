@@ -127,7 +127,15 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .brand-mark.big { width: 60px; height: 60px; border-radius: 14px; }
 .brand-mark.lg { width: 52px; height: 52px; border-radius: 12px; }
 .side-brand .brand { font-size: 1.2rem; gap: 12px; }
-.brand-txt > span:first-child { white-space: nowrap; }
+/* "HAMNA" en Audiowide (a trazos): máscara pintada con el color del tema */
+.wm { display: block; width: 116px; height: 19px; background: var(--text); flex: none;
+  -webkit-mask: url(hamna-texto.svg) center / contain no-repeat; mask: url(hamna-texto.svg) center / contain no-repeat; }
+.wm.big { width: 175px; height: 29px; }
+.wm-lema { display: block; width: 175px; height: 7px; background: var(--text3); margin-top: 7px;
+  -webkit-mask: url(hamna-lema.svg) center / contain no-repeat; mask: url(hamna-lema.svg) center / contain no-repeat; }
+.wm-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.brand .wm-row b { font-size: .95rem; letter-spacing: .02em; }
+.brand.big .wm-row b { font-size: 1.25rem; }
 .brand-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; line-height: 1.1; }
 .brand-mark.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 55%, transparent); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }

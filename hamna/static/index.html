@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.13.0">
+<link rel="stylesheet" href="static/app.css?v=1.13.1">
 </head>
 <body>
 
@@ -17,7 +17,7 @@
   <form id="loginForm" class="login-card">
     <img id="loginLogo" class="login-logo hidden" alt="">
     <p id="loginStation" class="login-station hidden"></p>
-    <div class="brand big"><img class="brand-mark big" src="static/logo.svg" alt="">HAMNA <b>Web</b></div>
+    <div class="brand big"><img class="brand-mark big" src="static/logo.svg" alt=""><span class="brand-txt"><span class="wm-row"><span class="wm big" role="img" aria-label="HAMNA"></span><b>Web</b></span><span class="wm-lema" role="img" aria-label="HAM Net Automation"></span></span></div>
     <p class="muted">Automatización de redes para tu nodo</p>
     <label>Usuario<input id="loginUser" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
     <label>Contraseña<input type="password" id="loginPw" autocomplete="current-password" required></label>
@@ -42,7 +42,7 @@
     <button class="btn icon ghost side-close" id="btnHideMenu" title="Esconder menú" aria-label="Esconder menú"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
     <div class="side-brand">
       <div class="side-id">
-        <div class="brand"><img class="brand-mark lg" id="brandDot" src="static/logo.svg" alt=""><span class="brand-txt"><span>HAMNA <b>Web</b></span><span class="ver" id="appVer" translate="no"></span></span></div>
+        <div class="brand"><img class="brand-mark lg" id="brandDot" src="static/logo.svg" alt=""><span class="brand-txt"><span class="wm" role="img" aria-label="HAMNA"></span><span class="wm-row"><b>Web</b><span class="ver" id="appVer" translate="no"></span></span></span></div>
         <div class="node" id="nodeLabel"></div>
       </div>
     </div>
@@ -393,7 +393,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.13.0"></script>
-<script src="static/app.js?v=1.13.0"></script>
+<script src="static/i18n.js?v=1.13.1"></script>
+<script src="static/app.js?v=1.13.1"></script>
 </body>
 </html>

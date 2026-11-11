@@ -27,6 +27,7 @@ from . import irlpnet
 log = logging.getLogger("hamna.backend")
 
 FINISH_BUFFER = 0.8
+REKEY_SECS = 2.0     # IRLP: reactivar el PTT durante la reproducción
 
 
 def _sleep_until(seconds, abort):
@@ -222,7 +223,16 @@ class IRLPBackend(Backend):
             cmd = [self.player, "-q", str(wav)] if self.player == "aplay" else \
                 shlex.split(self.player) + [str(wav)]
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            next_key = time.time() + REKEY_SECS
             while proc.poll() is None:
+                # IRLP suelta el PTT a la fuerza al terminar sus anuncios (p. ej.
+                # al desconectar con 73): se vuelve a activar mientras HAMNA suena.
+                if time.time() >= next_key:
+                    next_key = time.time() + REKEY_SECS
+                    try:
+                        self.key()
+                    except Exception as e:
+                        log.warning("[IRLP] no se pudo reactivar el PTT: %s", e)
                 if abort():
                     proc.terminate()
                     try:
