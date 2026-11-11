@@ -171,23 +171,41 @@ def asl_status(node):
     return data
 
 
-def irlp_status(cfg):
-    env = cfg.get("irlp_env") or "/home/irlp/custom/environment"
-    local = "/home/irlp/local"
+def _irlp_local(env):
+    """$LOCAL de IRLP. El archivo de entorno lo define con otras variables
+    (export LOCAL=${IRLPDIR}/local), así que se resuelven las asignaciones
+    simples del propio archivo; si no se puede, /home/irlp/local."""
+    default = "/home/irlp/local"
     try:
         with open(env, encoding="utf-8", errors="ignore") as f:
-            m = re.search(r"^\s*(?:export\s+)?LOCAL=([^\s#]+)", f.read(), re.M)
-            if m:
-                local = m.group(1).strip("\"'")
+            txt = f.read()
     except OSError:
-        pass
+        return default
+    vals = {}
+    for m in re.finditer(r"^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)=([^\s#;]*)", txt, re.M):
+        v = m.group(2).strip("\"'")
+        v = re.sub(r"\$\{?([A-Z_][A-Z0-9_]*)\}?", lambda x: vals.get(x.group(1), os.environ.get(x.group(1), "")), v)
+        vals[m.group(1)] = v
+    local = vals.get("LOCAL", "")
+    return local if local.startswith("/") and os.path.isdir(local) else default
+
+
+def irlp_status(cfg):
+    env = cfg.get("irlp_env") or "/home/irlp/custom/environment"
+    local = _irlp_local(env)
     activo = ""
     try:
         with open(os.path.join(local, "active"), encoding="utf-8", errors="ignore") as f:
             activo = f.read().strip()
     except OSError:
         pass
-    return {"sistema": "irlp", "nodo": cfg.get("node") or "", "activo": activo,
+    detalle = ""
+    if activo:
+        from . import irlpnet
+        t = irlpnet.target(local)
+        if t and t["ip"]:
+            detalle = "{}:{} · {}".format(t["ip"], t["port"], t["codec"])
+    return {"sistema": "irlp", "nodo": cfg.get("node") or "", "activo": activo, "detalle": detalle,
             "enlaces": [{"nodo": activo, "modo": "transceptor"}] if activo else [], "red": []}
 
 

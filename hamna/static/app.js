@@ -1643,7 +1643,7 @@ function renderSesiones() {
   const estado = s.tx ? ["Transmitiendo", "tx"] : s.rx ? ["Recibiendo", "rx"] : ["En reposo", ""];
   const talking = s.enlaces.filter((e) => e.transmitiendo);
   $("#sesStats").innerHTML = s.sistema === "irlp" ? `
-    <div class="stat"><div class="k">IRLP</div><div class="v sm">${s.activo ? "Conectado a " + esc(s.activo) : "Sin conexión"}</div></div>` : `
+    <div class="stat"><div class="k">IRLP</div><div class="v sm">${s.activo ? "Conectado a " + esc(s.activo) : "Sin conexión"}</div>${s.detalle ? `<div class="d">${esc(s.detalle)}</div>` : ""}</div>` : `
     <div class="stat"><div class="k">Enlaces directos</div><div class="v">${s.enlaces.length}</div>
       <div class="d">${s.enlaces.filter((e) => e.direccion === "IN").length} entrantes · ${s.enlaces.filter((e) => e.direccion === "OUT").length} salientes</div></div>
     <div class="stat"><div class="k">Nodos en la red</div><div class="v">${s.total_red}</div><div class="d">alcanzables a través de los enlaces</div></div>
