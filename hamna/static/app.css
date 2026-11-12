@@ -609,3 +609,10 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 @keyframes livepulse { 50% { opacity: .35; } }
 .live-box h4 { margin: 0 0 6px; }
 .live-box pre { white-space: pre-wrap; word-break: break-all; }
+
+/* Exportar y avisos (v1.14) */
+.ex-list { max-height: 46vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; }
+.ex-list .sec-row { grid-template-columns: 28px 1fr auto; }
+#exProg progress { height: 10px; accent-color: var(--accent, #3b82f6); }
+.tg-sub { margin: -4px 0 12px 28px; }
+.tg-sub input { display: block; max-width: 180px; margin-top: 4px; }

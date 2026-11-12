@@ -298,12 +298,50 @@
     "Enviar prueba": "Send a test", "Enviando…": "Sending…", "✅ Enviado: revisa Telegram": "✅ Sent: check Telegram",
     "•••••• (guardado; escribe para cambiarlo)": "•••••• (saved; type to change it)", "Falta el token del bot": "The bot token is missing",
     "Falta el token del bot o el chat": "The bot token or the chat is missing",
+    // v1.14: avisos nuevos
+    "Durante las transmisiones": "During broadcasts", "Probar": "Test",
+    "⏰ Aviso antes de que empiece cada evento programado": "⏰ Alert before each scheduled event starts",
+    "Minutos antes": "Minutes before",
+    "Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.": "One or more, separated by commas. Example: «60, 15, 5» sends three alerts.",
+    "▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones":
+      "▶ Summary at the start: the event, its approximate end time, its sections with their length and the connections",
+    "🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)": "🔹 When each section starts (which one, how long it is and what comes next)",
+    "✅ Resumen al terminar: cuánto duró y qué secciones salieron completas, interrumpidas o sin audio":
+      "✅ Summary at the end: how long it took and which sections aired fully, were interrupted or had no audio",
+    "Manda a Telegram un mensaje de prueba o un ejemplo de cada aviso armado con los datos de un evento. No se transmite nada. Usa el token y el chat escritos arriba, aunque no los hayas guardado.":
+      "Sends Telegram a test message or a sample of each alert built from an event's data. Nothing is transmitted. It uses the token and chat typed above, even if you haven't saved them.",
+    "Qué enviar": "What to send", "Mensaje de prueba": "Test message", "⏰ Aviso antes del evento": "⏰ Alert before the event",
+    "▶ Resumen al empezar": "▶ Start summary", "🔹 Inicio de sección": "🔹 Section start", "✅ Resumen al terminar": "✅ End summary",
+    "Evento para el ejemplo": "Event for the sample", "(no hay eventos)": "(no events)",
+    "Elige un evento para el ejemplo": "Pick an event for the sample", "Ese evento no tiene secciones": "That event has no sections",
+    "Minutos de aviso inválidos: usa números de 1 a 1440 separados por coma": "Invalid alert minutes: use numbers from 1 to 1440 separated by commas",
+    // v1.14: exportar
+    "⬇ Exportar": "⬇ Export",
+    "Elige y ordena las secciones. Se unen en un solo archivo para descargar. El orden aquí no cambia el del evento.":
+      "Pick and order the sections. They are joined into a single file to download. The order here doesn't change the event's.",
+    "✓ Todas": "✓ All", "✗ Ninguna": "✗ None", "Silencio entre secciones (s)": "Silence between sections (s)", "Formato": "Format",
+    "Este nodo no puede crear MP3 (no tiene ffmpeg ni lame).": "This node can't create MP3 files (it has neither ffmpeg nor lame).",
+    "Nivelar el volumen de cada sección": "Level the volume of each section", "Nivel objetivo (LUFS)": "Target level (LUFS)",
+    "-16 es común para escuchar en el teléfono; -23 es el estándar de radiodifusión.": "-16 is common for listening on a phone; -23 is the broadcast standard.",
+    "Exportando…": "Exporting…", "Iniciando…": "Starting…", "Preparando…": "Preparing…",
+    "Uniendo las secciones…": "Joining the sections…", "Creando el MP3…": "Creating the MP3…",
+    "Selecciona al menos una sección": "Select at least one section",
+    "Ninguna de las secciones elegidas tiene audio": "None of the selected sections has audio",
+    "Ya hay una exportación en curso; espera a que termine": "An export is already running; wait for it to finish",
+    "La exportación ya no existe": "The export no longer exists", "El archivo ya no existe; vuelve a exportar": "The file no longer exists; export again",
+    "Una de las secciones ya no está en el evento; recarga la página": "One of the sections is no longer in the event; reload the page",
     "Bajada": "Download", "Subida": "Upload", "Datos del equipo del nodo · se actualizan con el estado": "Node system data · updated with the status",
     "Idioma no disponible": "Language not available", "Logo guardado": "Logo saved", "Logo quitado": "Logo removed", "¿Quitar el logo?": "Remove the logo?",
   };
 
   const M = (re, fn) => [re, fn];
   const P = [
+    M(/^Exportar: (.+)$/, (m, a) => "Export: " + a),
+    M(/^(\d+) de (\d+) · (\S+)$/, (m, a, b, d) => `${a} of ${b} · ${d}`),
+    M(/^(\S+) · ⚠ sin audio, se omite$/, (m, d) => `${d} · ⚠ no audio, skipped`),
+    M(/^\((\d+)\/(\d+)\) (.+?)( — nivelando…)?$/, (m, a, b, n, l) => `(${a}/${b}) ${n}${l ? " — leveling…" : ""}`),
+    M(/^✅ Listo: (.+?)( · se omitieron sin audio: (.+?))? ·$/, (m, a, w, x) => `✅ Done: ${a}` + (w ? ` · skipped (no audio): ${x}` : "") + " ·"),
+    M(/^Este nodo no puede crear archivos (\w+); elige WAV$/, (m, f) => `This node can't create ${f} files; choose WAV`),
     M(/^Nodo (\w+)$/, (m, n) => "Node " + n),
     M(/^nodo (\w+)$/, (m, n) => "node " + n),
     M(/^Cada (domingo|lunes|martes|miércoles|jueves|viernes|sábado)$/, (m, d) => "Every " + DIA[d]),

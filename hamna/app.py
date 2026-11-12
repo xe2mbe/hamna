@@ -9,10 +9,11 @@ import re
 import shutil
 import threading
 import time
+import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, backends, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -821,10 +822,85 @@ def avisos_chats(req):
 
 @app.route("/api/avisos/probar", ("POST",), rol="admin")
 def avisos_probar(req):
+    """Envía un aviso de prueba. Con tipo y evento manda un ejemplo real de
+    ese aviso armado con los datos del evento (sin transmitir nada)."""
     b = req.json()
-    notify.send_now(notify.header() + "\n✅ Prueba de avisos de HAMNA Web (enviada por {}).".format(
-        notify.esc(req.user["usuario"])), b.get("token"), b.get("chat"))
+    tipo = b.get("tipo") or "simple"
+    quien = notify.esc(req.user["usuario"])
+    if tipo == "simple":
+        txt = "✅ Prueba de avisos de HAMNA Web (enviada por {}).".format(quien)
+    else:
+        ev = db.get_evento(int(b.get("evento_id") or 0))
+        if not ev:
+            raise ValueError("Elige un evento para el ejemplo")
+        cfg = settings.load()
+        secs = [dict(s) for s in db.get_secciones_by_evento(ev["id"])]
+        if not secs:
+            raise ValueError("Ese evento no tiene secciones")
+        for s in secs:
+            s["tiene_audio"] = bool(engine._file_of(s))
+        gap = cfg.get("section_gap", 3)
+        con = db.get_conexiones(ev["id"])
+        now = dt.datetime.now()
+        if tipo == "proximo":
+            m = (notify.upcoming_minutes(cfg) or [15])[-1]
+            txt = notify.msg_upcoming(ev, secs, now + dt.timedelta(minutes=m), m, con, gap)
+        elif tipo == "inicio":
+            nodo = "nodo {}".format(cfg.get("node")) if cfg.get("node") else ""
+            txt = notify.msg_start(ev, secs, "prueba · " + req.user["usuario"], now, gap, nodo, con)
+        elif tipo == "seccion":
+            i = next((j for j, s in enumerate(secs) if s["tiene_audio"]), 0)
+            txt = notify.msg_section(ev, secs, i, now)
+        elif tipo == "fin":
+            est = ["ok" if s["tiene_audio"] else "sin_audio" for s in secs]
+            total = sum(float(s.get("duracion") or 0) for s in secs if s["tiene_audio"])
+            txt = notify.msg_end(ev, secs, est, now - dt.timedelta(seconds=total), now, "completo")
+        else:
+            raise ValueError("Tipo de aviso desconocido")
+        txt = "🧪 <i>Ejemplo (prueba de {}; no se transmitió nada)</i>\n".format(quien) + txt
+    notify.send_now(notify.header() + "\n" + txt, b.get("token"), b.get("chat"))
     return ok()
+
+
+# ── Exportar secciones a un archivo ──────────────────────────────────────────
+@app.route("/api/exportar/formatos", rol="lectura")
+def exportar_formatos(req):
+    cfg = settings.load()
+    return jsonr({"formatos": export.formats(), "objetivo": float(cfg.get("normalize_target", -18))})
+
+
+@app.route("/api/eventos/<int:eid>/exportar", ("POST",), rol="lectura")
+def exportar_start(req, eid):
+    b = req.json()
+    try:
+        silencio = float(b.get("silencio", 5))
+        objetivo = float(b.get("objetivo", -18))
+        ids = [int(x) for x in (b.get("secciones") or [])]
+    except (TypeError, ValueError):
+        raise ValueError("Valor inválido")
+    jid = export.start(eid, ids, silencio, str(b.get("formato") or "mp3").lower(),
+                       bool(b.get("normalizar")), objetivo, req.user["usuario"])
+    return ok(id=jid)
+
+
+@app.route("/api/exportar/<jid>", rol="lectura")
+def exportar_status(req, jid):
+    j = export.get(str(jid))
+    if not j:
+        raise HTTPError(404, "La exportación ya no existe")
+    return jsonr(j)
+
+
+@app.route("/api/exportar/<jid>/archivo", rol="lectura")
+def exportar_archivo(req, jid):
+    path, nombre = export.file_of(str(jid))
+    if not path:
+        raise HTTPError(404, "El archivo ya no existe; vuelve a exportar")
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "_", nombre)
+    r = send_file(path, "audio/mpeg" if nombre.endswith(".mp3") else "audio/wav")
+    r.headers["Content-Disposition"] = "attachment; filename=\"{}\"; filename*=UTF-8''{}".format(
+        ascii_name, urllib.parse.quote(nombre))
+    return r
 
 
 @app.route("/api/zonas")
@@ -903,10 +979,11 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
-             "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end"}
+             "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
+             "tg_on_upcoming", "tg_on_section"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
-            "azure_voice", "azure_style", "espeak_voice", "tg_chat"}
+            "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins"}
 
 
 @app.route("/api/ajustes")
@@ -929,6 +1006,12 @@ def ajustes_save(req):
             upd[k] = str(v).strip()
         elif k in ("azure_key", "tg_token") and str(v).strip():
             upd[k] = str(v).strip()
+    if "tg_upcoming_mins" in upd:
+        bad = [x for x in re.split(r"[,;\s]+", upd["tg_upcoming_mins"])
+               if x and not (x.isdigit() and 1 <= int(x) <= 1440)]
+        if bad:
+            raise ValueError("Minutos de aviso inválidos: usa números de 1 a 1440 separados por coma")
+        upd["tg_upcoming_mins"] = ", ".join(str(m) for m in notify.upcoming_minutes(upd))
     if upd.get("node") and not re.match(r"^[A-Za-z0-9]{1,10}$", upd["node"]):
         raise ValueError("Número de nodo inválido")
     if upd.get("irlp_mode") not in (None, "red", "local"):

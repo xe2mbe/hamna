@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.13.4">
+<link rel="stylesheet" href="static/app.css?v=1.14.0">
 </head>
 <body>
 
@@ -307,8 +307,25 @@
             <label class="check"><input type="checkbox" name="tg_on_error"> ❌ Un evento no pudo iniciar o terminó con error</label>
             <label class="check"><input type="checkbox" name="tg_on_preflight"> ⚠ Revisión 30 min antes de cada evento programado encontró un problema (secciones sin audio, nodo que no responde, falta la clave de Azure, poco disco, sincronización fallida)</label>
             <label class="check"><input type="checkbox" name="tg_on_sync"> ❌ Falló una sincronización automática desde otro nodo</label>
-            <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Cada transmisión que empieza</label>
-            <label class="check"><input type="checkbox" name="tg_on_end"> ✅ Cada transmisión que termina</label>
+            <h3>Durante las transmisiones</h3>
+            <label class="check"><input type="checkbox" name="tg_on_upcoming"> ⏰ Aviso antes de que empiece cada evento programado</label>
+            <label class="tg-sub">Minutos antes<input name="tg_upcoming_mins" inputmode="numeric" placeholder="15" translate="no">
+              <small>Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.</small></label>
+            <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones</label>
+            <label class="check"><input type="checkbox" name="tg_on_section"> 🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)</label>
+            <label class="check"><input type="checkbox" name="tg_on_end"> ✅ Resumen al terminar: cuánto duró y qué secciones salieron completas, interrumpidas o sin audio</label>
+            <h3>Probar</h3>
+            <p class="muted" style="margin-top:0">Manda a Telegram un mensaje de prueba o un ejemplo de cada aviso armado con los datos de un evento. No se transmite nada. Usa el token y el chat escritos arriba, aunque no los hayas guardado.</p>
+            <div class="grid2">
+              <label>Qué enviar<select id="tgTestKind">
+                <option value="simple">Mensaje de prueba</option>
+                <option value="proximo">⏰ Aviso antes del evento</option>
+                <option value="inicio">▶ Resumen al empezar</option>
+                <option value="seccion">🔹 Inicio de sección</option>
+                <option value="fin">✅ Resumen al terminar</option>
+              </select></label>
+              <label id="tgTestEvWrap" class="hidden">Evento para el ejemplo<select id="tgTestEv" translate="no"></select></label>
+            </div>
             <div class="row gap wrap"><button type="button" class="btn" id="btnTgTest">Enviar prueba</button><span id="tgTestMsg" class="muted"></span></div>
           </fieldset>
 
@@ -393,7 +410,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.13.4"></script>
-<script src="static/app.js?v=1.13.4"></script>
+<script src="static/i18n.js?v=1.14.0"></script>
+<script src="static/app.js?v=1.14.0"></script>
 </body>
 </html>

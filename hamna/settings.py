@@ -61,6 +61,9 @@ DEFAULTS = {
     "tg_on_sync": True,
     "tg_on_start": False,
     "tg_on_end": False,
+    "tg_on_upcoming": False,
+    "tg_upcoming_mins": "15",     # uno o varios, separados por coma: «60, 15»
+    "tg_on_section": False,
 
     # Seguridad
     "password_hash": "",

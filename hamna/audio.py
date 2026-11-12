@@ -129,14 +129,14 @@ def duration(path):
 
 
 # ── Conversión y nivel ───────────────────────────────────────────────────────
-def _to_8k_ffmpeg(src, out, gain_db=None):
+def _to_8k_ffmpeg(src, out, gain_db=None, rate=RATE):
     af = "aformat=channel_layouts=mono"
     if gain_db is not None:
         limit = 10 ** (PEAK_LIMIT_DB / 20)
         af += (",volume={:.2f}dB,alimiter=limit={:.4f}:attack=5:release=50:level=disabled"
                .format(gain_db, limit))
     r = _run(["ffmpeg", "-hide_banner", "-nostats", "-y", "-i", src, "-af", af,
-              "-ar", str(RATE), "-ac", "1", "-sample_fmt", "s16", "-f", "wav", out])
+              "-ar", str(rate), "-ac", "1", "-sample_fmt", "s16", "-f", "wav", out])
     if r.returncode != 0:
         raise RuntimeError("ffmpeg no pudo convertir {}: {}".format(
             Path(src).name, r.stderr.decode(errors="ignore")[-300:]))
@@ -166,7 +166,7 @@ def _lufs_ffmpeg(src):
         return None
 
 
-def _to_8k_sox(src, out, gain_db=None):
+def _to_8k_sox(src, out, gain_db=None, rate=RATE):
     src = Path(src)
     tmp = None
     if src.suffix.lower() == ".mp3":
@@ -183,7 +183,7 @@ def _to_8k_sox(src, out, gain_db=None):
         src = ["-t", "ul", "-r", "8000", "-c", "1", src]
     try:
         cmd = ["sox", "-V1"] + (src if isinstance(src, list) else [src]) + \
-              ["-r", str(RATE), "-c", "1", "-b", "16", "-e", "signed-integer", out]
+              ["-r", str(rate), "-c", "1", "-b", "16", "-e", "signed-integer", out]
         if gain_db is not None:
             # limitador de sox a 0 dBFS y luego bajar 2 dB = ganancia exacta con techo en -2 dB
             cmd += ["gain", "-l", "{:.2f}".format(gain_db - PEAK_LIMIT_DB),

@@ -656,6 +656,7 @@ async function loadEvento(id) {
       <div class="muted">${esc(ev.tipo || "")}</div></div>
       <div class="row gap wrap">
         <button class="btn primary" id="evTx">📡 Transmitir ahora</button>
+        <button class="btn ro" id="evExport" ${secs.length ? "" : "disabled"}>⬇ Exportar</button>
         <button class="btn ok-soft" id="evEdit">Editar</button>
         <button class="btn danger-soft" id="evDel">Borrar</button>
       </div>
@@ -682,6 +683,7 @@ async function loadEvento(id) {
   renderSync(ev);
   renderShare(ev);
   $("#evTx").onclick = () => txStart(ev.id, ev.nombre);
+  $("#evExport").onclick = () => exportForm(ev);
   $("#evEdit").onclick = () => eventoForm(ev);
   $("#evDel").onclick = async () => {
     if (!(await confirmBox(`¿Borrar el evento «${ev.nombre}» y su programación? Las secciones se conservan en la biblioteca.`, "Borrar"))) return;
@@ -710,6 +712,98 @@ async function loadEvento(id) {
     loadEvento(ev.id);
   };
 }
+/* ── Exportar secciones a un solo archivo ────────────────────────────────── */
+async function exportForm(ev) {
+  let info;
+  try { info = await api("api/exportar/formatos"); } catch (e) { return toast(e.message, true); }
+  let pref = {};
+  try { pref = JSON.parse(localStorage.getItem("hamna.export") || "{}"); } catch {}
+  const items = ev.secciones.map((s) => ({ ...s, on: !!s.tiene_audio }));
+  const fmtOk = info.formatos.includes(pref.formato) ? pref.formato : info.formatos[0];
+  openModal("Exportar: " + ev.nombre, `
+    <p class="muted" style="margin-top:0">Elige y ordena las secciones. Se unen en un solo archivo para descargar. El orden aquí no cambia el del evento.</p>
+    <div class="row gap wrap" style="margin-bottom:8px">
+      <button type="button" class="btn sm" id="exAll">✓ Todas</button>
+      <button type="button" class="btn sm" id="exNone">✗ Ninguna</button>
+      <span class="muted" id="exSum"></span>
+    </div>
+    <div id="exList" class="ex-list"></div>
+    <div class="grid2" style="margin-top:12px">
+      <label>Silencio entre secciones (s)<input type="number" id="exGap" min="0" max="60" step="0.5" value="${pref.silencio ?? 5}"></label>
+      <label>Formato<select id="exFmt">${info.formatos.map((f) =>
+        `<option value="${f}" ${f === fmtOk ? "selected" : ""}>${f.toUpperCase()}</option>`).join("")}</select>
+        ${info.formatos.includes("mp3") ? "" : "<small>Este nodo no puede crear MP3 (no tiene ffmpeg ni lame).</small>"}</label>
+    </div>
+    <label class="check"><input type="checkbox" id="exNorm" ${pref.normalizar ? "checked" : ""}> Nivelar el volumen de cada sección</label>
+    <label id="exTgtWrap" class="${pref.normalizar ? "" : "hidden"}">Nivel objetivo (LUFS)<input type="number" id="exTgt" min="-40" max="-6" step="0.5" value="${pref.objetivo ?? info.objetivo}">
+      <small>-16 es común para escuchar en el teléfono; -23 es el estándar de radiodifusión.</small></label>
+    <div id="exProg" class="hidden" style="margin-top:12px">
+      <progress id="exBar" max="1" value="0" style="width:100%"></progress>
+      <small id="exMsg" class="muted"></small>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeModal()">Cerrar</button>
+      <button type="button" class="btn primary" id="exGo">⬇ Exportar</button>
+    </div>`);
+  const draw = () => {
+    $("#exList").innerHTML = items.map((s, i) => `
+      <div class="sec-row" data-i="${i}">
+        <label class="check" style="margin:0"><input type="checkbox" data-on ${s.on ? "checked" : ""}></label>
+        <span class="name">${esc(s.nombre)}<small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio, se omite"}</small></span>
+        <span class="mini">
+          <button type="button" class="btn" data-mv="-1" ${i === 0 ? "disabled" : ""} title="Mover arriba">↑</button>
+          <button type="button" class="btn" data-mv="1" ${i === items.length - 1 ? "disabled" : ""} title="Mover abajo">↓</button>
+        </span>
+      </div>`).join("");
+    const sel = items.filter((s) => s.on && s.tiene_audio);
+    const gap = Math.max(0, +$("#exGap").value || 0);
+    $("#exSum").textContent = `${sel.length} de ${items.length} · ${fmt(sel.reduce((a, s) => a + (s.duracion || 0), 0) + gap * Math.max(0, sel.length - 1))}`;
+  };
+  draw();
+  $("#exAll").onclick = () => { items.forEach((s) => (s.on = true)); draw(); };
+  $("#exNone").onclick = () => { items.forEach((s) => (s.on = false)); draw(); };
+  $("#exGap").oninput = draw;
+  $("#exNorm").onchange = () => $("#exTgtWrap").classList.toggle("hidden", !$("#exNorm").checked);
+  $("#exList").onchange = (e) => {
+    if (!("on" in e.target.dataset)) return;
+    items[+e.target.closest(".sec-row").dataset.i].on = e.target.checked; draw();
+  };
+  $("#exList").onclick = (e) => {
+    const b = e.target.closest("button[data-mv]"); if (!b) return;
+    const i = +b.closest(".sec-row").dataset.i, j = i + +b.dataset.mv;
+    [items[i], items[j]] = [items[j], items[i]]; draw();
+  };
+  $("#exGo").onclick = async () => {
+    const sel = items.filter((s) => s.on);
+    if (!sel.length) return toast("Selecciona al menos una sección", true);
+    if (!sel.some((s) => s.tiene_audio)) return toast("Ninguna de las secciones elegidas tiene audio", true);
+    const body = { secciones: sel.map((s) => s.id), silencio: +$("#exGap").value || 0,
+      formato: $("#exFmt").value, normalizar: $("#exNorm").checked, objetivo: +$("#exTgt").value || info.objetivo };
+    try { localStorage.setItem("hamna.export", JSON.stringify(body.normalizar ? { ...body, secciones: undefined } : { ...body, secciones: undefined, objetivo: undefined })); } catch {}
+    const go = $("#exGo"); busy(go, true, "Exportando…");
+    $("#exProg").classList.remove("hidden"); $("#exMsg").textContent = "Iniciando…";
+    let jid;
+    try { jid = (await api(`api/eventos/${ev.id}/exportar`, { method: "POST", json: body })).id; }
+    catch (e) { busy(go, false); $("#exMsg").textContent = "❌ " + e.message; return; }
+    const poll = async () => {
+      if (!$("#exBar")) return;          // se cerró la ventana: el archivo se sigue preparando
+      let j;
+      try { j = await api("api/exportar/" + jid); } catch (e) { $("#exMsg").textContent = "❌ " + e.message; busy(go, false); return; }
+      $("#exBar").max = j.total; $("#exBar").value = j.paso;
+      $("#exMsg").textContent = j.mensaje;
+      if (j.estado === "trabajando") return setTimeout(poll, 1000);
+      busy(go, false);
+      if (j.estado === "error") { $("#exMsg").textContent = "❌ " + j.error; return; }
+      const url = `api/exportar/${jid}/archivo`;
+      const omit = j.omitidas.length ? ` · se omitieron sin audio: ${j.omitidas.join(", ")}` : "";
+      $("#exMsg").innerHTML = `✅ Listo: ${fmt(j.duracion)} · ${(j.tamano / 1048576).toFixed(1)} MB${esc(omit)} · <a href="${url}" download="${esc(j.nombre)}" translate="no">${esc(j.nombre)}</a>`;
+      const a = document.createElement("a"); a.href = url; a.download = j.nombre;
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+    poll();
+  };
+}
+
 /* ── Conexiones automáticas de un evento ─────────────────────────────────── */
 const ACC = { conectar: "Conectar", desconectar: "Desconectar", desconectar_todo: "Desconectar todo" };
 const MODO = { transceptor: "transceptor", monitor: "solo monitor", permanente: "permanente" };
@@ -2008,10 +2102,24 @@ $("#tgChats").onclick = (e) => {
   $("#setForm").tg_chat.value = b.dataset.chat; $("#tgChats").classList.add("hidden");
   $("#tgChatsMsg").textContent = "Listo. Guarda los ajustes.";
 };
+$("#tgTestKind").onchange = async () => {
+  const need = $("#tgTestKind").value !== "simple";
+  $("#tgTestEvWrap").classList.toggle("hidden", !need);
+  if (!need || $("#tgTestEv").options.length) return;
+  try {
+    const ev = await api("api/eventos");
+    $("#tgTestEv").innerHTML = ev.eventos.length
+      ? ev.eventos.map((e) => `<option value="${e.id}">${esc(e.nombre)}${e.numero ? " #" + esc(e.numero) : ""}</option>`).join("")
+      : `<option value="">(no hay eventos)</option>`;
+  } catch (e) { $("#tgTestMsg").textContent = "❌ " + e.message; }
+};
 $("#btnTgTest").onclick = async () => {
   const f = $("#setForm"), b = $("#btnTgTest"); busy(b, true, "Enviando…");
+  $("#tgTestMsg").textContent = "";
   try {
-    await api("api/avisos/probar", { method: "POST", json: { token: f.tg_token.value.trim(), chat: f.tg_chat.value.trim() } });
+    await api("api/avisos/probar", { method: "POST", json: {
+      token: f.tg_token.value.trim(), chat: f.tg_chat.value.trim(),
+      tipo: $("#tgTestKind").value, evento_id: +$("#tgTestEv").value || 0 } });
     $("#tgTestMsg").textContent = "✅ Enviado: revisa Telegram";
   } catch (e) { $("#tgTestMsg").textContent = "❌ " + e.message; }
   finally { busy(b, false); }

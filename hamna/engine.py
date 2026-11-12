@@ -44,6 +44,7 @@ class Engine:
         self._wake = threading.Event()
         self._fired = set()
         self._prewarmed = set()
+        self._upcoming = set()          # avisos «sale en N min» ya enviados
         self._pre_done = {}      # evento_id → ids de acciones "antes" ya hechas por el programador
         self._post_timers = {}   # evento_id → timers de acciones "al terminar"
         self.events = deque(maxlen=80)
@@ -298,7 +299,9 @@ class Engine:
                   secciones=[{"id": s["id"], "nombre": s["nombre"], "tipo": s["tipo"],
                               "duracion": float(s["duracion"] or 0)} for s in secs])
         self.note("Iniciando «{}» ({}) por {}".format(ev['nombre'], origen, be.name))
-        notify.send("inicio", "▶ Inicia <b>{}</b> ({})".format(notify.esc(ev["nombre"]), notify.esc(origen)))
+        inicio = dt.datetime.now()
+        estados = [None] * len(secs)    # para el resumen final: ok / parcial / sin_audio
+        plays = 0
         for t in self._post_timers.pop(ev["id"], []):
             t.cancel()      # desconexiones pendientes de una corrida anterior
         try:
@@ -312,6 +315,12 @@ class Engine:
                 self._take()
             pf = self._pause_files(cfg)
             self._sync_secs(secs)
+            for s in secs:
+                s["tiene_audio"] = bool(s.get("_prep"))
+            notify.send("inicio", notify.msg_start(
+                ev, secs, origen, inicio, cfg.get("section_gap", 3),
+                "nodo {} · {}".format(cfg.get("node"), be.name) if cfg.get("node") else be.name,
+                db.get_conexiones(ev["id"])), dedupe="inicio:{}".format(hid))
             if linked_at is not None:
                 self._wait(LINK_SETTLE - (time.monotonic() - linked_at))
 
@@ -343,15 +352,23 @@ class Engine:
                 self._take("next", "skip_pause")
                 if not sec.get("_prep"):
                     self.note("«{}» no tiene audio; se omite".format(sec['nombre']), "warn")
+                    estados[i] = "sin_audio"
                     i += 1
                     continue
                 self._set(cur_sec=i, sec_pos=0.0)
                 self.note("Sección {}/{}: {}".format(i + 1, len(secs), sec['nombre']))
+                plays += 1
+                sec["tiene_audio"] = True
+                notify.send("seccion", notify.msg_section(ev, secs, i, inicio),
+                            dedupe="seccion:{}:{}".format(hid, plays))
+                if estados[i] != "ok":
+                    estados[i] = "parcial"
                 if self._play_section(be, sec, cfg, pf) == "prev":
                     j = anterior(i)
                     self.note("Regresando a la sección anterior" if j != i else "Repitiendo la sección")
                     i, back = j, True
                     continue
+                estados[i] = "ok"
                 i += 1
             result = "completo"
             self.note("«{}» terminó".format(ev['nombre']))
@@ -363,13 +380,15 @@ class Engine:
             raise
         finally:
             db.historial_fin(hid, result)
-            if result.startswith("error") or result == "incompleto":
-                notify.send("error", "❌ <b>{}</b> terminó con error\n{}".format(
-                    notify.esc(ev["nombre"]), notify.esc(result)))
-            else:
-                notify.send("fin", "{} <b>{}</b> {}".format(
-                    "⏹" if result == "detenido" else "✅", notify.esc(ev["nombre"]),
-                    "fue detenido" if result == "detenido" else "terminó"))
+            try:
+                resumen = notify.msg_end(ev, secs, estados, inicio, dt.datetime.now(), result)
+            except Exception:
+                log.exception("No pude armar el resumen final")
+                resumen = "<b>{}</b>: {}".format(notify.esc(ev["nombre"]), notify.esc(result))
+            # Con error el resumen va como aviso de error (así llega aunque el
+            # resumen final esté apagado)
+            notify.send("error" if result.startswith("error") or result == "incompleto" else "fin",
+                        resumen, dedupe="fin:{}".format(hid))
             try:
                 self._links_after(ev, cfg)
             except Exception as e:
@@ -607,6 +626,10 @@ class Engine:
                 notify.send("error", "❌ No se pudo iniciar <b>{}</b> ({})\n{}".format(
                     notify.esc(row["evento_nombre"]), hhmm, notify.esc(e)))
         try:
+            self._tick_upcoming(now)
+        except Exception:
+            log.exception("Error al revisar los avisos previos")
+        try:
             from . import sync
             sync.tick(now)
         except Exception:
@@ -614,6 +637,40 @@ class Engine:
         # olvidar disparos de otros días
         self._fired = {k for k in self._fired if k[1] == today}
         self._prewarmed = {k for k in self._prewarmed if k[1] == today}
+
+    def _tick_upcoming(self, now):
+        """Aviso por Telegram N minutos antes de cada evento programado. Mira
+        hacia adelante (no solo el día de hoy) para que un evento a las 00:10
+        también se avise a las 23:55."""
+        cfg = settings.load()
+        if not (cfg.get("tg_enabled") and cfg.get("tg_on_upcoming")):
+            return
+        mins = notify.upcoming_minutes(cfg)
+        if not mins:
+            return
+        base = now.replace(second=0, microsecond=0)
+        self._upcoming = {k for k in self._upcoming if k[1] > now - dt.timedelta(minutes=5)}
+        for row in db.get_programacion(solo_activos=True):
+            try:
+                occs = self.occurrences(row, base + dt.timedelta(minutes=1),
+                                        base + dt.timedelta(minutes=max(mins)))
+            except Exception:
+                continue
+            for occ in occs:
+                left = int(round((occ - base).total_seconds() / 60.0))
+                key = (row["id"], occ, left)
+                if left not in mins or key in self._upcoming:
+                    continue
+                self._upcoming.add(key)
+                ev = db.get_evento(row["evento_id"])
+                if not ev:
+                    continue
+                secs = [dict(s) for s in db.get_secciones_by_evento(row["evento_id"])]
+                for s in secs:
+                    s["tiene_audio"] = bool(self._file_of(s))
+                notify.send("proximo", notify.msg_upcoming(
+                    ev, secs, occ, left, db.get_conexiones(row["evento_id"]), cfg.get("section_gap", 3)),
+                    dedupe="proximo:{}:{}:{}".format(row["id"], occ, left))
 
     def _tick_links(self, row, now, today, h, m):
         """Acciones 'N minutos antes' de un evento programado."""
