@@ -1104,7 +1104,7 @@ function showSet(k) {
   try { localStorage.setItem("hamna.set", k); } catch {}
   $$("#setNav button").forEach((b) => b.classList.toggle("active", b.dataset.set === k));
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
-  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios", "respaldo"].includes(k));
+  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k));
   if (k === "sistema") loadSistema();
   if (k === "respaldo") loadRespaldo();
   if (k === "seguridad") loadMyAccount();
@@ -1117,11 +1117,13 @@ async function loadAjustes() {
   for (const el of f.elements) {
     if (!el.name || !(el.name in S.cfg)) continue;
     if (el.type === "checkbox") el.checked = !!S.cfg[el.name];
-    else if (el.name !== "azure_key" && el.name !== "tg_token") el.value = S.cfg[el.name] ?? "";
+    else if (el.name !== "azure_key" && el.name !== "tg_token" && !("secret" in el.dataset)) el.value = S.cfg[el.name] ?? "";
   }
   f.azure_key.placeholder = S.cfg.azure_key_set ? "•••••• (guardada; escribe para cambiarla)" : "Pega aquí tu clave";
   f.tg_token.placeholder = S.cfg.tg_token_set ? "•••••• (guardado; escribe para cambiarlo)" : "123456789:ABC…";
   f.tg_token.value = "";
+  f.ab_node_token.value = "";
+  f.ab_node_token.placeholder = S.cfg.ab_node_token_set ? "•••••• (guardado; escribe para cambiarlo)" : "hb_…";
   f.azure_key.value = "";
   $("#detectHint").textContent = `Detectado en este equipo: ${info.detectado.toUpperCase()}${info.nodo_detectado ? " · nodo " + info.nodo_detectado : ""}`;
   const names = { azure: "Azure", piper: "Piper", espeak: "eSpeak" };
@@ -1147,7 +1149,7 @@ $("#setForm").onsubmit = async (e) => {
   for (const el of f.elements) {
     if (!el.name || el.closest("#pauseSounds")) continue;
     if (el.type === "checkbox") data[el.name] = el.checked;
-    else if (el.name === "azure_key" || el.name === "tg_token") { if (el.value.trim()) data[el.name] = el.value.trim(); }
+    else if (el.name === "azure_key" || el.name === "tg_token" || "secret" in el.dataset) { if (el.value.trim()) data[el.name] = el.value.trim(); }
     else data[el.name] = el.value;
   }
   const r = await run(() => api("api/ajustes", { method: "PUT", json: data }), "Ajustes guardados");
@@ -1232,6 +1234,7 @@ $("#btnPw").onclick = async () => {
 /* ── Respaldo y restauración ──────────────────────────────────────────────── */
 const mb = (b) => (b / 1048576 < 10 ? (b / 1048576).toFixed(1) : Math.round(b / 1048576)) + " MB";
 async function loadRespaldo() {
+  loadAutoBackup(); loadRecv();
   let d;
   try { d = await api("api/respaldo"); } catch (e) { $("#bkSize").textContent = e.message; return; }
   const upd = () => {
@@ -1274,6 +1277,118 @@ $("#btnRestore").onclick = async () => {
   xhr.onerror = () => { busy(btn, false); msg.textContent = ""; toast("Se cortó la conexión al subir el respaldo", true); };
   xhr.send(fd);
 };
+/* ── Respaldo automático ─────────────────────────────────────────────────── */
+const fechaTs = (t) => (t ? new Date(t * 1000).toLocaleString() : "—");
+const DEST = { nodo: "otro nodo", nube: "nube" };
+async function loadAutoBackup() {
+  let d;
+  try { d = await api("api/autorespaldo"); } catch (e) { $("#abStatus").textContent = e.message; return; }
+  const u = (d.estado || {}).ultimo;
+  let html = "";
+  if (d.corriendo) html = `<b>⏳ Haciendo un respaldo…</b>`;
+  else if (u) {
+    const res = Object.entries(u.resultados || {}).map(([k, v]) =>
+      `<li><span class="d">${v.ok ? "✅" : "❌"} ${esc(DEST[k] || k)}</span><span translate="no">${esc(v.detalle || "")}</span></li>`).join("");
+    html = `<b>${u.ok ? "✅" : "❌"} Último respaldo: ${esc(u.fecha)}</b>
+      <div class="muted" style="font-size:.84rem">${esc(u.origen)}${u.tam ? ` · ${u.con_audios ? "con audios" : "sin audios"} · ${mb(u.tam)}` : ""}${u.nota ? " · " + esc(u.nota) : ""}</div>
+      ${res ? `<ul class="upd-list">${res}</ul>` : ""}`;
+  } else html = `<span class="muted">Todavía no se ha hecho ningún respaldo automático.</span>`;
+  html += `<div class="muted" style="font-size:.84rem;margin-top:4px">${d.audios_cambiaron ? "Los audios cambiaron desde el último respaldo con audios: el próximo los incluirá." : "Los audios no han cambiado desde el último respaldo con audios."}</div>`;
+  $("#abStatus").innerHTML = html;
+  renderCloud(d);
+  clearTimeout(loadAutoBackup._t);
+  if (d.corriendo) loadAutoBackup._t = setTimeout(() => { if (S.setSec === "respaldo") loadAutoBackup(); }, 3000);
+}
+function renderCloud(d) {
+  const box = $("#abCloud"), name = { drive: "Google Drive", onedrive: "OneDrive" };
+  if (!d.rclone) {
+    box.innerHTML = `<b>Falta rclone en este nodo</b>
+      <p class="muted" style="margin:4px 0">rclone es el programa que sube los respaldos a Google Drive u OneDrive. Para instalarlo, en la terminal del nodo:</p>
+      <pre translate="no">sudo apt install rclone</pre>
+      <p class="muted" style="margin:4px 0">Si apt no lo encuentra (por ejemplo en HamVOIP):</p>
+      <pre translate="no">curl https://rclone.org/install.sh | sudo bash</pre>`;
+    return;
+  }
+  if (d.nube) {
+    box.innerHTML = `<div class="upd-head"><div><b>✅ Conectado a ${esc(name[d.nube] || d.nube)}</b>
+      <div class="muted" style="font-size:.84rem">Los respaldos van a <span translate="no">${esc(d.nube_carpeta)}</span> · <span translate="no">${esc(d.rclone)}</span></div></div>
+      <button type="button" class="btn sm ghost" id="btnCloudDel">Desconectar</button></div>`;
+    $("#btnCloudDel").onclick = async () => {
+      if (!(await confirmBox("¿Desconectar la nube? Los respaldos que ya están ahí no se borran."))) return;
+      await run(() => api("api/autorespaldo/nube", { method: "DELETE" }), "Nube desconectada");
+      loadAutoBackup();
+    };
+    return;
+  }
+  box.innerHTML = `<b>Conectar con la nube</b>
+    <ol class="muted" style="margin:6px 0;padding-left:20px;font-size:.88rem">
+      <li>En tu computadora instala rclone (<a href="https://rclone.org/downloads/" target="_blank" rel="noopener">rclone.org/downloads</a>).</li>
+      <li>En una terminal de tu computadora corre el comando de abajo. Se abre el navegador para que autorices con tu cuenta.</li>
+      <li>Copia todo el texto que aparece entre <code>---></code> y <code><---</code> y pégalo aquí.</li>
+    </ol>
+    <label>Servicio<select id="cloudTipo"><option value="drive">Google Drive</option><option value="onedrive">OneDrive</option></select></label>
+    <pre translate="no" id="cloudCmd">rclone authorize "drive"</pre>
+    <label>Texto que te dio rclone<textarea id="cloudTok" rows="3" placeholder='{"access_token":"…","token_type":"Bearer","refresh_token":"…","expiry":"…"}' translate="no"></textarea></label>
+    <div class="row gap"><button type="button" class="btn primary sm" id="btnCloudSet">Conectar</button></div>`;
+  $("#cloudTipo").onchange = () => { $("#cloudCmd").textContent = `rclone authorize "${$("#cloudTipo").value}"`; };
+  $("#btnCloudSet").onclick = async () => {
+    const b = $("#btnCloudSet"); busy(b, true, "Conectando…");
+    try {
+      await run(() => api("api/autorespaldo/nube", { method: "POST", json: { tipo: $("#cloudTipo").value, token: $("#cloudTok").value } }),
+        "Nube conectada");
+      loadAutoBackup();
+    } catch {} finally { busy(b, false); }
+  };
+}
+$("#btnAbProbe").onclick = async () => {
+  const f = $("#setForm"), b = $("#btnAbProbe"), msg = $("#abProbeMsg");
+  busy(b, true, "Probando…"); msg.textContent = "";
+  try {
+    const r = await api("api/autorespaldo/probar-nodo", { method: "POST", json: { url: f.ab_node_url.value, codigo: f.ab_node_token.value } });
+    f.ab_node_pin.value = r.huella || "";
+    msg.textContent = `✅ Conectado con ${r.estacion || "el nodo"}${r.nodo ? " · nodo " + r.nodo : ""} (v${r.version}, ${r.libre_mb} MB libres). Guarda los ajustes.`;
+  } catch (e) { msg.textContent = "❌ " + e.message; }
+  finally { busy(b, false); }
+};
+$("#setForm").ab_node_url.addEventListener("input", () => { $("#setForm").ab_node_pin.value = ""; });
+$("#btnAbNow").onclick = async () => {
+  await run(() => api("api/autorespaldo/ahora", { method: "POST", json: { audios: $("#abNowAud").value } }), "Respaldo iniciado");
+  loadAutoBackup();
+};
+/* Recibir respaldos de otros nodos */
+async function loadRecv() {
+  const box = $("#recvBox");
+  let d;
+  try { d = await api("api/respaldos-recibidos"); } catch (e) { box.textContent = e.message; return; }
+  const codes = d.codigos.map((c) => `<li><span class="d">${esc(c.etiqueta || "(sin nombre)")}</span>
+      <span>Creado ${esc(fechaTs(c.creado))} · ${c.ultimo_uso ? `último respaldo ${esc(fechaTs(c.ultimo_uso))} del nodo ${esc(c.ultimo_nodo)} (${esc(c.ultima_ip)})` : "sin usar"}</span>
+      <button type="button" class="btn sm ghost" data-del="${c.id}">Quitar</button></li>`).join("");
+  const nodos = d.nodos.map((n) => `<div class="upd-box"><b>Nodo ${esc(n.nodo)}</b>${n.estacion ? ` · ${esc(n.estacion)}` : ""}
+      <div class="muted" style="font-size:.84rem">${n.ultimo ? `Último: ${esc(n.ultimo)} desde ${esc(n.ip || "?")} · HAMNA v${esc(n.version || "?")}` : ""}</div>
+      <ul class="upd-list">${n.archivos.map((a) => `<li><span class="d">${esc(a.fecha)}</span><span><a href="api/respaldos-recibidos/${encodeURIComponent(n.nodo)}/${encodeURIComponent(a.nombre)}" download translate="no">${esc(a.nombre)}</a> · ${mb(a.tam)}</span></li>`).join("")}</ul></div>`).join("");
+  box.innerHTML = `<h4>Códigos de acceso</h4>
+    ${codes ? `<ul class="upd-list">${codes}</ul>` : `<p class="muted">No hay códigos. Crea uno para cada nodo que mandará respaldos aquí.</p>`}
+    <div class="row gap wrap" style="margin:8px 0 14px"><input id="recvLabel" placeholder="Nombre (p. ej. nodo 58788)" style="max-width:260px"><button type="button" class="btn sm" id="btnRecvNew">+ Nuevo código</button></div>
+    <h4>Respaldos guardados</h4>
+    ${nodos || `<p class="muted">Todavía no ha llegado ningún respaldo.</p>`}`;
+  $$("[data-del]", box).forEach((b) => (b.onclick = async () => {
+    if (!(await confirmBox("¿Quitar este código? El nodo que lo usa ya no podrá mandar respaldos aquí. Los respaldos guardados no se borran."))) return;
+    await run(() => api("api/respaldos-recibidos/codigos/" + b.dataset.del, { method: "DELETE" }), "Código quitado");
+    loadRecv();
+  }));
+  $("#btnRecvNew").onclick = async () => {
+    const r = await run(() => api("api/respaldos-recibidos/codigos", { method: "POST", json: { etiqueta: $("#recvLabel").value } }));
+    const url = location.origin + location.pathname.replace(/[^/]*$/, "");
+    openModal("Código para recibir respaldos", `<p>En el nodo que mandará los respaldos, ve a Ajustes → Respaldo → Respaldo automático → «A otro nodo HAMNA» y pega:</p>
+      <label>Dirección del nodo destino<input readonly value="${esc(url)}" translate="no"></label>
+      <label>Código de acceso<input readonly value="${esc(r.codigo)}" translate="no" id="newRecvCode"></label>
+      <p class="muted">Copia el código ahora: por seguridad no se vuelve a mostrar.</p>
+      <div class="modal-actions"><button class="btn" id="cpRecv">Copiar código</button><button class="btn primary" id="okRecv">Listo</button></div>`);
+    $("#cpRecv").onclick = () => { const i = $("#newRecvCode"); i.select(); try { navigator.clipboard.writeText(i.value); toast("Código copiado"); } catch { document.execCommand("copy"); } };
+    $("#okRecv").onclick = () => closeModal();
+    loadRecv();
+  };
+}
 /* ── Actualizaciones (GitHub) ─────────────────────────────────────────────── */
 function updCmd(d) {
   return d.sabor === "hamvoip" ? "/opt/hamna-web/update.sh" : "sudo /opt/hamna-web/update.sh";

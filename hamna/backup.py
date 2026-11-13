@@ -5,6 +5,7 @@ El respaldo es un .tar.gz con:
   hamna-respaldo.json   qué es, de qué nodo y versión
   hamna.db              eventos, secciones, programación, usuarios, compartidos…
   settings.json         ajustes (incluye las claves de Azure y Telegram)
+  rclone.conf           acceso a Google Drive / OneDrive del respaldo automático
   logo_*.png|jpg|…      logo de la estación
   sonidos/              audios de pausa (alerta, pausa, continuamos)
   audios/               audios de las secciones (opcional)
@@ -99,7 +100,7 @@ def estimate():
 def filename(con_audios):
     node = re.sub(r"[^A-Za-z0-9]", "", str(settings.get("node") or "")) or "nodo"
     return "hamna-respaldo-{}-{}{}.tar.gz".format(
-        node, dt.datetime.now().strftime("%Y%m%d_%H%M"), "-con-audios" if con_audios else "")
+        node, dt.datetime.now().strftime("%Y%m%d_%H%M%S"), "-con-audios" if con_audios else "")
 
 
 # ── Crear (en streaming) ─────────────────────────────────────────────────────
@@ -165,6 +166,8 @@ def stream(con_audios, usuario):
                 tf.add(str(snap), arcname="hamna.db")
                 if paths.settings_file().is_file():
                     tf.add(str(paths.settings_file()), arcname="settings.json")
+                if (paths.data_dir() / "rclone.conf").is_file():
+                    tf.add(str(paths.data_dir() / "rclone.conf"), arcname="rclone.conf")
                 if logo and LOGO_RE.match(logo) and (paths.data_dir() / logo).is_file():
                     tf.add(str(paths.data_dir() / logo), arcname=logo)
                 for folder in CARPETAS:
@@ -210,7 +213,7 @@ def stream(con_audios, usuario):
 # ── Restaurar ────────────────────────────────────────────────────────────────
 def _safe_member(name):
     """Devuelve la ruta destino relativa permitida o None."""
-    if name in (MANIFEST, "hamna.db", "settings.json") or LOGO_RE.match(name):
+    if name in (MANIFEST, "hamna.db", "settings.json", "rclone.conf") or LOGO_RE.match(name):
         return name
     parts = name.split("/")
     if (len(parts) == 2 and parts[0] in CARPETAS and parts[1]
@@ -325,6 +328,12 @@ def restore(archivo, conservar_nodo, usuario):
                         os.replace(str(f), str(data / folder / f.name))
             if not conservar_nodo and logo and (stage / logo).is_file():
                 os.replace(str(stage / logo), str(data / logo))
+            # Nube de respaldos (rclone): la del respaldo, salvo que este nodo ya tenga
+            # una propia y se pidió conservar sus datos
+            if (stage / "rclone.conf").is_file() and not (conservar_nodo and (data / "rclone.conf").is_file()):
+                if (data / "rclone.conf").is_file():
+                    os.replace(str(data / "rclone.conf"), str(old / "rclone.conf"))
+                os.replace(str(stage / "rclone.conf"), str(data / "rclone.conf"))
             os.replace(str(stage / "hamna.db"), str(data / "hamna.db"))
             os.replace(str(stage / "settings.json"), str(data / "settings.json"))
             try:

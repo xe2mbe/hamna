@@ -634,6 +634,11 @@ class Engine:
             sync.tick(now)
         except Exception:
             log.exception("Error al revisar las sincronizaciones")
+        try:
+            from . import autobackup
+            autobackup.tick(now, self.busy())
+        except Exception:
+            log.exception("Error al revisar el respaldo automático")
         # olvidar disparos de otros días
         self._fired = {k for k in self._fired if k[1] == today}
         self._prewarmed = {k for k in self._prewarmed if k[1] == today}

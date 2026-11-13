@@ -64,6 +64,19 @@ DEFAULTS = {
     "tg_on_upcoming": False,
     "tg_upcoming_mins": "15",     # uno o varios, separados por coma: «60, 15»
     "tg_on_section": False,
+    "tg_on_backup": True,
+
+    # Respaldo automático (ver autobackup.py)
+    "ab_enabled": False,
+    "ab_hora": "03:30",
+    "ab_keep": 7,                 # respaldos sin audios que se guardan en la nube
+    "ab_node_on": False,
+    "ab_node_url": "",
+    "ab_node_token": "",
+    "ab_node_pin": "",            # huella del certificado del nodo destino
+    "ab_cloud_on": False,
+    "ab_cloud_folder": "HAMNA",
+    "ab_recv_keep": 7,            # al recibir: respaldos sin audios por nodo
 
     # Seguridad
     "password_hash": "",
@@ -71,7 +84,7 @@ DEFAULTS = {
 }
 
 # Claves que nunca se mandan al navegador
-SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token"}
+SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token", "ab_node_token"}
 
 _lock = threading.Lock()
 _cache = None
@@ -131,4 +144,5 @@ def public():
     out = {k: v for k, v in cfg.items() if k not in SECRET_KEYS}
     out["azure_key_set"] = bool(cfg.get("azure_key"))
     out["tg_token_set"] = bool(cfg.get("tg_token"))
+    out["ab_node_token_set"] = bool(cfg.get("ab_node_token"))
     return out

@@ -13,7 +13,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, backup, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, autobackup, backends, backup, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -33,9 +33,12 @@ def init_app():
     auth.init()
     share.init()
     sync.init()
+    autobackup.init()
     app.roles = auth.ROLES
     app.user_loader = lambda req: auth.user_for(req.token, req.ip)
     app.upload_limits["/api/respaldo/restaurar"] = 4 * 2**30
+    app.raw_uploads["/api/remoto/respaldo"] = (
+        4 * 2**30, lambda req: autobackup.code_check(req.headers.get("X-HAMNA-Backup", "")) is not None)
 
 
 def require(req, rol):
@@ -978,13 +981,14 @@ def sesiones_accion(req, accion):
 NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_pitch": int,
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
-            "normalize_target": float, "pause_volume": int}
+            "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
-            "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins"}
+            "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
+            "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder"}
 
 
 @app.route("/api/ajustes")
@@ -1005,7 +1009,7 @@ def ajustes_save(req):
             upd[k] = v if isinstance(v, bool) else truthy(v)
         elif k in STR_KEYS:
             upd[k] = str(v).strip()
-        elif k in ("azure_key", "tg_token") and str(v).strip():
+        elif k in ("azure_key", "tg_token", "ab_node_token") and str(v).strip():
             upd[k] = str(v).strip()
     if "tg_upcoming_mins" in upd:
         bad = [x for x in re.split(r"[,;\s]+", upd["tg_upcoming_mins"])
@@ -1013,6 +1017,11 @@ def ajustes_save(req):
         if bad:
             raise ValueError("Minutos de aviso inválidos: usa números de 1 a 1440 separados por coma")
         upd["tg_upcoming_mins"] = ", ".join(str(m) for m in notify.upcoming_minutes(upd))
+    if "ab_hora" in upd and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", upd["ab_hora"]):
+        raise ValueError("Hora del respaldo inválida (HH:MM)")
+    for k in ("ab_keep", "ab_recv_keep"):
+        if k in upd and not 1 <= upd[k] <= 60:
+            raise ValueError("Copias a conservar: de 1 a 60")
     if upd.get("node") and not re.match(r"^[A-Za-z0-9]{1,10}$", upd["node"]):
         raise ValueError("Número de nodo inválido")
     if upd.get("irlp_mode") not in (None, "red", "local"):
@@ -1080,6 +1089,103 @@ def respaldo_restaurar(req):
     r = backup.restore(up.path, truthy(req.form.get("conservar_nodo", "1")), req.user["usuario"])
     backup.restart_soon()
     return ok(**r)
+
+
+# ── Respaldo automático ──────────────────────────────────────────────────────
+@app.route("/api/autorespaldo", rol="admin")
+def autorespaldo_info(req):
+    cfg = settings.load()
+    st = autobackup.load_state()
+    return jsonr({"estado": st, "corriendo": autobackup.running(),
+                  "destinos": autobackup.destinations(cfg), "rclone": autobackup.rclone_version(),
+                  "nube": autobackup.cloud_info(), "nube_carpeta": autobackup._cloud_dir(cfg).split(":", 1)[1],
+                  "audios_cambiaron": autobackup.audios_changed(st)})
+
+
+@app.route("/api/autorespaldo/ahora", ("POST",), rol="admin")
+def autorespaldo_ahora(req):
+    audios = str(req.json().get("audios") or "auto")
+    if audios not in ("auto", "si", "no"):
+        raise ValueError("Opción de audios inválida")
+    if autobackup.running():
+        raise ValueError("Ya se está haciendo un respaldo")
+    if not autobackup.destinations(settings.load()):
+        raise ValueError("Primero configura y guarda al menos un destino (otro nodo o nube)")
+    autobackup.run_bg("manual · " + req.user["usuario"], audios)
+    return ok()
+
+
+@app.route("/api/autorespaldo/probar-nodo", ("POST",), rol="admin")
+def autorespaldo_probar(req):
+    b = req.json()
+    codigo = (b.get("codigo") or "").strip() or settings.get("ab_node_token") or ""
+    if not codigo:
+        raise ValueError("Falta el código de acceso del nodo destino")
+    return ok(**autobackup.probe_node(b.get("url") or "", codigo))
+
+
+@app.route("/api/autorespaldo/nube", ("POST", "DELETE"), rol="admin")
+def autorespaldo_nube(req):
+    if req.method == "DELETE":
+        autobackup.cloud_remove()
+        log.info("%s quitó la nube de respaldos", req.user["usuario"])
+        return ok()
+    b = req.json()
+    tipo = autobackup.cloud_setup(str(b.get("tipo") or ""), str(b.get("token") or ""))
+    log.info("%s configuró la nube de respaldos (%s)", req.user["usuario"], tipo)
+    return ok(nube=tipo)
+
+
+# Lado que recibe
+@app.route("/api/respaldos-recibidos", rol="admin")
+def recibidos(req):
+    return jsonr({"codigos": autobackup.codes(), "nodos": autobackup.received(),
+                  "conservar": int(settings.get("ab_recv_keep") or 7), "con_audios": autobackup.KEEP_CON_AUDIOS})
+
+
+@app.route("/api/respaldos-recibidos/codigos", ("POST",), rol="admin")
+def recibidos_codigo(req):
+    token = autobackup.code_create(req.json().get("etiqueta") or "")
+    log.info("%s creó un código para recibir respaldos", req.user["usuario"])
+    return ok(codigo=token)
+
+
+@app.route("/api/respaldos-recibidos/codigos/<int:cid>", ("DELETE",), rol="admin")
+def recibidos_codigo_del(req, cid):
+    autobackup.code_revoke(cid)
+    return ok()
+
+
+@app.route("/api/respaldos-recibidos/<nodo>/<nombre>", rol="admin")
+def recibidos_archivo(req, nodo, nombre):
+    f = autobackup.received_file(str(nodo), str(nombre))
+    if not f:
+        raise HTTPError(404, "Ese respaldo ya no existe")
+    r = send_file(f, "application/gzip")
+    r.headers["Content-Disposition"] = 'attachment; filename="{}"'.format(f.name)
+    return r
+
+
+@app.route("/api/remoto/respaldo", ("GET", "POST"), auth=False)
+def remoto_respaldo(req):
+    token = req.headers.get("X-HAMNA-Backup", "")
+    if not autobackup.code_check(token):
+        raise HTTPError(401, "Código de acceso inválido")
+    if req.method == "GET":
+        cfg = settings.load()
+        return ok(estacion=cfg.get("station_name") or "", nodo=cfg.get("node") or "", version=VERSION,
+                  libre_mb=shutil.disk_usage(str(paths.data_dir())).free // 2**20)
+    up = req.files.get("cuerpo")
+    if not up:
+        raise ValueError("No llegó el respaldo")
+    try:
+        est = bytes.fromhex(req.headers.get("X-HAMNA-Estacion", "")).decode("utf-8", "replace")[:80]
+    except ValueError:
+        est = ""
+    name = autobackup.receive(token, up.path, req.headers.get("X-HAMNA-Nodo", ""), est,
+                              req.headers.get("X-HAMNA-Version", "")[:20], req.ip)
+    up.path = None
+    return ok(guardado=name)
 
 
 @app.route("/api/ajustes/password", ("POST",), rol="lectura")

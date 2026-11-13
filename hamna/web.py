@@ -187,6 +187,29 @@ def send_file(path, ctype=None, cache=False):
                     or "application/octet-stream", cache=cache)
 
 
+# ── Cuerpo crudo a disco (p. ej. respaldos que manda otro nodo) ─────────────
+def _spool_raw(rfile, length, max_bytes):
+    if length > max_bytes:
+        raise HTTPError(413, "El archivo es demasiado grande (máximo {} MB)".format(max_bytes // 2**20))
+    free = shutil.disk_usage(str(paths.tmp_dir())).free
+    if length + 50 * 2**20 > free:
+        raise HTTPError(413, "No hay espacio en el nodo para recibir el archivo ({} MB libres)".format(free // 2**20))
+    dest = paths.tmp_dir() / ("raw_" + uuid.uuid4().hex)
+    try:
+        with open(str(dest), "wb") as f:
+            left = length
+            while left > 0:
+                chunk = rfile.read(min(262144, left))
+                if not chunk:
+                    raise HTTPError(400, "Subida incompleta")
+                f.write(chunk)
+                left -= len(chunk)
+    except BaseException:
+        paths.rm(dest)
+        raise
+    return str(dest)
+
+
 # ── Multipart a disco ────────────────────────────────────────────────────────
 def _parse_multipart(rfile, length, boundary, max_bytes):
     """Copia el cuerpo a un archivo temporal y lo parte con mmap; así una
@@ -258,6 +281,7 @@ class App:
         self.secret = "x"
         self.max_upload = 300 * 2**20
         self.upload_limits = {}         # ruta → límite propio (p. ej. restaurar respaldo)
+        self.raw_uploads = {}           # ruta → (límite, check(req) → bool): POST con cuerpo crudo sin sesión
         self.user_loader = None     # función(request) -> usuario o None
         self.roles = {}             # rol -> nivel
 
@@ -333,7 +357,12 @@ class App:
                         req.user = app.user_loader(req)
                     length = int(self.headers.get("Content-Length") or 0)
                     ctype = self.headers.get("Content-Type", "")
-                    if ctype.startswith("multipart/form-data"):
+                    raw_up = app.raw_uploads.get(req.path) if req.method == "POST" else None
+                    if raw_up:
+                        if not raw_up[1](req):     # se revisa el código ANTES de leer el cuerpo
+                            raise HTTPError(401, "Código de acceso inválido")
+                        req.files["cuerpo"] = UploadedFile("cuerpo", _spool_raw(self.rfile, length, raw_up[0]))
+                    elif ctype.startswith("multipart/form-data"):
                         m = re.search(r'boundary="?([^";]+)"?', ctype)
                         if not m:
                             raise HTTPError(400, "Falta boundary")

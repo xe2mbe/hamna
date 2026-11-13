@@ -34,6 +34,7 @@ KINDS = {
     "fin": "tg_on_end",              # resumen al terminar cada transmisión
     "proximo": "tg_on_upcoming",     # N minutos antes de un evento programado
     "seccion": "tg_on_section",      # al empezar cada sección
+    "respaldo": "tg_on_backup",      # respaldo automático fallido
 }
 MAX_LINES = 40          # Telegram corta en 4096 caracteres
 
