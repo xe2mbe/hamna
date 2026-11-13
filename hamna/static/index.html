@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.18.1">
+<link rel="stylesheet" href="static/app.css?v=1.18.2">
 </head>
 <body>
 
@@ -366,54 +366,81 @@
 
           <fieldset data-set="respaldo" class="hidden">
             <legend>Respaldo</legend>
-            <h3 style="margin-top:0">Respaldo automático</h3>
-            <p class="muted" style="margin:0 0 10px;max-width:680px">Cada día, a la hora elegida, HAMNA arma un respaldo y lo manda fuera de este nodo, para que no se pierda nada si se daña la tarjeta SD. Los audios de las secciones solo se incluyen cuando cambiaron desde el último respaldo con audios. Si a esa hora hay algo al aire, espera a que termine.</p>
-            <div class="grid2">
-              <label class="check"><input type="checkbox" name="ab_enabled"> Hacer un respaldo automático cada día</label>
-              <label>Hora del respaldo<input type="time" name="ab_hora"></label>
-            </div>
-            <div id="abStatus" class="upd-box"></div>
-
-            <h4>A otro nodo HAMNA</h4>
-            <label class="check"><input type="checkbox" name="ab_node_on"> Mandar el respaldo a otro nodo HAMNA (por ejemplo el hub)</label>
-            <div class="grid2">
-              <label>Dirección del nodo destino<input name="ab_node_url" placeholder="https://192.168.1.4/hamna/" autocomplete="off"><small>En ese nodo: Ajustes → Respaldo → Recibir respaldos de otros nodos → Nuevo código.</small></label>
-              <label>Código de acceso<input type="password" name="ab_node_token" data-secret autocomplete="new-password"></label>
-            </div>
-            <input type="hidden" name="ab_node_pin">
-            <div class="row gap wrap"><button type="button" class="btn sm" id="btnAbProbe">Probar conexión</button><span class="muted" id="abProbeMsg"></span></div>
-
-            <h4>A Google Drive u OneDrive</h4>
-            <label class="check"><input type="checkbox" name="ab_cloud_on"> Mandar el respaldo a la nube</label>
-            <div id="abCloud" class="upd-box"></div>
-            <div class="grid2">
-              <label>Carpeta en la nube<input name="ab_cloud_folder" placeholder="HAMNA"><small>Dentro de ella se crea una carpeta con el número de este nodo.</small></label>
-              <label>Respaldos sin audios a conservar en la nube<input type="number" name="ab_keep" min="1" max="60"><small>De los que traen audios se conservan los 2 últimos.</small></label>
+            <div class="subtabs" id="bkTabs">
+              <button type="button" data-sub="auto" class="active">⏰ Automático</button>
+              <button type="button" data-sub="manual">💾 Descargar y restaurar</button>
+              <button type="button" data-sub="recibir">📥 Recibir de otros nodos</button>
             </div>
 
-            <div class="row gap wrap" style="margin:6px 0 4px">
-              <select id="abNowAud"><option value="auto">Audios solo si cambiaron</option><option value="si">Con audios</option><option value="no">Sin audios</option></select>
-              <button type="button" class="btn" id="btnAbNow">Respaldar ahora</button>
+            <!-- Automático -->
+            <div class="subpane" data-sub="auto">
+              <p class="muted bk-intro">Cada día HAMNA arma un respaldo y lo manda fuera de este nodo, para que no se pierda nada si se daña la tarjeta SD. Los audios de las secciones solo se incluyen cuando cambiaron.</p>
+
+              <div class="bk-card">
+                <div class="bk-head"><h4>Último respaldo</h4>
+                  <div class="row gap wrap">
+                    <select id="abNowAud"><option value="auto">Audios solo si cambiaron</option><option value="si">Con audios</option><option value="no">Sin audios</option></select>
+                    <button type="button" class="btn sm" id="btnAbNow">Respaldar ahora</button>
+                  </div></div>
+                <div id="abStatus"></div>
+              </div>
+
+              <div class="bk-card">
+                <h4>1. Cuándo</h4>
+                <div class="grid2">
+                  <label class="check"><input type="checkbox" name="ab_enabled"> Hacer un respaldo automático cada día</label>
+                  <label>Hora del respaldo<input type="time" name="ab_hora"><small>Si a esa hora hay algo al aire, espera a que termine.</small></label>
+                </div>
+              </div>
+
+              <h4 class="bk-sub">2. Adónde se manda <span class="muted">(uno o los dos)</span></h4>
+              <div class="grid2 bk-dest">
+                <div class="bk-card">
+                  <label class="check bk-title"><input type="checkbox" name="ab_node_on"> 🖥️ A otro nodo HAMNA</label>
+                  <p class="muted bk-note">Por ejemplo el hub. En ese nodo: Respaldo → Recibir de otros nodos → Nuevo código.</p>
+                  <label>Dirección del nodo destino<input name="ab_node_url" placeholder="https://192.168.1.4/hamna/" autocomplete="off"></label>
+                  <label>Código de acceso<input type="password" name="ab_node_token" data-secret autocomplete="new-password"></label>
+                  <input type="hidden" name="ab_node_pin">
+                  <div class="row gap wrap"><button type="button" class="btn sm" id="btnAbProbe">Probar conexión</button><span class="muted" id="abProbeMsg"></span></div>
+                </div>
+                <div class="bk-card">
+                  <label class="check bk-title"><input type="checkbox" name="ab_cloud_on"> ☁️ A Google Drive u OneDrive</label>
+                  <div id="abCloud"></div>
+                  <label>Carpeta en la nube<input name="ab_cloud_folder" placeholder="HAMNA"><small>Dentro de ella se crea una carpeta con el número de este nodo.</small></label>
+                  <label>Respaldos sin audios a conservar en la nube<input type="number" name="ab_keep" min="1" max="60"><small>De los que traen audios se conservan los 2 últimos.</small></label>
+                </div>
+              </div>
             </div>
-            <small class="muted">Guarda los ajustes antes de usar «Respaldar ahora».</small>
 
-            <h3>Descargar respaldo</h3>
-            <p class="muted" style="margin:0 0 10px;max-width:680px">Guarda en tu computadora eventos, secciones, programación, usuarios, ajustes (incluidas las claves de Azure y Telegram), el logo y los audios de pausa. Sirve para cambiar la tarjeta SD o pasar todo a otro nodo.</p>
-            <label class="check"><input type="checkbox" id="bkAudios" checked> Incluir los audios de las secciones <span class="muted" id="bkAudInfo"></span></label>
-            <div class="muted" id="bkSize" style="font-size:.84rem;margin:4px 0 12px"></div>
-            <div class="row gap wrap"><a class="btn primary" id="btnBackup" href="api/respaldo/descargar?audios=1">⬇ Descargar respaldo</a></div>
-            <p class="muted" style="font-size:.84rem;max-width:680px">⚠️ El archivo contiene contraseñas (cifradas) y claves; guárdalo en un lugar seguro y no lo compartas.</p>
+            <!-- Descargar y restaurar -->
+            <div class="subpane hidden" data-sub="manual">
+              <div class="grid2 bk-dest">
+                <div class="bk-card">
+                  <h4>⬇ Descargar respaldo</h4>
+                  <p class="muted bk-note">Guarda en tu computadora eventos, secciones, programación, usuarios, ajustes (incluidas las claves de Azure y Telegram), el logo y los audios de pausa. Sirve para cambiar la tarjeta SD o pasar todo a otro nodo.</p>
+                  <label class="check"><input type="checkbox" id="bkAudios" checked> Incluir los audios de las secciones <span class="muted" id="bkAudInfo"></span></label>
+                  <div class="muted" id="bkSize" style="font-size:.84rem;margin:4px 0 12px"></div>
+                  <div class="row gap wrap"><a class="btn primary" id="btnBackup" href="api/respaldo/descargar?audios=1">⬇ Descargar respaldo</a></div>
+                  <p class="muted" style="font-size:.84rem">⚠️ El archivo contiene contraseñas (cifradas) y claves; guárdalo en un lugar seguro y no lo compartas.</p>
+                </div>
+                <div class="bk-card">
+                  <h4>⬆ Restaurar desde un respaldo</h4>
+                  <p class="muted bk-note">Reemplaza los datos de este nodo con los del respaldo. Lo que hay ahora no se borra: se mueve a <code translate="no">/var/lib/hamna/antes-de-restaurar-…</code> (se guardan las 2 más recientes). Los usuarios y contraseñas pasan a ser los del respaldo. Si el respaldo no trae audios de secciones, se quedan los de este nodo.</p>
+                  <label>Archivo de respaldo<input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"></label>
+                  <label class="check"><input type="checkbox" id="bkKeepNode" checked> Conservar los datos de este nodo (tipo, número, comandos IRLP/ASL, nombre de la estación y logo)<small>Desmárcalo solo si restauras el mismo nodo (por ejemplo, después de cambiar la tarjeta SD).</small></label>
+                  <div class="row gap wrap"><button type="button" class="btn danger" id="btnRestore">Restaurar</button><span class="muted" id="bkMsg"></span></div>
+                </div>
+              </div>
+            </div>
 
-            <h3>Restaurar desde un respaldo</h3>
-            <p class="muted" style="margin:0 0 10px;max-width:680px">Reemplaza los datos de este nodo con los del respaldo. Lo que hay ahora no se borra: se mueve a <code translate="no">/var/lib/hamna/antes-de-restaurar-…</code> (se guardan las 2 más recientes). Los usuarios y contraseñas pasan a ser los del respaldo. Si el respaldo no trae audios de secciones, se quedan los de este nodo.</p>
-            <label>Archivo de respaldo<input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"></label>
-            <label class="check"><input type="checkbox" id="bkKeepNode" checked> Conservar los datos de este nodo (tipo, número, comandos IRLP/ASL, nombre de la estación y logo)<small>Desmárcalo solo si restauras el mismo nodo (por ejemplo, después de cambiar la tarjeta SD).</small></label>
-            <div class="row gap wrap"><button type="button" class="btn danger" id="btnRestore">Restaurar</button><span class="muted" id="bkMsg"></span></div>
-
-            <h3>Recibir respaldos de otros nodos</h3>
-            <p class="muted" style="margin:0 0 10px;max-width:680px">Este nodo puede guardar los respaldos automáticos de tus otros nodos. Crea un código para cada nodo y pégalo en su sección «Respaldo automático», junto con la dirección de este nodo.</p>
-            <label style="max-width:360px">Respaldos sin audios a conservar por nodo<input type="number" name="ab_recv_keep" min="1" max="60"><small>De los que traen audios se conservan los 2 últimos.</small></label>
-            <div id="recvBox"><p class="muted">Cargando…</p></div>
+            <!-- Recibir de otros nodos -->
+            <div class="subpane hidden" data-sub="recibir">
+              <p class="muted bk-intro">Este nodo puede guardar los respaldos automáticos de tus otros nodos. Crea un código para cada nodo y pégalo en su sección «Respaldo automático», junto con la dirección de este nodo.</p>
+              <div class="bk-card">
+                <label style="max-width:360px">Respaldos sin audios a conservar por nodo<input type="number" name="ab_recv_keep" min="1" max="60"><small>De los que traen audios se conservan los 2 últimos.</small></label>
+                <div id="recvBox"><p class="muted">Cargando…</p></div>
+              </div>
+            </div>
           </fieldset>
 
           <fieldset data-set="sistema" class="hidden">
@@ -469,7 +496,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.18.1"></script>
-<script src="static/app.js?v=1.18.1"></script>
+<script src="static/i18n.js?v=1.18.2"></script>
+<script src="static/app.js?v=1.18.2"></script>
 </body>
 </html>

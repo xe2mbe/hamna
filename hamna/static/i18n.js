@@ -308,6 +308,15 @@
     "Queda poco espacio. Borra audios que ya no uses, compacta las secciones (Ajustes → Nivel de audio) o revisa la bitácora del sistema.":
       "Space is running low. Delete audios you no longer use, compact the sections (Settings → Audio level) or check the system log.",
     "Queda muy poca memoria libre. Revisa qué programas están corriendo en el nodo.": "Very little free memory left. Check which programs are running on the node.",
+    // Respaldo (sub-pestañas)
+    "⏰ Automático": "⏰ Automatic", "💾 Descargar y restaurar": "💾 Download and restore", "📥 Recibir de otros nodos": "📥 Receive from other nodes",
+    "Cada día HAMNA arma un respaldo y lo manda fuera de este nodo, para que no se pierda nada si se daña la tarjeta SD. Los audios de las secciones solo se incluyen cuando cambiaron.":
+      "Every day HAMNA makes a backup and sends it off this node, so nothing is lost if the SD card fails. Section audios are only included when they changed.",
+    "Último respaldo": "Last backup", "1. Cuándo": "1. When", "2. Adónde se manda": "2. Where it goes", "(uno o los dos)": "(one or both)",
+    "Si a esa hora hay algo al aire, espera a que termine.": "If something is on air at that time, it waits until it ends.",
+    "🖥️ A otro nodo HAMNA": "🖥️ To another HAMNA node", "☁️ A Google Drive u OneDrive": "☁️ To Google Drive or OneDrive",
+    "Por ejemplo el hub. En ese nodo: Respaldo → Recibir de otros nodos → Nuevo código.": "For example the hub. On that node: Backup → Receive from other nodes → New code.",
+    "⬆ Restaurar desde un respaldo": "⬆ Restore from a backup",
     // Respaldo automático
     "Respaldo automático": "Automatic backup",
     "Cada día, a la hora elegida, HAMNA arma un respaldo y lo manda fuera de este nodo, para que no se pierda nada si se daña la tarjeta SD. Los audios de las secciones solo se incluyen cuando cambiaron desde el último respaldo con audios. Si a esa hora hay algo al aire, espera a que termine.":

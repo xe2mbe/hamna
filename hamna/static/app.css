@@ -628,3 +628,31 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 .diag-cmd{margin:6px 0;white-space:pre-wrap;word-break:break-all;font-size:.78rem}
 .diag-list li{align-items:flex-start}
 #diagBox .upd-head{gap:12px}
+
+/* Respaldo: sub-pestañas y tarjetas */
+.subtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
+.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 12px;
+  color: var(--text2); font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.bk-intro { margin: 0 0 14px; max-width: 760px; }
+.bk-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 14px; background: var(--surface); }
+.bk-card h4 { margin: 0 0 10px; }
+.bk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.bk-head h4 { margin: 0; }
+.bk-sub { margin: 4px 0 10px; }
+.bk-dest { align-items: stretch; }
+.bk-dest .bk-card { margin-bottom: 0; }
+.bk-title { font-weight: 600; }
+.bk-note { font-size: .86rem; margin: 2px 0 10px; }
+#abStatus .upd-list { margin-top: 6px; }
+@media (max-width: 960px) {
+  .subtabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .subtabs::-webkit-scrollbar { display: none; }
+  .bk-dest .bk-card { margin-bottom: 14px; }
+}
+#abCloud { background: var(--surface2); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+#abCloud:empty { display: none; }
+.bk-head select { width: auto; max-width: 100%; }
+.bk-head .row { flex-wrap: nowrap; }
+@media (max-width: 520px) { .bk-head .row { flex-wrap: wrap; } }

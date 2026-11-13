@@ -1112,7 +1112,7 @@ function showSet(k) {
       b.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
-  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k));
+  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k) || (k === "respaldo" && S.bkSub === "manual"));
   if (k === "sistema") loadSistema();
   if (k === "respaldo") loadRespaldo();
   if (k === "seguridad") loadMyAccount();
@@ -1326,7 +1326,18 @@ async function loadHealth(force) {
 }
 /* ── Respaldo y restauración ──────────────────────────────────────────────── */
 const mb = (b) => (b / 1048576 < 10 ? (b / 1048576).toFixed(1) : Math.round(b / 1048576)) + " MB";
+/* Sub-pestañas de Respaldo */
+try { S.bkSub = localStorage.getItem("hamna.bksub") || "auto"; } catch { S.bkSub = "auto"; }
+function showBkSub(k) {
+  S.bkSub = k;
+  try { localStorage.setItem("hamna.bksub", k); } catch {}
+  $$("#bkTabs button").forEach((b) => b.classList.toggle("active", b.dataset.sub === k));
+  $$("#setForm .subpane").forEach((p) => p.classList.toggle("hidden", p.dataset.sub !== k));
+  if (S.setSec === "respaldo") $("#saveBar").classList.toggle("hidden", k === "manual");
+}
+$$("#bkTabs button").forEach((b) => (b.onclick = () => showBkSub(b.dataset.sub)));
 async function loadRespaldo() {
+  showBkSub(S.bkSub || "auto");
   loadAutoBackup(); loadRecv();
   let d;
   try { d = await api("api/respaldo"); } catch (e) { $("#bkSize").textContent = e.message; return; }
@@ -1382,7 +1393,7 @@ async function loadAutoBackup() {
   else if (u) {
     const res = Object.entries(u.resultados || {}).map(([k, v]) =>
       `<li><span class="d">${v.ok ? "✅" : "❌"} ${esc(DEST[k] || k)}</span><span translate="no">${esc(v.detalle || "")}</span></li>`).join("");
-    html = `<b>${u.ok ? "✅" : "❌"} Último respaldo: ${esc(u.fecha)}</b>
+    html = `<b>${u.ok ? "✅" : "❌"} ${esc(u.fecha)}</b>
       <div class="muted" style="font-size:.84rem">${esc(u.origen)}${u.tam ? ` · ${u.con_audios ? "con audios" : "sin audios"} · ${mb(u.tam)}` : ""}${u.nota ? " · " + esc(u.nota) : ""}</div>
       ${res ? `<ul class="upd-list">${res}</ul>` : ""}`;
   } else html = `<span class="muted">Todavía no se ha hecho ningún respaldo automático.</span>`;
@@ -1445,7 +1456,19 @@ $("#btnAbProbe").onclick = async () => {
 };
 $("#setForm").ab_node_url.addEventListener("input", () => { $("#setForm").ab_node_pin.value = ""; });
 $("#btnAbNow").onclick = async () => {
-  await run(() => api("api/autorespaldo/ahora", { method: "POST", json: { audios: $("#abNowAud").value } }), "Respaldo iniciado");
+  // Primero se guardan los ajustes del respaldo tal como están en pantalla
+  const f = $("#setForm"), data = {};
+  for (const el of f.elements) {
+    if (!el.name || !el.name.startsWith("ab_")) continue;
+    if (el.type === "checkbox") data[el.name] = el.checked;
+    else if ("secret" in el.dataset) { if (el.value.trim()) data[el.name] = el.value.trim(); }
+    else data[el.name] = el.value;
+  }
+  try {
+    const r = await api("api/ajustes", { method: "PUT", json: data });
+    S.cfg = r.ajustes;
+    await run(() => api("api/autorespaldo/ahora", { method: "POST", json: { audios: $("#abNowAud").value } }), "Respaldo iniciado");
+  } catch (e) { toast(e.message, true); }
   loadAutoBackup();
 };
 /* Recibir respaldos de otros nodos */
