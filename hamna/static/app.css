@@ -285,12 +285,14 @@ main > .view { max-width: 1180px; margin: 0 auto; }
 .nchip small { color: var(--text2); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Ajustes */
-.settings { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: start; }
-.settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
-.settings-nav button { background: none; border: 0; text-align: left; padding: 9px 12px; border-radius: 10px;
+/* Pestañas horizontales arriba; el contenido usa todo el ancho */
+.settings { display: flex; flex-direction: column; gap: 14px; }
+.settings-nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 12px; }
+.settings-nav button { background: none; border: 0; padding: 8px 14px; border-radius: 9px; white-space: nowrap;
   color: var(--text2); font: inherit; font-weight: 500; cursor: pointer; }
 .settings-nav button:hover { background: var(--hover); color: var(--text); }
-.settings-nav button.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.settings-nav button.active { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--shadow); }
 .settings-body { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 22px 24px; box-shadow: var(--shadow); }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -549,8 +551,9 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   html, body { overflow-x: hidden; }
   .onair { left: 12px; right: 12px; bottom: 12px; }
   .toast { left: 50%; }
-  .split, .settings { grid-template-columns: 1fr; }
-  .settings-nav { flex-direction: row; overflow-x: auto; position: static; }
+  .split { grid-template-columns: 1fr; }
+  .settings-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .settings-nav::-webkit-scrollbar { display: none; }
   .cron-row { grid-template-columns: 34px 1fr auto; }
   .cron-row code { grid-column: 2 / -1; grid-row: 2; }
   .cron-row .mini { grid-column: 3; grid-row: 1; }

@@ -1106,7 +1106,11 @@ function showSet(k) {
   if (!isAdmin()) k = "seguridad";
   S.setSec = k;
   try { localStorage.setItem("hamna.set", k); } catch {}
-  $$("#setNav button").forEach((b) => b.classList.toggle("active", b.dataset.set === k));
+  $$("#setNav button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.set === k);
+    if (b.dataset.set === k && b.scrollIntoView && b.parentElement.scrollWidth > b.parentElement.clientWidth)
+      b.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
   $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k));
   if (k === "sistema") loadSistema();
