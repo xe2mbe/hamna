@@ -13,7 +13,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, autobackup, backends, backup, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, autobackup, backends, backup, health, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -253,7 +253,18 @@ def status(req):
     s["sys"] = sysmon.snapshot()
     s["version"] = VERSION
     s["envivo"] = live.status()
+    s["salud"] = health.worst()
     return jsonr(s)
+
+
+@app.route("/api/salud")
+def salud(req):
+    return jsonr(health.status())
+
+
+@app.route("/api/salud/revisar", ("POST",), rol="admin")
+def salud_revisar(req):
+    return jsonr(health.check_now())
 
 
 # ── Escuchar en vivo ─────────────────────────────────────────────────────────
@@ -984,7 +995,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",

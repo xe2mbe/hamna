@@ -35,6 +35,7 @@ KINDS = {
     "proximo": "tg_on_upcoming",     # N minutos antes de un evento programado
     "seccion": "tg_on_section",      # al empezar cada sección
     "respaldo": "tg_on_backup",      # respaldo automático fallido
+    "salud": "tg_on_health",         # SD, voltaje, temperatura, disco (health.py)
 }
 MAX_LINES = 40          # Telegram corta en 4096 caracteres
 

@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.16.0">
+<link rel="stylesheet" href="static/app.css?v=1.17.0">
 </head>
 <body>
 
@@ -55,7 +55,7 @@
       <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Ajustes</span></button>
     </nav>
     <div class="side-mon" id="sideMon" translate="no">
-      <div class="mon-h"><span data-l="Equipo">Equipo</span><span id="monUp"></span></div>
+      <div class="mon-h"><span data-l="Equipo">Equipo</span><button type="button" class="mon-health hidden" id="monHealth"></button><span id="monUp"></span></div>
       <div class="mon-row"><span data-l="CPU">CPU</span><div class="mbar"><div id="mbCpu"></div></div><b id="mvCpu">—</b></div>
       <div class="mon-row"><span data-l="RAM">RAM</span><div class="mbar"><div id="mbMem"></div></div><b id="mvMem">—</b></div>
       <div class="mon-row"><span data-l="Disco">Disco</span><div class="mbar"><div id="mbDisk"></div></div><b id="mvDisk">—</b></div>
@@ -314,7 +314,8 @@
               <small>Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.</small></label>
             <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones</label>
             <label class="check"><input type="checkbox" name="tg_on_backup"> 💾 Si falla el respaldo automático</label>
-              <label class="check"><input type="checkbox" name="tg_on_section"> 🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)</label>
+            <label class="check"><input type="checkbox" name="tg_on_health"> 🩺 Salud del nodo: errores de la tarjeta SD, escritura lenta, bajo voltaje, temperatura alta, poco disco (y cuando se normaliza)</label>
+            <label class="check"><input type="checkbox" name="tg_on_section"> 🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)</label>
             <label class="check"><input type="checkbox" name="tg_on_end"> ✅ Resumen al terminar: cuánto duró y qué secciones salieron completas, interrumpidas o sin audio</label>
             <h3>Probar</h3>
             <p class="muted" style="margin-top:0">Manda a Telegram un mensaje de prueba o un ejemplo de cada aviso armado con los datos de un evento. No se transmite nada. Usa el token y el chat escritos arriba, aunque no los hayas guardado.</p>
@@ -418,6 +419,7 @@
           <fieldset data-set="sistema" class="hidden">
             <legend>Sistema</legend>
             <div id="updBox" class="upd-box"><p class="muted">Buscando actualizaciones…</p></div>
+            <div id="healthBox" class="upd-box"></div>
             <div id="liveBox" class="upd-box"></div>
             <div id="sysInfo" class="sysinfo">Cargando…</div>
           </fieldset>
@@ -464,7 +466,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.16.0"></script>
-<script src="static/app.js?v=1.16.0"></script>
+<script src="static/i18n.js?v=1.17.0"></script>
+<script src="static/app.js?v=1.17.0"></script>
 </body>
 </html>

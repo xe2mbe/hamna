@@ -93,6 +93,8 @@ def main():
     logging.getLogger("hamna").info("HAMNA Web %s · Python %s · datos en %s",
                                     VERSION, sys.version.split()[0], paths.data_dir())
     threading.Thread(target=engine.scheduler_loop, daemon=True).start()
+    from . import health
+    health.start()
     from .live import live
     live.start()
     app.serve(a.host, a.port)

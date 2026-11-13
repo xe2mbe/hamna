@@ -616,3 +616,9 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 #exProg progress { height: 10px; accent-color: var(--accent, #3b82f6); }
 .tg-sub { margin: -4px 0 12px 28px; }
 .tg-sub input { display: block; max-width: 180px; margin-top: 4px; }
+
+/* Salud del equipo */
+.mon-health{margin-left:auto;margin-right:6px;border:1px solid var(--warn,#d97706);background:transparent;color:var(--warn,#d97706);
+  font:inherit;font-size:.72rem;font-weight:700;border-radius:999px;padding:0 7px;cursor:pointer;line-height:1.5}
+.mon-health.bad{border-color:var(--danger,#dc2626);color:var(--danger,#dc2626)}
+#healthBox .upd-list li{align-items:flex-start}

@@ -248,6 +248,28 @@
     "Este nodo no tiene ffmpeg ni sox para convertir audio": "This node has neither ffmpeg nor sox to convert audio",
     "Zona horaria del programa": "Program time zone", "Hora": "Time",
     "Hora del nodo (sin conversión)": "Node time (no conversion)",
+    // Salud del equipo
+    "❌ El equipo necesita atención": "❌ The node needs attention", "⚠️ Hay algo que revisar en el equipo": "⚠️ Something on the node needs checking",
+    "✅ El equipo está bien": "✅ The node is healthy", "Revisando el equipo…": "Checking the node…", "↻ Revisar ahora": "↻ Check now",
+    "Revisando…": "Checking…", "Tarjeta SD": "SD card", "Escritura en la SD": "SD card writes", "Alimentación": "Power supply",
+    "Temperatura": "Temperature", "Memoria": "Memory",
+    "🩺 Salud del nodo: errores de la tarjeta SD, escritura lenta, bajo voltaje, temperatura alta, poco disco (y cuando se normaliza)":
+      "🩺 Node health: SD card errors, slow writes, under-voltage, high temperature, low disk (and when it recovers)",
+    "Bajo voltaje en este momento": "Under-voltage right now", "Sin bajo voltaje desde el arranque": "No under-voltage since boot",
+    "Sin errores de la tarjeta desde el arranque": "No card errors since boot", "Este equipo no informa la temperatura": "This device doesn't report temperature",
+    "Este equipo no informa el voltaje": "This device doesn't report voltage",
+    "No se puede leer el registro del kernel (dmesg) con los permisos de HAMNA; sin errores de ext4": "Can't read the kernel log (dmesg) with HAMNA's permissions; no ext4 errors", "Aún no se mide": "Not measured yet", "Sin datos": "No data",
+    "La tarjeta SD puede estar fallando. Descarga un respaldo cuanto antes (Ajustes → Respaldo) y cámbiala por una nueva, de preferencia «High Endurance». Revisa también la fuente de alimentación.":
+      "The SD card may be failing. Download a backup as soon as possible (Settings → Backup) and replace it, preferably with a «High Endurance» card. Check the power supply too.",
+    "La tarjeta SD tarda mucho en guardar o no responde: es la señal típica de una SD que se está muriendo. Saca un respaldo ya y prepara una SD nueva.":
+      "The SD card is very slow to save or doesn't respond: the typical sign of a dying card. Make a backup now and prepare a new SD card.",
+    "La fuente no da suficiente voltaje. Usa una fuente de 5.1 V y al menos 2.5 A (Pi 3) con un cable corto y grueso; el bajo voltaje también daña las tarjetas SD.":
+      "The power supply doesn't give enough voltage. Use a 5.1 V supply of at least 2.5 A (Pi 3) with a short, thick cable; under-voltage also damages SD cards.",
+    "La Raspberry está muy caliente y puede frenarse. Mejora la ventilación, agrega disipador o ventilador y revisa que no esté encerrada.":
+      "The Raspberry Pi is very hot and may slow down. Improve ventilation, add a heatsink or fan and make sure it isn't enclosed.",
+    "Queda poco espacio. Borra audios que ya no uses, compacta las secciones (Ajustes → Nivel de audio) o revisa la bitácora del sistema.":
+      "Space is running low. Delete audios you no longer use, compact the sections (Settings → Audio level) or check the system log.",
+    "Queda muy poca memoria libre. Revisa qué programas están corriendo en el nodo.": "Very little free memory left. Check which programs are running on the node.",
     // Respaldo automático
     "Respaldo automático": "Automatic backup",
     "Cada día, a la hora elegida, HAMNA arma un respaldo y lo manda fuera de este nodo, para que no se pierda nada si se daña la tarjeta SD. Los audios de las secciones solo se incluyen cuando cambiaron desde el último respaldo con audios. Si a esa hora hay algo al aire, espera a que termine.":
@@ -535,6 +557,12 @@
     M(/^Último: (.+) desde (.+) · HAMNA v(.+)$/, (m, a, b, c) => `Last: ${a} from ${b} · HAMNA v${c}`),
     M(/^Nodo (\w+)$/, (m, a) => "Node " + a),
     M(/^sin audios por falta de espacio en el nodo \((\d+) MB libres\)$/, (m, a) => `without audios: not enough space on the node (${a} MB free)`),
+    M(/^Salud del equipo( · revisado (.+))? · se revisa cada minuto$/, (m, x, f) => `Node health${f ? " · checked " + f : ""} · checked every minute`),
+    M(/^Guardar 64 KB tardó ([\d.]+) s( \(lo normal es menos de 1 s\))?$/, (m, s, n) => `Saving 64 KB took ${s} s${n ? " (normally under 1 s)" : ""}`),
+    M(/^(\d+) MB libres de (\d+) MB$/, (m, a, b) => `${a} MB free of ${b} MB`),
+    M(/^Hubo bajo voltaje (\d+) (?:vez|veces) desde el arranque$/, (m, n) => `Under-voltage ${n} time(s) since boot`),
+    M(/^Sin errores de la tarjeta desde el arranque\. Nota: el último arranque fue después de un apagado sin cerrar \(corte de luz o desconexión\)$/,
+      () => "No card errors since boot. Note: the last boot came after an unclean shutdown (power cut or unplug)"),
     M(/^\((\d+) archivos?, (.+)\)$/, (m, n, t) => `(${n} file${n === "1" ? "" : "s"}, ${t})`),
     M(/^Tamaño aproximado: (.+)$/, (m, a) => "Approximate size: " + a),
     M(/^Subiendo… (\d+) %$/, (m, a) => `Uploading… ${a} %`),

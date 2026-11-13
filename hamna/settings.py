@@ -65,6 +65,7 @@ DEFAULTS = {
     "tg_upcoming_mins": "15",     # uno o varios, separados por coma: «60, 15»
     "tg_on_section": False,
     "tg_on_backup": True,
+    "tg_on_health": True,
 
     # Respaldo automático (ver autobackup.py)
     "ab_enabled": False,

@@ -377,6 +377,7 @@ async function poll() {
   S.status = s;
   renderSys(s.sys, s.version);
   renderLive(s.envivo);
+  renderHealthBadge(s.salud);
   if (s.ts) {
     // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
     const [d, t] = s.now.split(" "), [Y, M, D] = d.split("-").map(Number), [h, m, x] = t.split(":").map(Number);
@@ -1231,6 +1232,35 @@ $("#btnPw").onclick = async () => {
     $("#pwOld").value = $("#pwNew").value = ""; loadMyAccount();
   } catch {}
 };
+/* ── Salud del equipo ─────────────────────────────────────────────────────── */
+const SALUD_ICO = { ok: "✅", nd: "➖", aviso: "⚠️", grave: "❌" };
+function renderHealthBadge(worst) {
+  const b = $("#monHealth");
+  if (!b) return;
+  const bad = worst === "aviso" || worst === "grave";
+  b.classList.toggle("hidden", !bad);
+  b.classList.toggle("bad", worst === "grave");
+  b.textContent = bad ? SALUD_ICO[worst] + " " + (window.HAMNA_LANG === "es" ? "Revisar" : "Check") : "";
+  b.title = window.HAMNA_LANG === "es" ? "La salud del equipo necesita atención: ver Ajustes → Sistema" : "The node's health needs attention: see Settings → System";
+}
+$("#monHealth").onclick = () => { S.setSec = "sistema"; showTab("ajustes"); };
+async function loadHealth(force) {
+  const box = $("#healthBox");
+  if (!box) return;
+  let d;
+  try { d = force ? await api("api/salud/revisar", { method: "POST" }) : await api("api/salud"); }
+  catch (e) { box.innerHTML = `<span class="muted">${esc(e.message)}</span>`; return; }
+  renderHealthBadge(d.peor);
+  const rows = d.checks.map((c) => `<li class="h-${c.nivel}"><span class="d"><span>${SALUD_ICO[c.nivel]}</span> <span>${esc(c.nombre)}</span></span>
+      <span>${esc(c.detalle)}${c.consejo ? `<br><i class="muted">${esc(c.consejo)}</i>` : ""}</span></li>`).join("");
+  box.className = "upd-box" + (d.peor === "grave" || d.peor === "aviso" ? " new" : "");
+  box.innerHTML = `<div class="upd-head"><div><b>${d.peor === "grave" ? "❌ El equipo necesita atención" : d.peor === "aviso" ? "⚠️ Hay algo que revisar en el equipo" : d.checks.length ? "✅ El equipo está bien" : "Revisando el equipo…"}</b>
+      <div class="muted" style="font-size:.84rem">Salud del equipo${d.actualizado ? " · revisado " + esc(d.actualizado) : ""} · se revisa cada minuto</div></div>
+      ${isAdmin() ? `<button type="button" class="btn sm" id="btnHealth">↻ Revisar ahora</button>` : ""}</div>
+    ${rows ? `<ul class="upd-list">${rows}</ul>` : ""}`;
+  const b = $("#btnHealth");
+  if (b) b.onclick = async () => { busy(b, true, "Revisando…"); await loadHealth(true); };
+}
 /* ── Respaldo y restauración ──────────────────────────────────────────────── */
 const mb = (b) => (b / 1048576 < 10 ? (b / 1048576).toFixed(1) : Math.round(b / 1048576)) + " MB";
 async function loadRespaldo() {
@@ -1436,6 +1466,7 @@ $("#appVer").onclick = () => { if ($("#appVer").classList.contains("has-update")
 async function loadSistema() {
   S.info = null;
   loadUpdates(false);
+  loadHealth(false);
   const i = await getInfo();
   const be = i.backend || {};
   const rows = [["Versión", "HAMNA Web " + i.version], ["Salida al aire", (be.backend || "").toUpperCase() + (be.mode ? " · " + be.mode : "")],
