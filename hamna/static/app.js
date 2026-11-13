@@ -1028,7 +1028,7 @@ async function seccionForm(s) {
         <p class="muted" id="sfResolved" style="font-size:.85rem"></p>
       </div>
       <div class="only-file">
-        <label>Archivo de audio<input type="file" name="archivo" accept="${info.formatos.join(",")}">
+        <label>Archivo de audio<input type="file" name="archivo" accept="${info.formatos.join(",")},audio/*">
           <small>${!isNew && s.ruta_archivo ? "Actual: " + esc(s.ruta_archivo) + " · " + fmt(s.duracion) + ". Sube otro solo si quieres reemplazarlo." : info.formatos.map((f) => f.slice(1).toUpperCase()).join(", ") + ". Se convierte solo al formato del nodo."}</small></label>
         <div id="sfProg" class="bar hidden"><div></div></div>
       </div>
@@ -1062,7 +1062,7 @@ async function seccionForm(s) {
       $("#sfResolved").textContent = "Se leerá: " + r.texto;
     } catch (e) { toast(e.message, true); } finally { busy(b, false); }
   };
-  f.onsubmit = (e) => {
+  f.onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData();
     fd.append("nombre", f.nombre.value);
@@ -1072,7 +1072,10 @@ async function seccionForm(s) {
       fd.append("regenerar_antes", f.regenerar_antes.checked ? "1" : "0");
       const changed = isNew || f.texto_tts.value !== (s.texto_tts || "") || f.titulo.value !== (s.titulo || "") || f.descripcion.value !== (s.descripcion || "") || !s.tiene_audio;
       fd.append("generar", changed ? "1" : "0");
-    } else if (f.archivo.files[0]) fd.append("archivo", f.archivo.files[0]);
+    } else if (f.archivo.files[0]) {
+      const af = await nodeReadyAudio(f.archivo.files[0]);
+      fd.append("archivo", af, af.name);
+    }
     upload(isNew ? "api/secciones" : "api/secciones/" + s.id, fd, $("#sfSave"), $("#sfProg"))
       .then(() => { toast(isNew ? "Sección creada" : "Guardada"); closeModal(); loadSecciones(); S.info = null; })
       .catch((err) => toast(err.message, true));
@@ -1181,7 +1184,8 @@ function renderPauseSounds() {
 $("#pauseSounds").onchange = async (e) => {
   if (e.target.type !== "file" || !e.target.files[0]) return;
   const k = e.target.closest(".psound").dataset.k, fd = new FormData();
-  fd.append("archivo", e.target.files[0]);
+  const af = await nodeReadyAudio(e.target.files[0]);
+  fd.append("archivo", af, af.name);
   try { await upload("api/ajustes/sonido/" + k, fd); toast("Audio guardado"); S.cfg = await api("api/ajustes"); renderPauseSounds(); }
   catch (err) { toast(err.message, true); }
 };
@@ -1232,6 +1236,61 @@ $("#btnPw").onclick = async () => {
     $("#pwOld").value = $("#pwNew").value = ""; loadMyAccount();
   } catch {}
 };
+/* ── Diagnóstico («Revisar este nodo») ───────────────────────────────────── */
+$("#btnDiag").onclick = async () => {
+  const b = $("#btnDiag"), out = $("#diagOut");
+  busy(b, true, "Revisando…"); out.innerHTML = `<p class="muted">Revisando… puede tardar unos segundos.</p>`;
+  let d;
+  try { d = await api("api/diagnostico", { method: "POST" }); }
+  catch (e) { out.innerHTML = `<p class="muted">${esc(e.message)}</p>`; busy(b, false); return; }
+  busy(b, false);
+  const grupos = [];
+  d.revisiones.forEach((r) => { let g = grupos.find((x) => x.n === r.grupo); if (!g) grupos.push(g = { n: r.grupo, rs: [] }); g.rs.push(r); });
+  const malas = d.revisiones.filter((r) => r.nivel === "grave" || r.nivel === "aviso").length;
+  out.innerHTML = `<p style="margin:10px 0 4px"><b>${d.peor === "grave" ? "❌ Hay problemas que arreglar" : d.peor === "aviso" ? "⚠️ Hay cosas por revisar" : "✅ Todo está bien"}</b>
+      <span class="muted" style="font-size:.84rem"> · ${malas} por atender · ${esc(d.fecha)} · ${d.segundos} s</span></p>` +
+    grupos.map((g) => `<h4 style="margin:12px 0 4px">${esc(g.n)}</h4><ul class="upd-list diag-list">${g.rs.map((r, i) => `
+      <li class="h-${r.nivel}"><span class="d"><span>${SALUD_ICO[r.nivel] || "•"}</span> <span>${esc(r.nombre)}</span></span>
+        <span><span>${esc(r.detalle)}</span>${r.arreglo ? `<br><i class="muted">${esc(r.arreglo)}</i>` : ""}
+        ${r.cmd ? `<pre translate="no" class="diag-cmd">${esc(r.cmd)}</pre><button type="button" class="btn sm ghost" data-copy="${esc(r.cmd)}">Copiar comando</button>` : ""}
+        ${r.accion ? `<button type="button" class="btn sm primary" data-fix='${esc(JSON.stringify(r.accion))}'>${esc(r.accion.texto)}</button>` : ""}</span></li>`).join("")}</ul>`).join("");
+  $$("[data-copy]", out).forEach((x) => (x.onclick = () => {
+    try { navigator.clipboard.writeText(x.dataset.copy); toast("Comando copiado"); } catch { toast(x.dataset.copy); }
+  }));
+  $$("[data-fix]", out).forEach((x) => (x.onclick = async () => {
+    const a = JSON.parse(x.dataset.fix);
+    if (a.tipo === "ajuste") {
+      await run(() => api("api/ajustes", { method: "PUT", json: { [a.clave]: a.valor } }), "Ajuste guardado");
+      S.cfg = null; $("#btnDiag").click();
+    }
+  }));
+};
+/* Audio que el nodo no puede leer (p. ej. MP3 sin mpg123): se convierte a WAV en el navegador */
+async function nodeReadyAudio(file) {
+  const info = await getInfo();
+  const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+  if (info.formatos.includes(ext)) return file;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !window.OfflineAudioContext) return file;
+  toast(`Este nodo no lee ${ext.slice(1).toUpperCase()}: convirtiendo a WAV en tu navegador…`);
+  let buf;
+  try {
+    const ctx = new Ctx();
+    buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    ctx.close && ctx.close();
+  } catch { return file; }          // el navegador tampoco lo entiende: que el nodo diga qué falta
+  const RATE = 22050, len = Math.ceil(buf.duration * RATE);
+  const off = new OfflineAudioContext(1, len, RATE);
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const dv = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, RATE, true);
+  dv.setUint32(28, RATE * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) { const v = Math.max(-1, Math.min(1, pcm[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true); }
+  return new File([dv.buffer], file.name.replace(/\.[^.]+$/, "") + ".wav", { type: "audio/wav" });
+}
 /* ── Salud del equipo ─────────────────────────────────────────────────────── */
 const SALUD_ICO = { ok: "✅", nd: "➖", aviso: "⚠️", grave: "❌" };
 function renderHealthBadge(worst) {

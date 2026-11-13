@@ -622,3 +622,6 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   font:inherit;font-size:.72rem;font-weight:700;border-radius:999px;padding:0 7px;cursor:pointer;line-height:1.5}
 .mon-health.bad{border-color:var(--danger,#dc2626);color:var(--danger,#dc2626)}
 #healthBox .upd-list li{align-items:flex-start}
+.diag-cmd{margin:6px 0;white-space:pre-wrap;word-break:break-all;font-size:.78rem}
+.diag-list li{align-items:flex-start}
+#diagBox .upd-head{gap:12px}

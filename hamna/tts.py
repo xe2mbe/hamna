@@ -118,6 +118,10 @@ def _azure(text, cfg, out):
         r = urllib.request.urlopen(req, timeout=60)
         data = r.read()
     except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise RuntimeError("Azure rechazó la clave (HTTP {}). La clave solo sirve en la región donde se creó: "
+                               "revisa que la región de Ajustes → Voz («{}») sea la de tu recurso y que la clave esté "
+                               "completa. Ajustes → Sistema → Revisar este nodo busca la región correcta.".format(e.code, region))
         raise RuntimeError("Azure HTTP {}: {}".format(e.code, e.read().decode(errors="ignore")[:200]))
     except urllib.error.URLError as e:
         raise RuntimeError("No pude conectar con Azure: {}".format(e.reason))

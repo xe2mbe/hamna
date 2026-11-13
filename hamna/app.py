@@ -13,7 +13,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, autobackup, backends, backup, health, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -260,6 +260,11 @@ def status(req):
 @app.route("/api/salud")
 def salud(req):
     return jsonr(health.status())
+
+
+@app.route("/api/diagnostico", ("POST",), rol="admin")
+def diagnostico(req):
+    return jsonr(diagnose.run())
 
 
 @app.route("/api/salud/revisar", ("POST",), rol="admin")
