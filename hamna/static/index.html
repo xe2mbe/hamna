@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.14.0">
+<link rel="stylesheet" href="static/app.css?v=1.15.0">
 </head>
 <body>
 
@@ -159,6 +159,7 @@
           <button data-set="usuarios">Usuarios</button>
           <button data-set="avisos">Avisos</button>
           <button data-set="seguridad">Mi cuenta</button>
+          <button data-set="respaldo">Respaldo</button>
           <button data-set="sistema">Sistema</button>
         </aside>
         <form class="settings-body" id="setForm" autocomplete="off">
@@ -361,6 +362,22 @@
             <div id="allSessions" class="slist"></div>
           </fieldset>
 
+          <fieldset data-set="respaldo" class="hidden">
+            <legend>Respaldo</legend>
+            <h3 style="margin-top:0">Descargar respaldo</h3>
+            <p class="muted" style="margin:0 0 10px;max-width:680px">Guarda en tu computadora eventos, secciones, programación, usuarios, ajustes (incluidas las claves de Azure y Telegram), el logo y los audios de pausa. Sirve para cambiar la tarjeta SD o pasar todo a otro nodo.</p>
+            <label class="check"><input type="checkbox" id="bkAudios" checked> Incluir los audios de las secciones <span class="muted" id="bkAudInfo"></span></label>
+            <div class="muted" id="bkSize" style="font-size:.84rem;margin:4px 0 12px"></div>
+            <div class="row gap wrap"><a class="btn primary" id="btnBackup" href="api/respaldo/descargar?audios=1">⬇ Descargar respaldo</a></div>
+            <p class="muted" style="font-size:.84rem;max-width:680px">⚠️ El archivo contiene contraseñas (cifradas) y claves; guárdalo en un lugar seguro y no lo compartas.</p>
+
+            <h3>Restaurar desde un respaldo</h3>
+            <p class="muted" style="margin:0 0 10px;max-width:680px">Reemplaza los datos de este nodo con los del respaldo. Lo que hay ahora no se borra: se mueve a <code translate="no">/var/lib/hamna/antes-de-restaurar-…</code> (se guardan las 2 más recientes). Los usuarios y contraseñas pasan a ser los del respaldo. Si el respaldo no trae audios de secciones, se quedan los de este nodo.</p>
+            <label>Archivo de respaldo<input type="file" id="bkFile" accept=".gz,.tgz,application/gzip"></label>
+            <label class="check"><input type="checkbox" id="bkKeepNode" checked> Conservar los datos de este nodo (tipo, número, comandos IRLP/ASL, nombre de la estación y logo)<small>Desmárcalo solo si restauras el mismo nodo (por ejemplo, después de cambiar la tarjeta SD).</small></label>
+            <div class="row gap wrap"><button type="button" class="btn danger" id="btnRestore">Restaurar</button><span class="muted" id="bkMsg"></span></div>
+          </fieldset>
+
           <fieldset data-set="sistema" class="hidden">
             <legend>Sistema</legend>
             <div id="updBox" class="upd-box"><p class="muted">Buscando actualizaciones…</p></div>
@@ -410,7 +427,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.14.0"></script>
-<script src="static/app.js?v=1.14.0"></script>
+<script src="static/i18n.js?v=1.15.0"></script>
+<script src="static/app.js?v=1.15.0"></script>
 </body>
 </html>

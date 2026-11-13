@@ -1104,8 +1104,9 @@ function showSet(k) {
   try { localStorage.setItem("hamna.set", k); } catch {}
   $$("#setNav button").forEach((b) => b.classList.toggle("active", b.dataset.set === k));
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
-  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k));
+  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios", "respaldo"].includes(k));
   if (k === "sistema") loadSistema();
+  if (k === "respaldo") loadRespaldo();
   if (k === "seguridad") loadMyAccount();
   if (k === "usuarios") loadUsers();
 }
@@ -1227,6 +1228,51 @@ $("#btnPw").onclick = async () => {
     await run(() => api("api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada; tus otras sesiones se cerraron");
     $("#pwOld").value = $("#pwNew").value = ""; loadMyAccount();
   } catch {}
+};
+/* ── Respaldo y restauración ──────────────────────────────────────────────── */
+const mb = (b) => (b / 1048576 < 10 ? (b / 1048576).toFixed(1) : Math.round(b / 1048576)) + " MB";
+async function loadRespaldo() {
+  let d;
+  try { d = await api("api/respaldo"); } catch (e) { $("#bkSize").textContent = e.message; return; }
+  const upd = () => {
+    const con = $("#bkAudios").checked;
+    $("#btnBackup").href = "api/respaldo/descargar?audios=" + (con ? 1 : 0);
+    $("#bkSize").textContent = `Tamaño aproximado: ${mb(d.base + (con ? d.audios : 0))}`;
+  };
+  $("#bkAudInfo").textContent = `(${d.n_audios} ${d.n_audios === 1 ? "archivo" : "archivos"}, ${mb(d.audios)})`;
+  $("#bkAudios").onchange = upd;
+  upd();
+}
+$("#btnBackup").onclick = () => toast("Preparando el respaldo; la descarga empieza en unos segundos…");
+$("#btnRestore").onclick = async () => {
+  const f = $("#bkFile").files[0];
+  if (!f) { toast("Elige el archivo de respaldo", true); return; }
+  if (!(await confirmBox(`¿Restaurar «${f.name}»? Se reemplazan eventos, secciones, programación, usuarios y ajustes de este nodo; HAMNA se reiniciará y tendrás que entrar de nuevo.`, "Sí, restaurar"))) return;
+  const btn = $("#btnRestore"), msg = $("#bkMsg");
+  busy(btn, true, "Restaurando…");
+  const fd = new FormData();
+  fd.append("conservar_nodo", $("#bkKeepNode").checked ? "1" : "0");
+  fd.append("archivo", f);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "api/respaldo/restaurar");
+  xhr.setRequestHeader("X-HAMNA", "1");
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) msg.textContent = e.loaded < e.total
+      ? `Subiendo… ${Math.round(e.loaded * 100 / e.total)} %` : "Revisando y restaurando…";
+  };
+  xhr.onload = () => {
+    let r = null;
+    try { r = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status !== 200 || !r || r.ok === false) {
+      busy(btn, false); msg.textContent = "";
+      toast((r && r.error) || `Error ${xhr.status}`, true); return;
+    }
+    const aud = r.audios == null ? "audios de secciones sin cambio" : `${r.audios} audios`;
+    msg.textContent = `✅ Restaurado (nodo ${r.nodo || "?"}, ${r.fecha}, ${aud}). Reiniciando HAMNA…`;
+    setTimeout(() => location.reload(), 9000);
+  };
+  xhr.onerror = () => { busy(btn, false); msg.textContent = ""; toast("Se cortó la conexión al subir el respaldo", true); };
+  xhr.send(fd);
 };
 /* ── Actualizaciones (GitHub) ─────────────────────────────────────────────── */
 function updCmd(d) {

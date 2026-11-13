@@ -248,6 +248,33 @@
     "Este nodo no tiene ffmpeg ni sox para convertir audio": "This node has neither ffmpeg nor sox to convert audio",
     "Zona horaria del programa": "Program time zone", "Hora": "Time",
     "Hora del nodo (sin conversión)": "Node time (no conversion)",
+    // Respaldo
+    "Respaldo": "Backup", "Descargar respaldo": "Download backup", "⬇ Descargar respaldo": "⬇ Download backup",
+    "Guarda en tu computadora eventos, secciones, programación, usuarios, ajustes (incluidas las claves de Azure y Telegram), el logo y los audios de pausa. Sirve para cambiar la tarjeta SD o pasar todo a otro nodo.":
+      "Saves events, sections, schedule, users, settings (including the Azure and Telegram keys), the logo and the pause audios to your computer. Use it to replace the SD card or move everything to another node.",
+    "Incluir los audios de las secciones": "Include the section audios",
+    "⚠️ El archivo contiene contraseñas (cifradas) y claves; guárdalo en un lugar seguro y no lo compartas.":
+      "⚠️ The file contains passwords (hashed) and keys; keep it somewhere safe and don't share it.",
+    "Restaurar desde un respaldo": "Restore from a backup",
+    "Reemplaza los datos de este nodo con los del respaldo. Lo que hay ahora no se borra: se mueve a":
+      "Replaces this node's data with the backup's. What is here now is not deleted: it is moved to",
+    "(se guardan las 2 más recientes). Los usuarios y contraseñas pasan a ser los del respaldo. Si el respaldo no trae audios de secciones, se quedan los de este nodo.":
+      "(the 2 most recent are kept). Users and passwords become the backup's. If the backup has no section audios, this node's are kept.",
+    "Archivo de respaldo": "Backup file",
+    "Conservar los datos de este nodo (tipo, número, comandos IRLP/ASL, nombre de la estación y logo)":
+      "Keep this node's own data (type, number, IRLP/ASL commands, station name and logo)",
+    "Desmárcalo solo si restauras el mismo nodo (por ejemplo, después de cambiar la tarjeta SD).":
+      "Uncheck it only when restoring the same node (for example, after replacing the SD card).",
+    "Restaurar": "Restore", "Restaurando…": "Restoring…", "Sí, restaurar": "Yes, restore",
+    "Preparando el respaldo; la descarga empieza en unos segundos…": "Preparing the backup; the download starts in a few seconds…",
+    "Elige el archivo de respaldo": "Choose the backup file", "Elige el archivo de respaldo (.tar.gz)": "Choose the backup file (.tar.gz)",
+    "Revisando y restaurando…": "Checking and restoring…", "Se cortó la conexión al subir el respaldo": "The connection dropped while uploading the backup",
+    "Hay una transmisión en curso; detenla antes de restaurar": "A broadcast is in progress; stop it before restoring",
+    "El archivo no es un respaldo de HAMNA (.tar.gz)": "The file is not a HAMNA backup (.tar.gz)",
+    "El archivo no es un respaldo de HAMNA Web": "The file is not a HAMNA Web backup",
+    "El respaldo no trae la base de datos": "The backup has no database",
+    "La base de datos del respaldo está dañada": "The backup's database is damaged",
+    "Los ajustes del respaldo están dañados": "The backup's settings are damaged",
     "Buscando actualizaciones…": "Checking for updates…", "↻ Buscar de nuevo": "↻ Check again",
     "HAMNA Web está al día": "HAMNA Web is up to date", "Para instalarla, en la terminal del nodo:": "To install it, in the node's terminal:",
     "Conserva los datos, usuarios y ajustes. Antes de correrlo, revisa que nada esté al aire.": "Keeps data, users and settings. Before running it, make sure nothing is on air.",
@@ -441,6 +468,15 @@
     M(/^Error interno: (.+)$/, (m, a) => "Internal error: " + a),
     M(/^Valor inválido en (.+)$/, (m, a) => "Invalid value in " + a),
     M(/^Error (\d+)$/, (m, a) => "Error " + a),
+    M(/^\((\d+) archivos?, (.+)\)$/, (m, n, t) => `(${n} file${n === "1" ? "" : "s"}, ${t})`),
+    M(/^Tamaño aproximado: (.+)$/, (m, a) => "Approximate size: " + a),
+    M(/^Subiendo… (\d+) %$/, (m, a) => `Uploading… ${a} %`),
+    M(/^¿Restaurar «(.+)»\? Se reemplazan eventos, secciones, programación, usuarios y ajustes de este nodo; HAMNA se reiniciará y tendrás que entrar de nuevo\.$/,
+      (m, a) => `Restore «${a}»? This node's events, sections, schedule, users and settings will be replaced; HAMNA will restart and you will need to sign in again.`),
+    M(/^✅ Restaurado \(nodo (.+), (.+), (.+)\)\. Reiniciando HAMNA…$/, (m, n, f, a) =>
+      `✅ Restored (node ${n}, ${f}, ${a.replace("audios de secciones sin cambio", "section audios unchanged")}). Restarting HAMNA…`),
+    M(/^No hay espacio (?:suficiente )?en el nodo para (?:restaurar|recibir el archivo) \((\d+) MB libres\)$/, (m, a) => `Not enough space on the node (${a} MB free)`),
+    M(/^El respaldo es de una versión más nueva de HAMNA \(v(.+)\); actualiza este nodo primero$/, (m, a) => `The backup is from a newer HAMNA (v${a}); update this node first`),
     M(/^Aún no hay usuarios\. En el nodo ejecuta: (.+)$/, (m, a) => "No users yet. On the node run: " + a),
   ];
 

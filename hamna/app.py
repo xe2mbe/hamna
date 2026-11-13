@@ -13,7 +13,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, backends, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, backends, backup, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -35,6 +35,7 @@ def init_app():
     sync.init()
     app.roles = auth.ROLES
     app.user_loader = lambda req: auth.user_for(req.token, req.ip)
+    app.upload_limits["/api/respaldo/restaurar"] = 4 * 2**30
 
 
 def require(req, rol):
@@ -1049,6 +1050,36 @@ def ajustes_sonido(req, kind):
         paths.rm(paths.sonidos_dir() / cur)
     settings.save({key: dest.name if dest else ""})
     return ok(nombre=dest.name if dest else "")
+
+
+# ── Respaldo y restauración ──────────────────────────────────────────────────
+@app.route("/api/respaldo", rol="admin")
+def respaldo_info(req):
+    e = backup.estimate()
+    e["copias"] = [d.name for d in backup._old_copies()]
+    e["libre"] = shutil.disk_usage(str(paths.data_dir())).free
+    return jsonr(e)
+
+
+@app.route("/api/respaldo/descargar", rol="admin")
+def respaldo_descargar(req):
+    con = truthy(req.query.get("audios", "0"))
+    nombre = backup.filename(con)
+    gen = backup.stream(con, req.user["usuario"])
+    return Response(stream=gen, ctype="application/gzip",
+                    headers={"Content-Disposition": 'attachment; filename="{}"'.format(nombre)})
+
+
+@app.route("/api/respaldo/restaurar", ("POST",), rol="admin")
+def respaldo_restaurar(req):
+    up = req.files.get("archivo")
+    if not up:
+        raise ValueError("Elige el archivo de respaldo (.tar.gz)")
+    if engine.busy():
+        raise ValueError("Hay una transmisión en curso; detenla antes de restaurar")
+    r = backup.restore(up.path, truthy(req.form.get("conservar_nodo", "1")), req.user["usuario"])
+    backup.restart_soon()
+    return ok(**r)
 
 
 @app.route("/api/ajustes/password", ("POST",), rol="lectura")

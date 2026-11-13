@@ -19,6 +19,7 @@ import mimetypes
 import mmap
 import os
 import re
+import shutil
 import socketserver
 import time
 import traceback
@@ -192,6 +193,9 @@ def _parse_multipart(rfile, length, boundary, max_bytes):
     subida de 200 MB no ocupa 200 MB de RAM en la Raspberry."""
     if length > max_bytes:
         raise HTTPError(413, "El archivo es demasiado grande (máximo {} MB)".format(max_bytes // 2**20))
+    free = shutil.disk_usage(str(paths.tmp_dir())).free
+    if length * 2 + 20 * 2**20 > free:      # se guarda dos veces mientras se separa
+        raise HTTPError(413, "No hay espacio en el nodo para recibir el archivo ({} MB libres)".format(free // 2**20))
     spool = paths.tmp_dir() / ("up_" + uuid.uuid4().hex)
     form, files = {}, {}
     try:
@@ -253,6 +257,7 @@ class App:
         self.static_dir = str(static_dir)
         self.secret = "x"
         self.max_upload = 300 * 2**20
+        self.upload_limits = {}         # ruta → límite propio (p. ej. restaurar respaldo)
         self.user_loader = None     # función(request) -> usuario o None
         self.roles = {}             # rol -> nivel
 
@@ -336,7 +341,8 @@ class App:
                             self.rfile.read(length) if length < 65536 else None
                             raise HTTPError(401, "Inicia sesión")
                         req.form, req.files = _parse_multipart(
-                            self.rfile, length, m.group(1).encode(), app.max_upload)
+                            self.rfile, length, m.group(1).encode(),
+                            app.upload_limits.get(req.path, app.max_upload))
                     elif length:
                         if length > 2**20:
                             raise HTTPError(413, "Petición demasiado grande")
