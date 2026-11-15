@@ -70,7 +70,19 @@ DEFAULTS = {
     "tg_on_collab": True,
     "tg_bot_on": True,
     "tg_collab_dm": True,
-    "ab_tg_on": False,            # respaldo diario (sin audios) a los administradores por Telegram         # mensajes privados al colaborador (recordatorio y «salió al aire»)
+    "ab_tg_on": False,
+    "hub_on": False,              # mandar el estado de este nodo a un hub cada minuto (hub.py)
+    "hub_url": "",                # vacíos: se usan la dirección y el código del respaldo a otro nodo
+    "hub_token": "",
+    "hub_pin": "",
+    "hub_alerta_min": 10,         # en el hub: avisar si un nodo deja de reportar (0 = no avisar)
+    "tg_on_nodes": True,
+    "rec_auto": "fin",            # grabar solo: "fin" (al terminar cada evento), "inicio" o "no"
+    "rec_silencio_min": 5,        # la grabación termina tras N min sin actividad
+    "rec_max_min": 180,           # tope de duración
+    "rec_dias": 30,               # borrar grabaciones de más de N días (0 = no borrar)
+    "rec_tg": False,              # mandar cada grabación al grupo de avisos de Telegram
+    "rec_titulo": "{evento} {numero} · Toma de reportes",   # título de la grabación automática            # respaldo diario (sin audios) a los administradores por Telegram         # mensajes privados al colaborador (recordatorio y «salió al aire»)
     "tg_recordar_dias": 2,        # días antes de la emisión para recordarle (0 = no recordar)            # el bot responde comandos y botones (solo un nodo por bot)
 
     # Respaldo automático (ver autobackup.py)
@@ -91,7 +103,7 @@ DEFAULTS = {
 }
 
 # Claves que nunca se mandan al navegador
-SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token", "ab_node_token"}
+SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token", "ab_node_token", "hub_token"}
 
 _lock = threading.Lock()
 _cache = None
@@ -152,4 +164,5 @@ def public():
     out["azure_key_set"] = bool(cfg.get("azure_key"))
     out["tg_token_set"] = bool(cfg.get("tg_token"))
     out["ab_node_token_set"] = bool(cfg.get("ab_node_token"))
+    out["hub_token_set"] = bool(cfg.get("hub_token"))
     return out

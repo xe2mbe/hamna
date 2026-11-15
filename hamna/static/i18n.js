@@ -57,6 +57,45 @@
     "Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.":
       "Each device or browser you sign in from is a session. It closes by itself if you don't use it for 30 days (and after 90 days at most). If you don't recognize one, close it with its button.",
     "Comandos y botones": "Commands and buttons",
+    "Título de la grabación automática": "Title of the automatic recording",
+    "Variables: {evento} · {numero} (#47 · 2026 #47) · {emision} · {emision_anio} · {anio} · {fecha} · {hora}. Así se llama también al descargarla o recibirla por Telegram.":
+      "Variables: {evento} · {numero} (#47 · 2026 #47) · {emision} · {emision_anio} · {anio} · {fecha} · {hora}. That is also the file name when downloading it or receiving it on Telegram.",
+    "El título de la grabación es muy largo (máximo 120 caracteres)": "The recording title is too long (120 characters max)",
+    "Grabaciones": "Recordings", "Grabación": "Recording", "⏺ Grabar ahora": "⏺ Record now", "⏹ Detener": "⏹ Stop",
+    "Lo que se escucha en el nodo: la toma de reportes, las redes…": "What is heard on the node: check-ins, nets…",
+    "Grabar ahora": "Record now", "Título": "Title", "⏺ Grabar": "⏺ Record", "Grabando": "Recording",
+    "Grabación detenida": "Recording stopped", "Borrada": "Deleted", "⬇ Descargar": "⬇ Download", "🗑 Borrar": "🗑 Delete",
+    "Todavía no hay grabaciones.": "There are no recordings yet.", "Se escucha actividad.": "Activity is being heard.",
+    "¿Detener la grabación? Se guarda lo que lleva.": "Stop the recording? What it has so far is saved.",
+    "¿Borrar esta grabación? No se puede deshacer.": "Delete this recording? It can't be undone.",
+    "Ver las grabaciones": "See the recordings", "Grabar solo": "Record automatically",
+    "Al terminar cada evento (la toma de reportes)": "When each event ends (the check-ins)",
+    "Desde que empieza cada evento (la emisión completa y lo que sigue)": "From the start of each event (the whole broadcast and what follows)",
+    "No, solo a mano": "No, only by hand", "Terminar tras (minutos sin actividad)": "Stop after (minutes without activity)",
+    "Duración máxima (minutos)": "Maximum length (minutes)", "Borrar las grabaciones de más de (días)": "Delete recordings older than (days)",
+    "0 = no borrar. Si el disco se llena, se borran las más viejas.": "0 = don't delete. If the disk fills up, the oldest are deleted.",
+    "📲 Mandar cada grabación al grupo de avisos de Telegram (hasta 50 MB, unas 3 h en MP3)":
+      "📲 Send each recording to the Telegram alerts group (up to 50 MB, about 3 h in MP3)",
+    "Graba lo que se escucha en el nodo (lo que recibe de la red y de radio, y lo que transmite) con el mismo audio del botón 🔊 En vivo. Los silencios largos no se graban, así que no queda aire muerto.":
+      "Records what is heard on the node (what it receives from the network and radio, and what it transmits) with the same audio as the 🔊 Live button. Long silences aren't recorded, so there's no dead air.",
+    " · terminó sin actividad": " · ended with no activity", " · llegó al tope de duración": " · reached the maximum length", " · detenida a mano": " · stopped by hand",
+    "Ya se está grabando": "Already recording", "No se está grabando": "Not recording",
+    "Opción de grabación inválida": "Invalid recording option",
+    "Nodos": "Nodes", "Estado de los nodos que reportan a este hub": "Status of the nodes that report to this hub",
+    "Panel de nodos": "Nodes panel", "Quitar del panel": "Remove from panel", "Quitado del panel": "Removed from panel",
+    "🗺 Reportar el estado de este nodo a un hub cada minuto (al aire, próximo evento, salud, versión, respaldo)":
+      "🗺 Report this node's status to a hub every minute (on air, next event, health, version, backup)",
+    "Dirección del hub": "Hub address", "Vacío = la del respaldo a otro nodo": "Empty = the one used for backups to another node",
+    "Vacío = el del respaldo": "Empty = the backup one",
+    "El código se crea en el hub: Ajustes → Respaldo → Recibir de otros nodos (el mismo código sirve para el respaldo y para el panel).":
+      "The code is created on the hub: Settings → Backup → Receive from other nodes (the same code works for backups and the panel).",
+    "Si este nodo es el hub: avisar si un nodo deja de reportar por (minutos)": "If this node is the hub: alert when a node stops reporting for (minutes)",
+    "0 = no avisar. El aviso llega por Telegram (Ajustes → Avisos).": "0 = no alert. The alert arrives on Telegram (Settings → Alerts).",
+    "🗺 Un nodo dejó de reportar al panel de nodos (y cuando vuelve)": "🗺 A node stopped reporting to the nodes panel (and when it comes back)",
+    "Sin eventos programados": "No scheduled events", "Se actualiza solo cada 30 s. Cada nodo manda su estado cada minuto.":
+      "Refreshes by itself every 30 s. Each node sends its status every minute.",
+    "Minutos para avisar de un nodo: de 0 a 1440": "Minutes to alert about a node: 0 to 1440",
+    "Falta la dirección o el código de acceso del hub": "The hub address or access code is missing",
     "📲 Por Telegram a los administradores": "📲 By Telegram to the administrators",
     "⚠ Primero configura el bot de Telegram en Ajustes → Avisos.": "⚠ First set up the Telegram bot in Settings → Alerts.",
     "⚠ Ningún administrador tiene su Telegram vinculado. Vincúlalo en Mi perfil (clic en tu foto o nombre).":
@@ -583,6 +622,8 @@
 
   const M = (re, fn) => [re, fn];
   const P = [
+    M(/^se detiene en (\S+)$/, (m, f) => "stops in " + f),
+    M(/^Quedaría: (.+)$/, (m, t) => "It would be: " + t),
     M(/^Así apareces para el administrador y en los avisos\. Para entrar sigues usando «(.+)»\.$/,
       (m, u) => `This is how the administrator and alerts see you. You still sign in with «${u}».`),
     M(/^¿Reemplazar el audio de (.+) con «(.+)»\?$/, (m, a, b) => `Replace the audio of ${a} with «${b}»?`),

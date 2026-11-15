@@ -255,19 +255,20 @@ $("#btnHideMenu").onclick = () => {
 $("#scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 try { if (localStorage.getItem("hamna.nav") === "collapsed") document.body.classList.add("nav-collapsed"); } catch {}
-const TABS = ["prog", "eventos", "secciones", "conexiones", "cron", "ajustes"];
+const TABS = ["prog", "eventos", "secciones", "conexiones", "grab", "nodos", "cron", "ajustes"];
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
   if (!TABS.includes(t)) t = "prog";
   if (t === "ajustes" && S.me && S.me.rol !== "admin") t = "prog";
   if (t === "cron" && S.me && S.me.rol === "lectura") t = "prog";
   if (S.tab === "conexiones" && t !== "conexiones") stopSesiones();
+  if (t !== "nodos") clearTimeout(S.nodosT);
   S.tab = t;
   try { localStorage.setItem("hamna.tab", t); } catch {}
   if (location.hash.slice(1) !== t) history.replaceState(null, "", "#" + t);
   $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
   $$(".view").forEach((v) => v.classList.toggle("hidden", v.id !== "view-" + t));
-  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, conexiones: loadSesiones, cron: loadCron, ajustes: loadAjustes })[t]();
+  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, conexiones: loadSesiones, grab: loadGrab, nodos: loadNodos, cron: loadCron, ajustes: loadAjustes })[t]();
   window.scrollTo(0, 0);
 }
 
@@ -303,6 +304,7 @@ function tickClock() {
   $("#clockUtc").textContent = `UTC ${pad2(utc.getUTCHours())}:${pad2(utc.getUTCMinutes())}`;
   $("#clockTop").textContent = $("#clockLocal").textContent;
   if (!(S.status && S.status.on_air)) tickProg();
+  renderRec();
 }
 // ── Escuchar en vivo ─────────────────────────────────────────────────────────
 // El nodo manda µ-law 8 kHz; aquí se decodifica y se reproduce con Web Audio.
@@ -386,6 +388,9 @@ async function poll() {
   renderSys(s.sys, s.version);
   renderLive(s.envivo);
   renderHealthBadge(s.salud);
+  S.rec = s.grabacion || {}; S.recAt = Date.now();
+  renderRec();
+  if (S.tab === "grab" && !!S.rec.grabando !== !!S.recLista) loadGrab();
   if (s.ts) {
     // Hora del nodo: s.now (hora local) y s.ts (época UTC) → desfase y zona horaria
     const [d, t] = s.now.split(" "), [Y, M, D] = d.split("-").map(Number), [h, m, x] = t.split(":").map(Number);
@@ -1190,6 +1195,12 @@ function showSet(k) {
   if (k === "respaldo") loadRespaldo();
   if (k === "usuarios") loadUsers();
   if (k === "avisos") loadBotSt();
+  if (k === "nodo") loadHubSt();
+  if (k === "grabacion") {
+    recTituloPrev();
+    const i = $("#setForm").rec_titulo;
+    if (i && !i.dataset.prev) { i.dataset.prev = 1; let t; i.addEventListener("input", () => { clearTimeout(t); t = setTimeout(recTituloPrev, 300); }); }
+  }
 }
 async function loadBotSt() {
   const el = $("#botSt"); if (!el) return;
@@ -1453,6 +1464,148 @@ async function nodeReadyAudio(file) {
   dv.setUint32(28, RATE * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, "data"); dv.setUint32(40, pcm.length * 2, true);
   for (let i = 0; i < pcm.length; i++) { const v = Math.max(-1, Math.min(1, pcm[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true); }
   return new File([dv.buffer], file.name.replace(/\.[^.]+$/, "") + ".wav", { type: "audio/wav" });
+}
+/* ── Grabaciones ─────────────────────────────────────────────────────────── */
+function nombreBonito(titulo, archivo) {
+  const ext = (archivo.match(/\.[a-z0-9]+$/i) || [".mp3"])[0];
+  return ((titulo || "Grabación").replace(/[\\/:*?"<>|\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim().replace(/^\.+|\.+$/g, "") || "Grabación").slice(0, 150) + ext;
+}
+async function recTituloPrev() {
+  const f = $("#setForm"), el = $("#recTitPrev"); if (!f || !el || !f.rec_titulo) return;
+  try { const r = await api("api/grabaciones/titulo", { method: "POST", json: { plantilla: f.rec_titulo.value } }); el.textContent = "Quedaría: " + r.titulo; }
+  catch { el.textContent = ""; }
+}
+function recAhora() {
+  const r = S.rec || {};
+  if (!r.grabando) return null;
+  const pasa = (Date.now() - (S.recAt || Date.now())) / 1000;
+  return { dur: r.dur + pasa, silencio: r.silencio + pasa, faltan: Math.max(0, r.faltan - pasa), titulo: r.titulo, limite: r.limite };
+}
+function renderRec() {
+  const el = $("#recInfo"); if (!el) return;
+  const r = recAhora();
+  el.classList.toggle("hidden", !r);
+  if (!r) return;
+  el.innerHTML = `<span><span class="rec-dot"></span>REC ${fmt(r.dur)}</span>${r.silencio > 15 ? `<small>se detiene en ${fmt(r.faltan)}</small>` : ""}`;
+  const b = $("#recEstado .rec-vivo");
+  if (b) b.innerHTML = recTexto(r);
+}
+function recTexto(r) {
+  return `<span class="rec-dot"></span><b>Grabando «${esc(r.titulo)}»</b> · ${fmt(r.dur)}
+    <div class="muted" style="font-size:.86rem;margin-top:4px">${r.silencio > 15 ? `Sin actividad desde hace ${fmt(r.silencio)}: <b>se detiene en ${fmt(r.faltan)}</b> si nadie habla.` : "Se escucha actividad."} Termina sola tras ${Math.round(r.limite / 60)} min sin actividad.</div>`;
+}
+$("#recInfo").onclick = () => showTab("grab");
+async function loadGrab() {
+  let d;
+  try { d = await api("api/grabaciones"); } catch (e) { $("#recList").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  S.rec = d.estado || {}; S.recAt = Date.now(); S.recLista = !!S.rec.grabando;
+  const puede = S.me && ["operador", "admin"].includes(S.me.rol);
+  $("#btnRecStart").classList.toggle("hidden", !!S.rec.grabando || !puede);
+  $("#btnRecStop").classList.toggle("hidden", !S.rec.grabando || !puede);
+  const ev = d.envivo || {};
+  $("#recEstado").className = "upd-box" + (S.rec.grabando ? " rec-box" : "");
+  $("#recEstado").innerHTML = S.rec.grabando ? `<div class="rec-vivo">${recTexto(recAhora())}</div>`
+    : !ev.configurado ? `⚠ Para grabar, este nodo necesita el audio en vivo (la línea <code>outstreamcmd</code> en rpt.conf). Revísalo en Ajustes → Sistema → «Revisar este nodo».`
+    : `Se graba solo según Ajustes → Grabación (por omisión, al terminar cada evento). También puedes grabar a mano.${d.mp3 ? "" : " Este nodo no puede crear MP3: se guardan en WAV."}`;
+  const g = d.grabaciones || [];
+  $("#recList").innerHTML = g.length ? g.map((x) => `<div class="card rec-card">
+      <div class="rec-head"><b>${esc(x.titulo)}</b><span class="muted">${esc(fechaCorta(x.inicio))} · ${fmt(x.dur)} · ${mb(x.tam)}</span></div>
+      <div class="muted rec-sub">${esc(x.origen)}${x.motivo === "silencio" ? " · terminó sin actividad" : x.motivo === "tope" ? " · llegó al tope de duración" : " · detenida a mano"}</div>
+      <audio controls preload="none" src="api/grabaciones/${encodeURIComponent(x.archivo)}"></audio>
+      <div class="actions"><a class="btn sm ro" href="api/grabaciones/${encodeURIComponent(x.archivo)}" download="${esc(nombreBonito(x.titulo, x.archivo))}">⬇ Descargar</a>
+        ${puede ? `<button type="button" class="btn sm danger-soft" data-recdel="${esc(x.archivo)}">🗑 Borrar</button>` : ""}</div>
+    </div>`).join("") : `<p class="empty">Todavía no hay grabaciones.</p>`;
+}
+$("#btnRecStart").onclick = () => {
+  openModal("Grabar ahora", `<form id="recForm">
+      <label>Título<input name="titulo" maxlength="120" placeholder="Toma de reportes"></label>
+      <p class="muted" style="font-size:.86rem">Graba lo que se escucha en el nodo. Termina sola tras ${(S.cfg && S.cfg.rec_silencio_min) || 5} min sin actividad, o cuando la detengas.</p>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">⏺ Grabar</button></div></form>`);
+  $("#recForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await run(() => api("api/grabaciones/iniciar", { method: "POST", json: { titulo: e.target.titulo.value } }), "Grabando"); closeModal(); poll(); loadGrab(); } catch {}
+  };
+};
+$("#btnRecStop").onclick = async () => {
+  if (!(await confirmBox("¿Detener la grabación? Se guarda lo que lleva.", "Detener", false))) return;
+  try { await run(() => api("api/grabaciones/detener", { method: "POST" }), "Grabación detenida"); setTimeout(() => { poll(); loadGrab(); }, 1500); } catch {}
+};
+$("#recList").onclick = async (e) => {
+  const b = e.target.closest("[data-recdel]"); if (!b) return;
+  if (!(await confirmBox("¿Borrar esta grabación? No se puede deshacer.", "Borrar"))) return;
+  try { await run(() => api("api/grabaciones/" + encodeURIComponent(b.dataset.recdel), { method: "DELETE" }), "Borrada"); loadGrab(); } catch {}
+};
+/* ── Panel de nodos ───────────────────────────────────────────────────────── */
+const vNum = (v) => String(v || "0").split(".").map((x) => parseInt(x, 10) || 0);
+const vMenor = (a, b) => { const x = vNum(a), y = vNum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+function haceTxt(s) {
+  if (s < 90) return "hace " + Math.max(1, Math.round(s)) + " s";
+  if (s < 5400) return "hace " + Math.round(s / 60) + " min";
+  if (s < 172800) return "hace " + Math.round(s / 3600) + " h";
+  return "hace " + Math.round(s / 86400) + " d";
+}
+function nodoCard(d, p) {
+  const lim = (p.alerta_min || 10) * 60;
+  const est = d.propio ? "ok" : d.edad < 180 ? "ok" : d.edad < lim ? "tarde" : "caido";
+  const sal = (d.salud || {}).peor, eq = d.equipo || {};
+  const volt = ((d.salud || {}).checks || []).find((c) => c.id === "voltaje");
+  const chips = [];
+  if (eq.temp != null) chips.push(`🌡 ${Math.round(eq.temp)} °C`);
+  if (volt && volt.nivel !== "nd") chips.push(`${volt.nivel === "ok" ? "⚡" : "⚠️"} ${volt.nivel === "ok" ? "voltaje bien" : "bajo voltaje"}`);
+  if (eq.disco != null) chips.push(`💾 disco ${eq.disco}%`);
+  if (eq.cpu != null) chips.push(`CPU ${Math.round(eq.cpu)}%`);
+  const malos = ((d.salud || {}).checks || []).filter((c) => c.nivel === "aviso" || c.nivel === "grave");
+  const viejo = d.version && vMenor(d.version, p.ultima_version);
+  const r = d.respaldo || {};
+  return `<div class="card nodo-card ${est}">
+    <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit"><b>${esc(d.estacion || "Nodo " + d.nodo)}</b>
+      <small>nodo ${esc(d.nodo || "—")}${d.propio ? " · este hub" : ""}${d.ip && !d.propio ? " · " + esc(d.ip) : ""}</small></div>
+      <span class="muted nodo-edad">${d.propio ? "ahora" : est === "caido" ? "⚠ sin reportar " + haceTxt(d.edad) : haceTxt(d.edad)}</span></div>
+    <div class="nodo-ver"><span class="chip ${viejo ? "warn" : ""}" title="${viejo ? "Hay una versión más nueva: v" + esc(p.ultima_version) : "Al día"}">v${esc(d.version || "?")}${viejo ? " · actualizar" : ""}</span>
+      ${d.tipo && d.tipo !== "auto" ? `<span class="chip">${esc(d.tipo.toUpperCase())}</span>` : ""}${d.bot ? '<span class="chip">🤖 bot</span>' : ""}</div>
+    ${d.al_aire ? `<div class="nodo-aire">🔴 <b>Al aire:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · faltan ${fmt(d.al_aire.falta)}</div>`
+      : d.proximo ? `<div class="meta">📅 ${esc(d.proximo.evento)}${d.proximo.num ? " " + esc(d.proximo.num) : ""} · ${esc(fechaCorta(d.proximo.fecha))}</div>` : `<div class="meta muted">Sin eventos programados</div>`}
+    ${d.grabando ? `<div class="meta" style="color:var(--danger)">⏺ Grabando «${esc(d.grabando.titulo)}» · ${fmt(d.grabando.dur)}</div>` : ""}
+    ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
+    <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} Salud${malos.length ? ": " + malos.map((c) => esc(c.nombre) + " — " + esc(c.detalle)).join("; ") : sal === "ok" ? " bien" : ": todavía sin revisar"}</div>
+    <div class="meta">💾 Respaldo: ${r.ultimo_ok ? "último bueno " + esc(fechaCorta(r.ultimo_ok)) : "sin respaldos buenos"}${r.ok === false && r.fecha ? ` · <span style="color:var(--warn)">el último falló (${esc(fechaCorta(r.fecha))})</span>` : ""}${d.recibido ? ` · en este hub: ${esc(fechaCorta(d.recibido.fecha))} (${mb(d.recibido.tam)})` : ""}</div>
+    ${!d.propio && isAdmin() ? `<div class="actions"><button type="button" class="btn sm ghost" data-quitar="${esc(d.nodo)}">Quitar del panel</button></div>` : ""}
+  </div>`;
+}
+async function loadNodos() {
+  clearTimeout(S.nodosT);
+  let p;
+  try { p = await api("api/nodos"); } catch (e) { $("#nodosList").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  S.nodos = p;
+  const todos = [p.este].concat(p.nodos);
+  $("#nodosList").innerHTML = todos.map((d) => nodoCard(d, p)).join("");
+  const caidos = p.nodos.filter((d) => d.edad >= (p.alerta_min || 10) * 60).length;
+  $("#nodosSub").textContent = p.nodos.length ? `${p.nodos.length} ${p.nodos.length > 1 ? "nodos reportan" : "nodo reporta"} a este hub${caidos ? ` · ${caidos} sin reportar` : ""}` : "Estado de los nodos que reportan a este hub";
+  $("#nodosHelp").innerHTML = p.nodos.length ? "Se actualiza solo cada 30 s. Cada nodo manda su estado cada minuto."
+    : "Ningún otro nodo reporta todavía. En cada nodo: <b>Ajustes → Nodo → Panel de nodos</b> → «Reportar el estado de este nodo a un hub» (si ya manda su respaldo a este hub, basta con marcar la casilla).";
+  if (S.tab === "nodos") S.nodosT = setTimeout(() => { if (S.tab === "nodos" && !document.hidden) loadNodos(); }, 30000);
+}
+$("#btnNodosReload").onclick = loadNodos;
+$("#nodosList").onclick = async (e) => {
+  const b = e.target.closest("[data-quitar]"); if (!b) return;
+  if (!(await confirmBox(`¿Quitar el nodo ${b.dataset.quitar} del panel? Si sigue reportando, vuelve a aparecer en un minuto.`, "Quitar"))) return;
+  try { await run(() => api("api/nodos/" + encodeURIComponent(b.dataset.quitar), { method: "DELETE" }), "Quitado del panel"); loadNodos(); } catch {}
+};
+$("#btnHubProbe").onclick = async () => {
+  const f = $("#setForm"), m = $("#hubMsg"), b = $("#btnHubProbe");
+  busy(b, true, "Probando…"); m.textContent = "";
+  try {
+    const r = await api("api/hub/probar", { method: "POST", json: { url: f.hub_url.value, codigo: f.hub_token.value } });
+    if (f.hub_url.value.trim()) f.hub_pin.value = r.huella || "";
+    m.textContent = `✅ Conecta con ${r.estacion || "el hub"}${r.nodo ? " (nodo " + r.nodo + ")" : ""} · v${r.version}. Guarda los ajustes.`;
+  } catch (e) { m.textContent = "❌ " + e.message; } finally { busy(b, false); }
+};
+async function loadHubSt() {
+  try {
+    const h = await api("api/hub");
+    if (!h.activo) return;
+    $("#hubMsg").textContent = h.error ? "⚠ " + h.error : h.ultimo_ok ? `✅ Reportando a ${h.hub || h.url} · último latido ${haceTxt(Date.now() / 1000 - h.ultimo_ok)}` : "Enviando el primer latido…";
+  } catch {}
 }
 /* ── Colaborador: «Mis secciones» ────────────────────────────────────────────── */
 async function startCollab(me) {

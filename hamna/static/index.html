@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.24.0">
+<link rel="stylesheet" href="static/app.css?v=1.25.0">
 </head>
 <body>
 
@@ -68,6 +68,8 @@
       <button data-tab="eventos"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg><span>Eventos</span></button>
       <button data-tab="secciones"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></svg><span>Secciones</span></button>
       <button data-tab="conexiones"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5 6.5 17M12 11.5l5.5 5.5"/></svg><span>Conexiones</span></button>
+      <button data-tab="grab"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg><span>Grabaciones</span></button>
+      <button data-tab="nodos"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Nodos</span></button>
       <button data-tab="cron"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Cron</span></button>
       <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Ajustes</span></button>
     </nav>
@@ -128,6 +130,27 @@
     </section>
 
     <!-- Conexiones -->
+    <section class="view hidden" id="view-grab">
+      <div class="view-head">
+        <div><h1>Grabaciones</h1><p class="sub">Lo que se escucha en el nodo: la toma de reportes, las redes…</p></div>
+        <div class="row gap">
+          <button class="btn primary" id="btnRecStart">⏺ Grabar ahora</button>
+          <button class="btn danger hidden" id="btnRecStop">⏹ Detener</button>
+        </div>
+      </div>
+      <div id="recEstado" class="upd-box"></div>
+      <div id="recList"><p class="muted">Cargando…</p></div>
+    </section>
+
+    <section class="view hidden" id="view-nodos">
+      <div class="view-head">
+        <div><h1>Nodos</h1><p class="sub" id="nodosSub">Estado de los nodos que reportan a este hub</p></div>
+        <div class="row gap"><button class="btn ro" id="btnNodosReload">↻ Actualizar</button></div>
+      </div>
+      <div class="nodos-grid" id="nodosList"><p class="muted">Cargando…</p></div>
+      <p class="muted nodos-help" id="nodosHelp"></p>
+    </section>
+
     <section class="view hidden" id="view-conexiones">
       <div class="view-head">
         <div><h1>Conexiones</h1><p class="sub" id="sesSub">Nodos conectados en este momento</p></div>
@@ -173,6 +196,7 @@
           <button data-set="voz">Voz (TTS)</button>
           <button data-set="pausas">Tiempos y pausas</button>
           <button data-set="audio">Nivel de audio</button>
+          <button data-set="grabacion">Grabación</button>
           <button data-set="usuarios">Usuarios</button>
           <button data-set="avisos">Avisos</button>
           <button data-set="respaldo">Respaldo</button>
@@ -235,6 +259,16 @@
               <input id="testAirText" value="Prueba de HAMNA Web. Son las {hora} del {dia} {fecha_larga}.">
             </label>
             <button type="button" class="btn danger-soft" id="btnTestAir">📡 Transmitir prueba</button>
+            <h3>Panel de nodos</h3>
+            <label class="check"><input type="checkbox" name="hub_on"> 🗺 Reportar el estado de este nodo a un hub cada minuto (al aire, próximo evento, salud, versión, respaldo)</label>
+            <div class="grid2">
+              <label>Dirección del hub<input name="hub_url" placeholder="Vacío = la del respaldo a otro nodo" autocomplete="off"></label>
+              <label>Código de acceso<input type="password" name="hub_token" data-secret autocomplete="new-password" placeholder="Vacío = el del respaldo"></label>
+            </div>
+            <input type="hidden" name="hub_pin">
+            <div class="row gap wrap"><button type="button" class="btn sm" id="btnHubProbe">Probar conexión</button><span class="muted" id="hubMsg"></span></div>
+            <p class="muted bk-note">El código se crea en el hub: Ajustes → Respaldo → Recibir de otros nodos (el mismo código sirve para el respaldo y para el panel).</p>
+            <label class="tg-sub">Si este nodo es el hub: avisar si un nodo deja de reportar por (minutos)<input type="number" name="hub_alerta_min" min="0" max="1440" placeholder="10"><small>0 = no avisar. El aviso llega por Telegram (Ajustes → Avisos).</small></label>
           </fieldset>
 
           <fieldset data-set="voz" class="hidden">
@@ -331,6 +365,7 @@
               <small>Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.</small></label>
             <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones</label>
             <label class="check"><input type="checkbox" name="tg_on_backup"> 💾 Si falla el respaldo automático</label>
+            <label class="check"><input type="checkbox" name="tg_on_nodes"> 🗺 Un nodo dejó de reportar al panel de nodos (y cuando vuelve)</label>
             <label class="check"><input type="checkbox" name="tg_on_collab"> 📤 Cuando un colaborador sube el audio de una sección</label>
             <label class="check"><input type="checkbox" name="tg_on_health"> 🩺 Salud del nodo: errores de la tarjeta SD, escritura lenta, bajo voltaje, temperatura alta, poco disco (y cuando se normaliza)</label>
             <label class="check"><input type="checkbox" name="tg_on_section"> 🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)</label>
@@ -355,6 +390,27 @@
               <label id="tgTestEvWrap" class="hidden">Evento para el ejemplo<select id="tgTestEv" translate="no"></select></label>
             </div>
             <div class="row gap wrap"><button type="button" class="btn" id="btnTgTest">Enviar prueba</button><span id="tgTestMsg" class="muted"></span></div>
+          </fieldset>
+
+          <fieldset data-set="grabacion" class="hidden">
+            <legend>Grabación</legend>
+            <p class="muted" style="margin-top:0">Graba lo que se escucha en el nodo (lo que recibe de la red y de radio, y lo que transmite) con el mismo audio del botón 🔊 En vivo. Los silencios largos no se graban, así que no queda aire muerto.</p>
+            <label>Grabar solo
+              <select name="rec_auto">
+                <option value="fin">Al terminar cada evento (la toma de reportes)</option>
+                <option value="inicio">Desde que empieza cada evento (la emisión completa y lo que sigue)</option>
+                <option value="no">No, solo a mano</option>
+              </select></label>
+            <label>Título de la grabación automática<input name="rec_titulo" maxlength="120" placeholder="{evento} {numero} · Toma de reportes">
+              <small>Variables: {evento} · {numero} (#47 · 2026 #47) · {emision} · {emision_anio} · {anio} · {fecha} · {hora}. Así se llama también al descargarla o recibirla por Telegram.</small>
+              <small class="rec-prev" id="recTitPrev"></small></label>
+            <div class="grid2">
+              <label>Terminar tras (minutos sin actividad)<input type="number" name="rec_silencio_min" min="1" max="60" placeholder="5"></label>
+              <label>Duración máxima (minutos)<input type="number" name="rec_max_min" min="10" max="600" placeholder="180"></label>
+            </div>
+            <label>Borrar las grabaciones de más de (días)<input type="number" name="rec_dias" min="0" max="3650" placeholder="30">
+              <small>0 = no borrar. Si el disco se llena, se borran las más viejas.</small></label>
+            <label class="check"><input type="checkbox" name="rec_tg"> 📲 Mandar cada grabación al grupo de avisos de Telegram (hasta 50 MB, unas 3 h en MP3)</label>
           </fieldset>
 
           <fieldset data-set="usuarios" class="hidden">
@@ -475,7 +531,7 @@
 
   <!-- Barra AL AIRE -->
   <footer class="onair" id="onair">
-    <div class="onair-state"><span class="pill" id="airPill">FUERA DEL AIRE</span><div class="air-sub"><span id="airCountdown" class="countdown"></span><button class="btn icon live-btn hidden" id="btnLive" title="Escuchar el nodo en vivo" aria-label="Escuchar el nodo en vivo"><span class="live-ico">🔊</span></button></div></div>
+    <div class="onair-state"><span class="pill" id="airPill">FUERA DEL AIRE</span><div class="air-sub"><span id="airCountdown" class="countdown"></span><button class="btn icon live-btn hidden" id="btnLive" title="Escuchar el nodo en vivo" aria-label="Escuchar el nodo en vivo"><span class="live-ico">🔊</span></button></div><button type="button" class="rec-info hidden" id="recInfo" title="Ver las grabaciones"></button></div>
     <div class="onair-main">
       <div class="onair-title"><b id="airEvento">—</b><span id="airSeccion" class="muted"></span></div>
       <div class="bars">
@@ -540,7 +596,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.24.0"></script>
-<script src="static/app.js?v=1.24.0"></script>
+<script src="static/i18n.js?v=1.25.0"></script>
+<script src="static/app.js?v=1.25.0"></script>
 </body>
 </html>

@@ -34,6 +34,8 @@ def init_app():
     share.init()
     sync.init()
     autobackup.init()
+    from . import hub
+    hub.init()
     app.roles = auth.ROLES
     app.user_loader = lambda req: auth.user_for(req.token, req.ip)
     app.upload_limits["/api/respaldo/restaurar"] = 4 * 2**30
@@ -329,6 +331,8 @@ def status(req):
     s["sys"] = sysmon.snapshot()
     s["version"] = VERSION
     s["envivo"] = live.status()
+    from . import grabar
+    s["grabacion"] = grabar.grabadora.estado()
     s["salud"] = health.worst()
     return jsonr(s)
 
@@ -1362,14 +1366,15 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int,
-            "tg_recordar_dias": int}
+            "tg_recordar_dias": int, "hub_alerta_min": int, "rec_silencio_min": int, "rec_max_min": int,
+            "rec_dias": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
-            "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder"}
+            "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder", "hub_url", "hub_pin", "rec_auto", "rec_titulo"}
 
 
 @app.route("/api/ajustes")
@@ -1390,7 +1395,7 @@ def ajustes_save(req):
             upd[k] = v if isinstance(v, bool) else truthy(v)
         elif k in STR_KEYS:
             upd[k] = str(v).strip()
-        elif k in ("azure_key", "tg_token", "ab_node_token") and str(v).strip():
+        elif k in ("azure_key", "tg_token", "ab_node_token", "hub_token") and str(v).strip():
             upd[k] = str(v).strip()
     if "tg_upcoming_mins" in upd:
         bad = [x for x in re.split(r"[,;\s]+", upd["tg_upcoming_mins"])
@@ -1400,6 +1405,21 @@ def ajustes_save(req):
         upd["tg_upcoming_mins"] = ", ".join(str(m) for m in notify.upcoming_minutes(upd))
     if "ab_hora" in upd and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", upd["ab_hora"]):
         raise ValueError("Hora del respaldo inválida (HH:MM)")
+    if "rec_titulo" in upd:
+        if len(upd["rec_titulo"]) > 120:
+            raise ValueError("El título de la grabación es muy largo (máximo 120 caracteres)")
+        if not upd["rec_titulo"]:
+            from . import grabar
+            upd["rec_titulo"] = grabar.TITULO_DEFAULT
+    if upd.get("rec_auto") not in (None, "fin", "inicio", "no"):
+        raise ValueError("Opción de grabación inválida")
+    for k, a, b, txt in (("rec_silencio_min", 1, 60, "Minutos sin actividad: de 1 a 60"),
+                         ("rec_max_min", 10, 600, "Duración máxima: de 10 a 600 min"),
+                         ("rec_dias", 0, 3650, "Días a conservar: de 0 a 3650")):
+        if k in upd and not a <= upd[k] <= b:
+            raise ValueError(txt)
+    if "hub_alerta_min" in upd and not 0 <= upd["hub_alerta_min"] <= 1440:
+        raise ValueError("Minutos para avisar de un nodo: de 0 a 1440")
     if "tg_recordar_dias" in upd and not 0 <= upd["tg_recordar_dias"] <= 14:
         raise ValueError("Días para el recordatorio: de 0 a 14")
     for k in ("ab_keep", "ab_recv_keep"):
@@ -1505,6 +1525,105 @@ def autorespaldo_probar(req):
     if not codigo:
         raise ValueError("Falta el código de acceso del nodo destino")
     return ok(**autobackup.probe_node(b.get("url") or "", codigo))
+
+
+# ── Grabaciones ─────────────────────────────────────────────────────────────
+@app.route("/api/grabaciones")
+def grabaciones(req):
+    from . import grabar
+    return jsonr({"grabaciones": grabar.lista(), "estado": grabar.grabadora.estado(), "envivo": live.status(),
+                  "mp3": "mp3" in export.formats()})
+
+
+@app.route("/api/grabaciones/iniciar", ("POST",))
+def grabacion_iniciar(req):
+    from . import grabar
+    titulo = (req.json().get("titulo") or "").strip() or "Grabación de {}".format(req.user.get("nombre") or req.user["usuario"])
+    st = grabar.grabadora.iniciar(titulo, "a mano · " + req.user["usuario"])
+    return ok(estado=st)
+
+
+@app.route("/api/grabaciones/detener", ("POST",))
+def grabacion_detener(req):
+    from . import grabar
+    r = grabar.grabadora.detener("manual")
+    if not r:
+        raise ValueError("No se está grabando")
+    log.info("%s detuvo la grabación «%s»", req.user["usuario"], r["titulo"])
+    return ok()
+
+
+@app.route("/api/grabaciones/<nombre>")
+def grabacion_archivo(req, nombre):
+    from . import grabar
+    p = grabar.archivo(nombre)
+    if not p:
+        raise HTTPError(404)
+    return send_file(p, "audio/mpeg" if p.suffix == ".mp3" else "audio/wav")
+
+
+@app.route("/api/grabaciones/titulo", ("POST",))
+def grabacion_titulo_prueba(req):
+    """Vista previa del título con la plantilla que se está escribiendo (con el próximo evento)."""
+    from . import bot, grabar
+    ev = {}
+    p = bot._proximos(1)
+    if p:
+        ev = numeracion.aplicar(db.get_evento(p[0][1]["evento_id"]) or {})
+    return ok(titulo=grabar.titulo_de(ev, (req.json().get("plantilla") or "").strip() or grabar.TITULO_DEFAULT))
+
+
+@app.route("/api/grabaciones/<nombre>", ("DELETE",))
+def grabacion_borrar(req, nombre):
+    from . import grabar
+    grabar.borrar(nombre)
+    log.info("%s borró la grabación %s", req.user["usuario"], nombre)
+    return ok()
+
+
+# ── Panel de nodos ───────────────────────────────────────────────────────────
+@app.route("/api/remoto/latido", ("POST",), auth=False)
+def remoto_latido(req):
+    """Un nodo reporta su estado al hub (mismo código de acceso que el respaldo)."""
+    from . import hub
+    if not autobackup.code_check(req.headers.get("X-HAMNA-Backup", "")):
+        raise HTTPError(401, "Código de acceso inválido")
+    hub.recibir(req.json(), req.ip)
+    cfg = settings.load()
+    return ok(estacion=cfg.get("station_name") or "", nodo=cfg.get("node") or "", version=VERSION)
+
+
+@app.route("/api/nodos")
+def nodos_panel(req):
+    from . import hub
+    return jsonr(hub.panel())
+
+
+@app.route("/api/nodos/<nodo>", ("DELETE",), rol="admin")
+def nodos_quitar(req, nodo):
+    from . import hub
+    hub.quitar(nodo)
+    log.info("%s quitó el nodo %s del panel", req.user["usuario"], nodo)
+    return ok()
+
+
+@app.route("/api/hub", rol="admin")
+def hub_estado(req):
+    from . import hub
+    return jsonr(hub.estado_envio())
+
+
+@app.route("/api/hub/probar", ("POST",), rol="admin")
+def hub_probar(req):
+    from . import hub
+    b = req.json()
+    url = (b.get("url") or "").strip()
+    codigo = (b.get("codigo") or "").strip()
+    d_url, d_tok, _pin = hub.destino()
+    url, codigo = url or d_url, codigo or (settings.get("hub_token") if url else "") or d_tok
+    if not url or not codigo:
+        raise ValueError("Falta la dirección o el código de acceso del hub")
+    return ok(**autobackup.probe_node(url, codigo))
 
 
 @app.route("/api/autorespaldo/nube", ("POST", "DELETE"), rol="admin")

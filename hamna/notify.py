@@ -40,6 +40,7 @@ KINDS = {
     "respaldo": "tg_on_backup",      # respaldo automático fallido
     "salud": "tg_on_health",         # SD, voltaje, temperatura, disco (health.py)
     "colaborador": "tg_on_collab",   # un colaborador subió el audio de una sección
+    "nodos": "tg_on_nodes",          # un nodo dejó de reportar al hub (o volvió)
 }
 MAX_LINES = 40          # Telegram corta en 4096 caracteres
 
@@ -75,19 +76,20 @@ def _call(token, method, params, timeout=15):
     return out.get("result")
 
 
-def send_document(token, chat, path, filename, caption="", timeout=300):
+def send_document(token, chat, path, filename, caption="", timeout=300, metodo="sendDocument",
+                  campo="document", tipo="application/gzip"):
     """Manda un archivo al chat (Telegram acepta hasta 50 MB por bot)."""
     bd = "hamna" + os.urandom(12).hex()
     head = []
     for k, v in (("chat_id", str(chat)), ("caption", caption), ("parse_mode", "HTML")):
         head.append('--{}\r\nContent-Disposition: form-data; name="{}"\r\n\r\n{}\r\n'.format(bd, k, v))
-    head.append('--{}\r\nContent-Disposition: form-data; name="document"; filename="{}"\r\n'
-                'Content-Type: application/gzip\r\n\r\n'.format(bd, filename))
+    head.append('--{}\r\nContent-Disposition: form-data; name="{}"; filename="{}"\r\n'
+                'Content-Type: {}\r\n\r\n'.format(bd, campo, filename, tipo))
     pre = "".join(head).encode("utf-8")
     post = "\r\n--{}--\r\n".format(bd).encode()
     with open(path, "rb") as f:
         body = pre + f.read() + post
-    req = urllib.request.Request(API.format(token, "sendDocument"), data=body, headers={
+    req = urllib.request.Request(API.format(token, metodo), data=body, headers={
         "User-Agent": "HAMNA-Web", "Content-Type": "multipart/form-data; boundary=" + bd})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

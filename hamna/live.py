@@ -52,6 +52,7 @@ class Live:
     def __init__(self):
         self._lock = threading.Lock()
         self._listeners = set()
+        self._taps = []                 # funciones que reciben el audio crudo (grabar.py)
         self._table = None
         self.last_rx = 0.0
         self.started = False
@@ -79,6 +80,11 @@ class Live:
                 time.sleep(1)
                 continue
             self.last_rx = time.time()
+            for t in list(self._taps):
+                try:
+                    t(data)
+                except Exception:
+                    log.exception("Error al pasar el audio a la grabación")
             if not self._listeners or len(data) < 2:
                 continue
             if len(data) % 2:
@@ -90,6 +96,14 @@ class Live:
                 for l in self._listeners:
                     l.q.append(enc)
                     l.ev.set()
+
+    def add_tap(self, fn):
+        if fn not in self._taps:
+            self._taps.append(fn)
+
+    def remove_tap(self, fn):
+        if fn in self._taps:
+            self._taps.remove(fn)
 
     # ── Oyentes ───────────────────────────────────────────────────────────
     def stream(self, ip, user):

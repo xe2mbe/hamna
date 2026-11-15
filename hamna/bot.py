@@ -41,6 +41,7 @@ _COMANDOS = [
     ("proximo", "Los siguientes eventos"),
     ("salud", "Temperatura, voltaje, disco y memoria del nodo"),
     ("historial", "Las últimas emisiones"),
+    ("nodos", "Cómo están los nodos que reportan a este hub"),
     ("ayuda", "Qué puedo hacer"),
 ]
 DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
@@ -246,7 +247,8 @@ def _ayuda(user):
          "/estado · qué está al aire ahora",
          "/proximo · los siguientes eventos"]
     if n >= auth.ROLES["lectura"]:
-        t += ["/salud · temperatura, voltaje, disco y memoria", "/historial · las últimas emisiones"]
+        t += ["/salud · temperatura, voltaje, disco y memoria", "/historial · las últimas emisiones",
+              "/nodos · cómo están los nodos que reportan a este hub"]
     if _es_admin(user):
         t += ["", "📲 <b>Mándame un audio o nota de voz</b> y te pregunto en qué sección lo pongo "
                   "(cualquiera; primero te ofrezco las de los próximos eventos)."]
@@ -267,10 +269,10 @@ def _comando(cmd, user):
         return _txt_estado()
     if cmd in ("proximo", "próximo", "proximos"):
         return _txt_proximo(user)
-    if cmd in ("salud", "historial"):
+    if cmd in ("salud", "historial", "nodos"):
         if n < auth.ROLES["lectura"]:
             return "Ese comando no está disponible para tu usuario."
-        return _txt_salud() if cmd == "salud" else _txt_historial()
+        return _txt_salud() if cmd == "salud" else _txt_historial() if cmd == "historial" else _txt_nodos()
     return "No conozco ese comando.\n\n" + _ayuda(user)
 
 
@@ -387,6 +389,28 @@ def _txt_salud():
         extra.append("encendido hace " + _falta(s["encendido_s"]))
     if extra:
         t += ["", " · ".join(extra)]
+    return "\n".join(t)
+
+
+def _txt_nodos():
+    from . import hub
+    p = hub.panel()
+    if not p["nodos"]:
+        return "Ningún nodo reporta a este hub todavía (en cada nodo: Ajustes → Nodo → Panel de nodos)."
+    lim = (p["alerta_min"] or 10) * 60
+    t = ["🗺 <b>Nodos</b>"]
+    for d in p["nodos"]:
+        ico = "🟢" if d["edad"] < 180 else "🟡" if d["edad"] < lim else "🔴"
+        nombre = notify.esc(d.get("estacion") or "") + " · " if d.get("estacion") else ""
+        linea = "{} {}nodo {}".format(ico, nombre, notify.esc(d["nodo"]))
+        if d["edad"] >= 180:
+            linea += " · sin reportar desde hace " + _falta(d["edad"])
+        elif d.get("al_aire"):
+            linea += " · 🔴 al aire: " + notify.esc(d["al_aire"].get("evento"))
+        sal = (d.get("salud") or {}).get("peor")
+        if sal in ("aviso", "grave"):
+            linea += " · " + ("⚠️" if sal == "aviso" else "❌") + " salud"
+        t.append(linea)
     return "\n".join(t)
 
 

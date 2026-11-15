@@ -307,6 +307,11 @@ class Engine:
         for t in self._post_timers.pop(ev["id"], []):
             t.cancel()      # desconexiones pendientes de una corrida anterior
         try:
+            try:
+                from . import grabar
+                grabar.al_evento("inicio", ev, be.name)
+            except Exception:
+                log.exception("No pude empezar la grabación")
             linked_at = time.monotonic() if self._links_before(ev, cfg) else None
             # Todo se prepara antes de activar el PTT, para no dejar silencio al aire
             for s in secs:
@@ -397,6 +402,12 @@ class Engine:
                 bot.al_aire(ev, secs, estados)
             except Exception:
                 log.exception("No pude avisar a los colaboradores")
+            if not result.startswith("error"):      # también si lo detuvieron: puede seguir la toma de reportes
+                try:
+                    from . import grabar
+                    grabar.al_evento("fin", ev, be.name)
+                except Exception:
+                    log.exception("No pude empezar la grabación")
             try:
                 self._links_after(ev, cfg)
             except Exception as e:
@@ -580,6 +591,11 @@ class Engine:
                 self._tick()
                 if time.time() - last_cleanup > 3600:
                     audio.cleanup()
+                    try:
+                        from . import grabar
+                        grabar.limpiar()
+                    except Exception:
+                        log.exception("No pude limpiar las grabaciones")
                     last_cleanup = time.time()
             except Exception:
                 log.exception("Error en el programador")

@@ -97,6 +97,8 @@ def main():
     health.start()
     from . import bot
     bot.start()
+    from . import hub
+    hub.start()
     from .live import live
     live.start()
     app.serve(a.host, a.port)
