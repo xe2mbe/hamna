@@ -2357,7 +2357,6 @@ async function logoutNow() {
   S.me = null; showLogin();
 }
 $("#btnSideLogout").onclick = logoutNow;
-$("#btnLogout").onclick = logoutNow;
 
 function uaShort(ua) {
   ua = ua || "";
@@ -2380,7 +2379,7 @@ function sessionRows(list, mine, showUser) {
       <div class="sico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
       <div class="sinfo"><b>${esc(uaShort(s.agente))}</b>${s.id === mine ? ' <span class="chip ok">Esta sesión</span>' : ""}
         <small>${showUser ? `<b>${esc(s.nombre || s.usuario)}</b> (${esc(s.usuario)}) · ` : ""}${esc(s.ip || "IP desconocida")} · activa ${ago(s.ultima)} · entró ${ago(s.creada)}</small></div>
-      ${s.id === mine ? "" : `<button type="button" class="btn sm danger-soft" data-close-ses="${s.id}">Cerrar</button>`}
+      ${s.id === mine ? "" : `<button type="button" class="btn icon ghost ses-out" data-close-ses="${s.id}" title="Cerrar la sesión en ese equipo" aria-label="Cerrar la sesión en ese equipo"><svg viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button>`}
     </div>`).join("");
 }
 $("#meLang").onchange = async (e) => {
@@ -2399,6 +2398,8 @@ async function loadMyAccount() {
   try {
     const r = await api("api/mis-sesiones");
     $("#mySessions").innerHTML = sessionRows(r.sesiones, r.mi_sesion, false);
+    // «Cerrar las demás» solo vale la pena con 2 o más sesiones en otros equipos
+    $("#btnCloseOthers").classList.toggle("hidden", r.sesiones.filter((s) => s.id !== r.mi_sesion).length < 2);
   } catch (e) { $("#mySessions").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 const ROL_AYUDA = {

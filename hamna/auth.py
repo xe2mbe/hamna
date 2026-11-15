@@ -26,7 +26,8 @@ from .web import check_password, hash_password
 # colaborador (nivel 0): solo entra a «Mis secciones» y sube el audio de las que el admin le asignó
 ROLES = {"colaborador": 0, "lectura": 1, "operador": 2, "admin": 3}
 ROL_NOMBRE = {"colaborador": "Colaborador", "lectura": "Solo lectura", "operador": "Operador", "admin": "Administrador"}
-SESSION_DAYS = 30
+SESSION_DAYS = 30               # la sesión se cierra sola tras 30 días sin usarse…
+SESSION_MAX_DAYS = 90           # …y a los 90 días de haber entrado, aunque se use diario
 TOUCH_SECS = 60                 # actualizar "última actividad" a lo mucho cada minuto
 MAX_USER_IP, MAX_IP, LOCK_SECS = 5, 20, 15 * 60
 USER_RX = re.compile(r"^[A-Za-z0-9._-]{2,32}$")
@@ -180,17 +181,22 @@ def user_for(token, ip=""):
     if not token or not re.match(r"^[0-9a-f]{64}$", token):
         return None
     now = time.time()
-    r = db.row("""SELECT s.id AS sid, s.ultima, u.* FROM sesiones_web s
+    r = db.row("""SELECT s.id AS sid, s.ultima, s.creada AS s_creada, s.expira AS s_expira, u.* FROM sesiones_web s
                   JOIN usuarios u ON u.id = s.usuario_id
                   WHERE s.token_hash=? AND s.expira > ? AND u.activo = 1""", (_th(token), now))
     if not r:
         return None
+    exp = r["s_expira"]
     if now - r["ultima"] > TOUCH_SECS:
-        db.execute("UPDATE sesiones_web SET ultima=?, ip=? WHERE id=?", (now, ip or "", r["sid"]))
+        # cada uso empuja el vencimiento: 30 días desde ahora, sin pasar del tope
+        exp = min(now + SESSION_DAYS * 86400, r["s_creada"] + SESSION_MAX_DAYS * 86400)
+        db.execute("UPDATE sesiones_web SET ultima=?, ip=?, expira=? WHERE id=?", (now, ip or "", exp, r["sid"]))
     sid = r.pop("sid")
-    r.pop("ultima", None)
+    for k in ("ultima", "s_creada", "s_expira"):
+        r.pop(k, None)
     u = _clean_user(r)
     u["sid"] = sid
+    u["exp"] = exp
     return u
 
 

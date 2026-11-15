@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.21.1">
+<link rel="stylesheet" href="static/app.css?v=1.21.2">
 </head>
 <body>
 
@@ -508,10 +508,10 @@
       </div>
       <div class="row gap"><button type="button" class="btn primary" id="btnPw">Cambiar contraseña</button></div>
       <h3>Mis sesiones abiertas</h3>
+      <p class="muted ses-note">Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.</p>
       <div id="mySessions" class="slist"><p class="muted">Cargando…</p></div>
       <div class="row gap wrap" style="margin-top:12px">
-        <button type="button" class="btn" id="btnCloseOthers">Cerrar las demás sesiones</button>
-        <button type="button" class="btn ghost" id="btnLogout">Cerrar esta sesión</button>
+        <button type="button" class="btn hidden" id="btnCloseOthers">Cerrar las demás sesiones</button>
       </div>
     </div>
   </div>
@@ -525,7 +525,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.21.1"></script>
-<script src="static/app.js?v=1.21.1"></script>
+<script src="static/i18n.js?v=1.21.2"></script>
+<script src="static/app.js?v=1.21.2"></script>
 </body>
 </html>

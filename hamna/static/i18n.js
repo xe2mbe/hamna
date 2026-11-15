@@ -53,6 +53,9 @@
     "Escuchar esta sección": "Listen to this section", "No se pudo reproducir esta sección": "Couldn't play this section",
     "Puedes escuchar el evento, pero no cambiarlo: las demás secciones las maneja el administrador.":
       "You can listen to the event, but not change it: the administrator manages the other sections.",
+    "Cerrar la sesión en ese equipo": "Sign out that device",
+    "Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.":
+      "Each device or browser you sign in from is a session. It closes by itself if you don't use it for 30 days (and after 90 days at most). If you don't recognize one, close it with its button.",
     "Mi nombre": "My name", "Guardar nombre": "Save name", "Nombre guardado": "Name saved", "👤 Mi perfil": "👤 My profile",
     "Mi perfil": "My profile", "Perfil guardado": "Profile saved", "Déjalo vacío si no quieres cambiarla.": "Leave it empty if you don't want to change it.",
     "Así te ven los demás usuarios y así apareces en los avisos. Para entrar sigues usando tu usuario.":

@@ -96,17 +96,35 @@ class Request:
             hmac.new(self.secret.encode(), data, hashlib.sha256).digest()).decode().rstrip("=")
 
     @property
-    def cookie_name(self):
+    def https(self):
+        """¿La página se abrió por https? Detrás de Apache la conexión llega por
+        http, así que se mira lo que dice el navegador (Origin / Referer)."""
+        if self.headers.get("X-Forwarded-Proto", "").lower() == "https":
+            return True
+        for h in ("Origin", "Referer"):
+            v = self.headers.get(h, "")
+            if v:
+                return v.lower().startswith("https://")
+        return False
+
+    @property
+    def _base_cookie(self):
         """Un nombre por instalación: dos nodos en la misma dirección con distinto
         puerto (p. ej. :80 y :8081) comparten cookies en el navegador, y con un
         nombre común iniciar sesión en uno cerraba la sesión del otro."""
         return "{}_{}".format(COOKIE, hashlib.sha256(
             ("cookie:" + self.secret).encode()).hexdigest()[:8])
 
+    @property
+    def cookie_name(self):
+        # La de https lleva Secure y otro nombre: así no choca con la de http
+        # (el navegador no deja que http reemplace una cookie Secure del mismo nombre).
+        return self._base_cookie + ("s" if self.https else "")
+
     def _read_session(self):
         raw = self.headers.get("Cookie", "")
         # el nombre propio primero; el viejo (hamna_s) sirve mientras exista
-        for name in (self.cookie_name, COOKIE):
+        for name in (self.cookie_name, self._base_cookie, COOKIE):
             for m in re.finditer(r"(?:^|;\s*)" + name + r"=([^;]+)", raw):
                 try:
                     payload, sig = m.group(1).rsplit(".", 1)
@@ -129,14 +147,21 @@ class Request:
     def logout(self):
         self.new_session = {}
 
+    def renew(self, exp):
+        """La sesión se alargó en el nodo: alargar también la cookie (a lo más una vez al día)."""
+        if self.new_session is None and self.token and exp - self.session.get("exp", 0) > 86400:
+            self.new_session = {"t": self.token, "exp": int(exp)}
+
     def cookie_header(self):
         if self.new_session is None:
             return None
+        sec = "; Secure" if self.https else ""
         if not self.new_session:
-            return "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax".format(self.cookie_name)
+            return "{}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{}".format(self.cookie_name, sec)
         payload = base64.urlsafe_b64encode(json.dumps(self.new_session).encode()).decode().rstrip("=")
-        return "{}={}.{}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax".format(
-            self.cookie_name, payload, self._sign(payload.encode()), SESSION_DAYS * 86400)
+        edad = max(60, int(self.new_session.get("exp", 0) - time.time()))
+        return "{}={}.{}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax{}".format(
+            self.cookie_name, payload, self._sign(payload.encode()), edad, sec)
 
     @property
     def authed(self):
@@ -355,6 +380,8 @@ class App:
                     req.ip = self._client_ip()
                     if app.user_loader:
                         req.user = app.user_loader(req)
+                        if req.user and req.user.get("exp"):
+                            req.renew(req.user["exp"])
                     length = int(self.headers.get("Content-Length") or 0)
                     ctype = self.headers.get("Content-Type", "")
                     raw_up = app.raw_uploads.get(req.path) if req.method == "POST" else None
