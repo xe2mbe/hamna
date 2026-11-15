@@ -238,6 +238,9 @@ def users():
     for r in db.rows("SELECT usuario_id, seccion_id FROM usuario_secciones"):
         secs.setdefault(r["usuario_id"], []).append(r["seccion_id"])
     out = [_clean_user(u) for u in out]
+    for u in out:       # SQLite guarda CURRENT_TIMESTAMP en UTC: mostrar en la hora del nodo
+        for k in ("creado_en", "ultimo_acceso"):
+            u[k] = utc_a_local(u.get(k))
     for u in out:
         u["secciones"] = secs.get(u["id"], [])
     return out
@@ -259,6 +262,18 @@ def set_tg(uid, tg_id, tg_nombre):
 
 def set_photo(uid, version):
     db.execute("UPDATE usuarios SET foto=? WHERE id=?", (version or "", uid))
+
+
+def utc_a_local(s):
+    """«AAAA-MM-DD HH:MM:SS» en UTC (CURRENT_TIMESTAMP de SQLite) → misma forma en la hora del nodo."""
+    if not s:
+        return s
+    try:
+        import calendar
+        t = calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%d %H:%M:%S"))
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t))
+    except ValueError:
+        return s
 
 
 def user_sections(uid):

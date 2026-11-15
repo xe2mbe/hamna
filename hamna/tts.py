@@ -29,6 +29,8 @@ VARIABLES = [
     ("{fecha_larga}", "Fecha en palabras (2 de noviembre de 2026)"),
     ("{hora}", "Hora actual (HH:MM)"),
     ("{dia}", "Día de la semana"),
+    ("{saludo}", "Buenos días / buenas tardes / buenas noches, según la hora"),
+    ("{despedida}", "Buen día / buena tarde / buena noche, según la hora"),
     ("{pausa_cada}", "Intervalo de pausa configurado"),
     ("{pausa_duracion}", "Duración de la pausa"),
     ("{pausa_alerta}", "Aviso antes de la pausa"),
@@ -55,6 +57,15 @@ def fmt_seg(s):
     return mins if r == 0 else "{} con {} segundo{}".format(mins, r, "" if r == 1 else "s")
 
 
+def saludo(now):
+    """(saludo, despedida) según la hora: mañana hasta las 12, tarde hasta las 19, luego noche."""
+    if 5 <= now.hour < 12:
+        return "buenos días", "buen día"
+    if 12 <= now.hour < 19:
+        return "buenas tardes", "buena tarde"
+    return "buenas noches", "buena noche"
+
+
 def resolve_variables(text, cfg, ctx=None):
     now = datetime.datetime.now()
     ctx = ctx or {}
@@ -63,6 +74,8 @@ def resolve_variables(text, cfg, ctx=None):
         "{fecha_larga}": "{} de {} de {}".format(now.day, MESES[now.month - 1], now.year),
         "{hora}": now.strftime("%H:%M"),
         "{dia}": DIAS[now.weekday()],
+        "{saludo}": saludo(now)[0],
+        "{despedida}": saludo(now)[1],
         "{pausa_cada}": fmt_seg(cfg.get("pause_tx_time", 160)),
         "{pausa_duracion}": fmt_seg(cfg.get("pause_duration", 10)),
         "{pausa_alerta}": fmt_seg(cfg.get("pause_alert_before", 10)),
