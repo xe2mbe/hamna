@@ -43,6 +43,7 @@ _COMANDOS = [
     ("historial", "Las últimas emisiones"),
     ("nodos", "Cómo están los nodos que reportan a este hub"),
     ("grabar", "Empezar a grabar lo que se escucha en el nodo"),
+    ("menu", "Menú con botones"),
     ("ayuda", "Qué puedo hacer"),
 ]
 DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
@@ -162,12 +163,14 @@ def _loop():
 
 
 # ── Atender mensajes y botones ──────────────────────────────────────────────
-def _responder(token, chat, texto, botones=None, a=None):
+def _responder(token, chat, texto, botones=None, a=None, markup=None):
     p = {"chat_id": chat, "text": texto, "parse_mode": "HTML", "disable_web_page_preview": "true"}
     if a:
         p["reply_to_message_id"] = a
     if botones:
         p["reply_markup"] = teclado(botones)
+    elif markup:
+        p["reply_markup"] = markup
     notify._call(token, "sendMessage", p)
 
 
@@ -213,7 +216,7 @@ def _atender(token, u):
     elif privado and texto.isdigit() and len(texto) == 6:
         cmd, arg = "vincular", texto
     elif privado:
-        cmd, arg = "ayuda", ""
+        cmd, arg = "menu", ""                         # «📋 Menú» o cualquier texto: el menú
     else:
         return                                      # conversación normal del grupo
     if cmd in ("start", "vincular") and arg:
@@ -224,6 +227,12 @@ def _atender(token, u):
             "👋 Hola. Todavía no sé quién eres.\n\n"
             "Entra a HAMNA → <b>Mi perfil</b> (clic en tu foto o nombre) → <b>🔗 Vincular Telegram</b>, "
             "y mándame el código que te da."), a=None if privado else m.get("message_id"))
+    if cmd in ("menu", "start"):
+        if privado and cmd == "start":
+            _responder(token, chat, "👋 Hola, <b>{}</b>. Abajo tienes el botón <b>📋 Menú</b> para abrirlo cuando quieras.".format(
+                notify.esc(user.get("nombre") or user["usuario"])), markup=TECLADO_FIJO)
+        texto, botones = _pantalla("menu", user)
+        return _responder(token, chat, texto, botones=botones, a=None if privado else m.get("message_id"))
     resp = _comando(cmd, user, arg, chat)
     if isinstance(resp, tuple):
         resp, botones = resp
@@ -242,8 +251,11 @@ def _vincular(token, chat, quien, code, msg_id):
     auth.set_tg(uid, str(quien.get("id")), tg_nombre)
     u = auth.user_by_tg(quien.get("id")) or {}
     log.info("Telegram %s vinculado con el usuario %s", tg_nombre, u.get("usuario"))
-    _responder(token, chat, "✅ Listo, <b>{}</b>. Tu Telegram quedó vinculado con tu usuario de HAMNA ({}).\n\n{}".format(
-        notify.esc(u.get("nombre") or u.get("usuario")), notify.esc(u.get("rol_nombre")), _ayuda(u)))
+    _responder(token, chat, "✅ Listo, <b>{}</b>. Tu Telegram quedó vinculado con tu usuario de HAMNA ({}).\n\n"
+                            "Usa el botón <b>📋 Menú</b> de abajo para ver todo lo que puedo hacer.".format(
+        notify.esc(u.get("nombre") or u.get("usuario")), notify.esc(u.get("rol_nombre"))), markup=TECLADO_FIJO)
+    texto, botones = _pantalla("menu", u)
+    _responder(token, chat, texto, botones=botones)
 
 
 def _ayuda(user):
@@ -514,6 +526,8 @@ def _boton(token, q):
     user = auth.user_by_tg((q.get("from") or {}).get("id"))
     if not user:
         return avisa("Primero vincula tu Telegram en HAMNA → Mi perfil.", True)
+    if data.startswith("m:"):
+        return _boton_menu(token, q, user, data, avisa)
     if data.split(":")[0] in ("up", "upx", "ant", "upl"):
         return _boton_audio(token, q, user, data, avisa, teclas)
     if _nivel(user) < auth.ROLES["operador"]:
@@ -859,3 +873,162 @@ def tick(now):
             _avisos_file().write_text(json.dumps(hechos))
         except Exception:
             pass
+
+
+# ── Menú con botones («tarjetas» que se reemplazan en el mismo mensaje) ────
+TECLADO_FIJO = json.dumps({"keyboard": [[{"text": "📋 Menú"}]], "resize_keyboard": True, "is_persistent": True})
+VOLVER = ("« Menú", "m:menu")
+EV_PAG = 8
+
+
+def _editar(token, chat, mid, texto, botones):
+    p = {"chat_id": chat, "message_id": mid, "text": texto, "parse_mode": "HTML", "disable_web_page_preview": "true",
+         "reply_markup": teclado(botones) if botones else json.dumps({"inline_keyboard": []})}
+    try:
+        notify._call(token, "editMessageText", p)
+    except RuntimeError as e:
+        if "not modified" not in str(e):
+            raise
+
+
+def _resumen():
+    from .engine import engine
+    s = engine.status()
+    if s.get("on_air"):
+        return "🔴 Al aire: <b>{}</b>".format(notify.esc(s.get("evento") or "prueba"))
+    prox = _proximos(1)
+    return "⚪ Fuera del aire" + (" · sigue " + _linea_proximo(*prox[0]) if prox else "")
+
+
+def _pantalla(cual, user, arg=""):
+    """(texto, botones) de cada pantalla del menú."""
+    from .engine import engine
+    from . import grabar
+    n = _nivel(user)
+    op, lec = n >= auth.ROLES["operador"], n >= auth.ROLES["lectura"]
+    if cual == "menu":
+        cfg = settings.load()
+        est = cfg.get("station_name") or "HAMNA"
+        e = grabar.grabadora.estado()
+        t = "📻 <b>{}</b>{}\n{}{}\n\n¿Qué quieres hacer?".format(
+            notify.esc(est), " · nodo " + notify.esc(cfg.get("node")) if cfg.get("node") else "", _resumen(),
+            "\n⏺ Grabando «{}» · {}".format(notify.esc(e["titulo"]), _hm(e["dur"])) if e.get("grabando") else "")
+        filas = [[("📡 Estado", "m:estado"), ("📅 Próximos", "m:prox")]]
+        if op:
+            filas.append([("▶ Transmitir evento", "m:ev:0"),
+                          ("⏹ Detener grabación", "rstop:0") if e.get("grabando") else ("⏺ Grabar", "m:grab")])
+        if lec:
+            filas.append([("🩺 Salud", "m:salud"), ("🗂 Historial", "m:hist"), ("🗺 Nodos", "m:nodos")])
+        filas.append([("❓ Ayuda", "m:ayuda")])
+        if _secciones_audio(user) and not _es_admin(user):
+            t += "\n📲 Para cambiar tu sección, mándame tu audio o una nota de voz."
+        return t, filas
+    if cual == "estado":
+        s = engine.status()
+        filas = []
+        if s.get("on_air") and op and s.get("evento_id"):
+            filas.append([("⏭ Siguiente sección", "sig:{}".format(s["evento_id"])), ("⏹ Detener", "det:{}".format(s["evento_id"]))])
+        filas.append([("🔄 Actualizar", "m:estado"), VOLVER])
+        return _txt_estado(), filas
+    if cual == "prox":
+        return _txt_proximo(user), [[VOLVER]]
+    if cual in ("salud", "hist", "nodos"):
+        if not lec:
+            return "Esa opción no está disponible para tu usuario.", [[VOLVER]]
+        return {"salud": _txt_salud, "hist": _txt_historial, "nodos": _txt_nodos}[cual](), [[("🔄 Actualizar", "m:" + cual), VOLVER]]
+    if cual == "ayuda":
+        return _ayuda(user), [[VOLVER]]
+    if cual == "grab":
+        if not op:
+            return "Solo un operador o el administrador pueden grabar.", [[VOLVER]]
+        e = grabar.grabadora.estado()
+        if e.get("grabando"):
+            return "⏺ Ya se está grabando «{}» · lleva {}".format(notify.esc(e["titulo"]), _hm(e["dur"])), \
+                [[("⏹ Detener grabación", "rstop:0")], [VOLVER]]
+        return ("⏺ <b>¿Empezar a grabar lo que se escucha en el nodo?</b>\nSe llamará «Grabación de {}» y se detiene sola tras {} min "
+                "sin actividad.\nPara otro título escribe <code>/grabar Título</code>.".format(
+                    notify.esc(user.get("nombre") or user["usuario"]), int(settings.load().get("rec_silencio_min", 5) or 5)),
+                [[("⏺ Sí, grabar", "m:grabgo"), VOLVER]])
+    if cual == "ev":
+        if not op:
+            return "Solo un operador o el administrador pueden transmitir.", [[VOLVER]]
+        evs = [e for e in db.get_eventos() if e.get("num_secciones")]
+        if not evs:
+            return "No hay eventos con secciones.", [[VOLVER]]
+        prox = {}
+        for t, row in _proximos(50):
+            prox.setdefault(row["evento_id"], t)
+        evs.sort(key=lambda e: (e["id"] not in prox, prox.get(e["id"], dt.datetime.max), e["nombre"].lower()))
+        pag = max(0, int(arg or 0))
+        trozo = evs[pag * EV_PAG:(pag + 1) * EV_PAG]
+        filas = [[("▶ {} · {}".format(e["nombre"][:34], _hm(e.get("duracion_total"))), "m:evc:{}".format(e["id"]))] for e in trozo]
+        nav = []
+        if pag > 0:
+            nav.append(("◀", "m:ev:{}".format(pag - 1)))
+        if (pag + 1) * EV_PAG < len(evs):
+            nav.append(("▶▶", "m:ev:{}".format(pag + 1)))
+        if nav:
+            filas.append(nav)
+        filas.append([VOLVER])
+        aviso = "\n⚠ Ahora hay algo al aire: al transmitir otro evento se detiene." if engine.status().get("on_air") else ""
+        return "▶ <b>¿Qué evento quieres transmitir?</b>\nPrimero van los que salen pronto.{}".format(aviso), filas
+    if cual == "evc":
+        if not op:
+            return "Solo un operador o el administrador pueden transmitir.", [[VOLVER]]
+        ev = db.get_evento(int(arg))
+        if not ev:
+            return "Ese evento ya no existe.", [[("« Eventos", "m:ev:0"), VOLVER]]
+        ev = numeracion.aplicar(ev)
+        secs = db.get_secciones_by_evento(ev["id"])
+        etq = numeracion.etiqueta(ev) if (ev.get("num") or ev.get("numero")) else ""
+        st = engine.status()
+        aviso = "\n\n⚠ Ahora está al aire «{}»: se va a detener.".format(notify.esc(st.get("evento") or "prueba")) if st.get("on_air") else ""
+        return ("▶ <b>¿Transmitir «{}»{} ahora?</b>\n{} secciones · {} aprox.{}".format(
+            notify.esc(ev["nombre"]), " " + notify.esc(etq) if etq else "", len(secs),
+            _hm(sum(float(s.get("duracion") or 0) for s in secs)), aviso),
+            [[("✅ Sí, transmitir", "m:evgo:{}".format(ev["id"]))], [("« Eventos", "m:ev:0"), VOLVER]])
+    return "No conozco esa opción.", [[VOLVER]]
+
+
+def _boton_menu(token, q, user, data, avisa):
+    from .engine import engine
+    from . import grabar
+    msg = q.get("message") or {}
+    chat, mid = (msg.get("chat") or {}).get("id"), msg.get("message_id")
+    p = data.split(":")
+    cual, arg = p[1], (p[2] if len(p) > 2 else "")
+    op = _nivel(user) >= auth.ROLES["operador"]
+    try:
+        if cual == "evgo":
+            if not op:
+                return avisa("Solo un operador o el administrador pueden transmitir.", True)
+            ev = db.get_evento(int(arg))
+            if not ev:
+                return avisa("Ese evento ya no existe.", True)
+            try:
+                engine.start_event(ev["id"], origen="Telegram · " + user["usuario"])
+            except ValueError as e:
+                return avisa(str(e), True)
+            engine.note("«{}» iniciado desde Telegram por {}".format(ev["nombre"], user["usuario"]))
+            avisa("Iniciando…")
+            return _editar(token, chat, mid, "▶ <b>{}</b> inició «{}».\nEl resumen y los botones para controlarlo llegan en el aviso de inicio.".format(
+                notify.esc(user.get("nombre") or user["usuario"]), notify.esc(ev["nombre"])),
+                [[("📡 Estado", "m:estado"), VOLVER]])
+        if cual == "grabgo":
+            if not op:
+                return avisa("Solo un operador o el administrador pueden grabar.", True)
+            titulo = "Grabación de {}".format(user.get("nombre") or user["usuario"])
+            try:
+                grabar.grabadora.iniciar(titulo, "Telegram · " + user["usuario"])
+            except ValueError as e:
+                return avisa(str(e), True)
+            avisa("Grabando")
+            return _editar(token, chat, mid, "⏺ Grabando «{}». Se detiene sola tras {} min sin actividad.".format(
+                notify.esc(titulo), int(settings.load().get("rec_silencio_min", 5) or 5)),
+                [[("⏹ Detener grabación", "rstop:0")], [VOLVER]])
+        texto, botones = _pantalla(cual, user, arg)
+        _editar(token, chat, mid, texto, botones)
+        avisa("")
+    except Exception as e:
+        log.exception("Menú del bot")
+        avisa("No pude: {}".format(e), True)
