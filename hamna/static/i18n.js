@@ -46,6 +46,13 @@
     "Elige el archivo de audio": "Choose the audio file", "Escribe el texto": "Write the text",
     "↩ Regresar a la anterior": "↩ Go back to the previous one",
     "📡 Dónde sale tu colaboración": "📡 Where your contribution airs",
+    "📷 Cambiar foto": "📷 Change photo", "Quitar foto": "Remove photo", "Foto guardada": "Photo saved", "Foto quitada": "Photo removed",
+    "Elige una imagen": "Choose an image", "La foto debe ser JPEG": "The photo must be JPEG", "La foto es muy grande": "The photo is too large",
+    "No pude leer la imagen": "Couldn't read the image",
+    "▶ Escuchar todo el evento": "▶ Listen to the whole event", "⏹ Detener": "⏹ Stop",
+    "Escuchar esta sección": "Listen to this section", "No se pudo reproducir esta sección": "Couldn't play this section",
+    "Puedes escuchar el evento, pero no cambiarlo: las demás secciones las maneja el administrador.":
+      "You can listen to the event, but not change it: the administrator manages the other sections.",
     "Mi nombre": "My name", "Guardar nombre": "Save name", "Nombre guardado": "Name saved", "👤 Mi perfil": "👤 My profile",
     "Mi perfil": "My profile", "Perfil guardado": "Profile saved", "Déjalo vacío si no quieres cambiarla.": "Leave it empty if you don't want to change it.",
     "Así te ven los demás usuarios y así apareces en los avisos. Para entrar sigues usando tu usuario.":

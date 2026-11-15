@@ -256,6 +256,7 @@ const TABS = ["prog", "eventos", "secciones", "conexiones", "cron", "ajustes"];
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
   if (!TABS.includes(t)) t = "prog";
+  if (t === "ajustes" && S.me && S.me.rol !== "admin") t = "prog";
   if (t === "cron" && S.me && S.me.rol === "lectura") t = "prog";
   if (S.tab === "conexiones" && t !== "conexiones") stopSesiones();
   S.tab = t;
@@ -1172,7 +1173,7 @@ function upload(url, fd, btn, bar) {
 /* ── Ajustes ─────────────────────────────────────────────────────────────── */
 $$("#setNav button").forEach((b) => (b.onclick = () => showSet(b.dataset.set)));
 function showSet(k) {
-  if (!isAdmin()) k = "seguridad";
+  if (!$(`#setForm fieldset[data-set="${k}"]`)) k = "nodo";       // «Mi cuenta» pasó al panel «Mi perfil»
   S.setSec = k;
   try { localStorage.setItem("hamna.set", k); } catch {}
   $$("#setNav button").forEach((b) => {
@@ -1181,10 +1182,9 @@ function showSet(k) {
       b.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
-  $("#saveBar").classList.toggle("hidden", ["seguridad", "sistema", "usuarios"].includes(k) || (k === "respaldo" && S.bkSub === "manual"));
+  $("#saveBar").classList.toggle("hidden", ["sistema", "usuarios"].includes(k) || (k === "respaldo" && S.bkSub === "manual"));
   if (k === "sistema") loadSistema();
   if (k === "respaldo") loadRespaldo();
-  if (k === "seguridad") loadMyAccount();
   if (k === "usuarios") loadUsers();
 }
 async function loadAjustes() {
@@ -1306,8 +1306,47 @@ $("#btnVoices").onclick = async () => {
 $("#btnMeNombre").onclick = async () => {
   try {
     const r = await run(() => api("api/mi-nombre", { method: "PUT", json: { nombre: $("#meNombre").value } }), "Nombre guardado");
-    S.me.nombre = r.nombre; applyRole(); loadMyAccount();
+    S.me.nombre = r.nombre; refreshMe();
   } catch {}
+};
+/* ── Mi perfil (todos los usuarios) ─────────────────────────────────────── */
+function openPerfil() { $("#perfil").classList.remove("hidden"); loadMyAccount(); }
+function closePerfil() { $("#perfil").classList.add("hidden"); $("#pwOld").value = $("#pwNew").value = ""; }
+$("#btnPerfil").onclick = openPerfil;
+$("#perfilClose").onclick = closePerfil;
+$("#perfil").addEventListener("mousedown", (e) => { if (e.target.id === "perfil") closePerfil(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("#modal").classList.contains("hidden")) closePerfil(); });
+/* Contenido del círculo: la foto si hay (con las iniciales si no carga) o las iniciales */
+function avatarInner(u) {
+  const ini = esc(initials(u || {}));
+  return u && u.foto ? `<img src="api/fotos/${u.id}?v=${encodeURIComponent(u.foto)}" alt="" data-i="${ini}" onerror="this.replaceWith(this.dataset.i)">` : ini;
+}
+function refreshMe() {
+  applyRole();
+  if ($("#cbAvatar")) { $("#cbAvatar").innerHTML = avatarInner(S.me); $("#cbUser").textContent = S.me.nombre || S.me.usuario; }
+  if (!$("#perfil").classList.contains("hidden")) loadMyAccount();
+}
+async function fotoJpeg(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("No pude leer la imagen")); i.src = url; });
+    const s = Math.min(img.naturalWidth, img.naturalHeight), N = 256, c = document.createElement("canvas");
+    c.width = c.height = N;
+    c.getContext("2d").drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, N, N);
+    return await new Promise((res) => c.toBlob(res, "image/jpeg", 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+$("#meFoto").onchange = async (e) => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const fd = new FormData(); fd.append("foto", await fotoJpeg(file), "foto.jpg");
+    const r = await api("api/mi-foto", { method: "POST", form: fd });
+    S.me.foto = r.foto; refreshMe(); toast("Foto guardada");
+  } catch (err) { toast(err.message, true); }
+};
+$("#btnFotoDel").onclick = async () => {
+  try { await run(() => api("api/mi-foto", { method: "DELETE" }), "Foto quitada"); S.me.foto = ""; refreshMe(); } catch {}
 };
 $("#btnPw").onclick = async () => {
   try {
@@ -1378,6 +1417,7 @@ async function startCollab(me) {
   $("#cbStation").textContent = (me && me.station) || "HAMNA Web";
   if (me && me.logo) { $("#cbLogo").src = me.logo; $("#cbLogo").classList.remove("hidden"); }
   $("#cbUser").textContent = S.me.nombre || S.me.usuario;
+  $("#cbAvatar").innerHTML = avatarInner(S.me);
   loadCollab();
 }
 const fechaCorta = (s) => {
@@ -1451,36 +1491,55 @@ $("#cbProg").onclick = async (e) => {
     ${ev.tipo ? `<p class="muted" style="margin:0 0 6px">${esc(ev.tipo)}</p>` : ""}
     ${ev.num_auto && ev.num ? `<p class="muted" style="margin:0 0 10px">🔢 ${esc(numTexto(ev.num))}</p>` : ""}
     <div class="totals"><span>Duración total <b>${fmt(tot)}</b></span><span>${ev.secciones.length} secciones</span></div>
-    <div class="cb-evsecs">${ev.secciones.map((s, i) => `<div class="sec-row ${s.mia ? "mia" : ""}">
+    <div class="cb-player">
+      <button type="button" class="btn primary sm" id="cbPlayAll">▶ Escuchar todo el evento</button>
+      <button type="button" class="btn sm hidden" id="cbStop">⏹ Detener</button>
+      <span class="muted" id="cbNow"></span>
+      <audio id="cbAudio" controls preload="none" class="hidden"></audio>
+    </div>
+    <div class="cb-evsecs">${ev.secciones.map((s, i) => `<div class="sec-row ${s.mia ? "mia" : ""}" data-i="${i}">
         <span class="n">${i + 1}</span>
         <span class="name"><span class="chip ${s.tipo}">${s.tipo}</span> ${esc(s.nombre)}${s.mia ? ' <span class="chip ok">Tu sección</span>' : ""}
-          <small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio"}</small></span></div>`).join("")}</div>
-    <p class="muted" style="font-size:.85rem;margin-top:12px">Solo puedes ver el orden y la duración; las demás secciones las maneja el administrador.</p>
+          <small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio"}</small></span>
+        ${s.tiene_audio ? `<button type="button" class="btn sm icon" data-play="${i}" title="Escuchar esta sección">▶</button>` : ""}</div>`).join("")}</div>
+    <p class="muted" style="font-size:.85rem;margin-top:12px">Puedes escuchar el evento, pero no cambiarlo: las demás secciones las maneja el administrador.</p>
     <div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal()">Cerrar</button></div>`);
+  cbPlayer(ev);
 };
-$("#cbLogout").onclick = logoutNow;
-$("#cbPw").onclick = () => {
-  openModal("Mi perfil", `<form id="cbPwForm">
-      <label>Mi nombre<input name="nombre" maxlength="60" value="${esc(S.me.nombre || "")}" placeholder="Pedro · XE2ABC">
-        <small>Así apareces para el administrador y en los avisos. Para entrar sigues usando «${esc(S.me.usuario)}».</small></label>
-      <h3>Cambiar contraseña</h3>
-      <p class="muted" style="margin:0 0 8px;font-size:.85rem">Déjalo vacío si no quieres cambiarla.</p>
-      <label>Contraseña actual<input type="password" name="actual" autocomplete="current-password"></label>
-      <label>Contraseña nueva<input type="password" name="nueva" autocomplete="new-password" minlength="8"><small>Al menos 8 caracteres.</small></label>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
-  $("#cbPwForm").onsubmit = async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    try {
-      if (f.nombre.value.trim() !== (S.me.nombre || "")) {
-        const r = await api("api/mi-nombre", { method: "PUT", json: { nombre: f.nombre.value } });
-        S.me.nombre = r.nombre; $("#cbUser").textContent = r.nombre || S.me.usuario;
-      }
-      if (f.nueva.value || f.actual.value) await api("api/ajustes/password", { method: "POST", json: { actual: f.actual.value, nueva: f.nueva.value } });
-      toast("Perfil guardado"); closeModal();
-    } catch (err) { toast(err.message, true); }
+/* Reproductor del colaborador: una sección o todo el evento en orden (con la pausa entre secciones) */
+function cbPlayer(ev) {
+  const a = $("#cbAudio"), secs = ev.secciones;
+  let cola = [], i = -1, espera = null;
+  const marcar = (k) => $$(".cb-evsecs .sec-row").forEach((r) => r.classList.toggle("playing", +r.dataset.i === k));
+  const parar = () => {
+    clearTimeout(espera); a.pause(); a.removeAttribute("src"); cola = []; i = -1;
+    marcar(-1); $("#cbNow").textContent = ""; $("#cbStop").classList.add("hidden"); a.classList.add("hidden");
   };
-};
+  const tocar = (k) => {
+    if (!a.isConnected) return;               // se cerró la ventana durante la pausa entre secciones
+    i = k;
+    const s = secs[cola[i]];
+    a.src = `api/mis-eventos/${ev.id}/secciones/${s.id}/audio`;
+    a.classList.remove("hidden"); $("#cbStop").classList.remove("hidden");
+    marcar(cola[i]);
+    $("#cbNow").textContent = cola.length > 1 ? `${cola[i] + 1}/${secs.length} · ${s.nombre}` : s.nombre;
+    a.play().catch(() => {});
+  };
+  a.onended = () => {
+    if (i + 1 < cola.length) espera = setTimeout(() => tocar(i + 1), (ev.pausa || 0) * 1000);
+    else parar();
+  };
+  a.onerror = () => { if (a.getAttribute("src")) { toast("No se pudo reproducir esta sección", true); a.onended(); } };
+  $("#cbPlayAll").onclick = () => {
+    parar();
+    cola = secs.map((s, k) => (s.tiene_audio ? k : -1)).filter((k) => k >= 0);
+    if (cola.length) tocar(0);
+  };
+  $("#cbStop").onclick = parar;
+  $$(".cb-evsecs [data-play]").forEach((b) => (b.onclick = () => { parar(); cola = [+b.dataset.play]; tocar(0); }));
+}
+$("#cbLogout").onclick = logoutNow;
+$("#cbPw").onclick = openPerfil;
 /* ── Salud del equipo ─────────────────────────────────────────────────────── */
 const SALUD_ICO = { ok: "✅", nd: "➖", aviso: "⚠️", grave: "❌" };
 function renderHealthBadge(worst) {
@@ -2283,7 +2342,9 @@ function applyRole() {
   const u = S.me || {};
   document.body.classList.remove("rol-admin", "rol-operador", "rol-lectura", "rol-colaborador");
   if (u.rol) document.body.classList.add("rol-" + u.rol);
-  $("#userAvatar").textContent = initials(u);
+  $("#userAvatar").innerHTML = avatarInner(u);
+  // Ajustes es del nodo: solo el admin. Lo personal está en «Mi perfil».
+  $('#tabs [data-tab="ajustes"]').classList.toggle("hidden", u.rol !== "admin");
   $("#userName").textContent = u.nombre || u.usuario || "";
   $("#userRole").textContent = (u.usuario ? u.usuario + " · " : "") + (ROL_TXT[u.rol] || "");
 }
@@ -2327,7 +2388,8 @@ $("#meLang").onchange = async (e) => {
 async function loadMyAccount() {
   const u = S.me || {};
   $("#meLang").value = window.HAMNA_LANG;
-  $("#meAvatar").textContent = initials(u);
+  $("#meAvatar").innerHTML = avatarInner(u);
+  $("#btnFotoDel").classList.toggle("hidden", !u.foto);
   $("#meName").textContent = u.nombre || u.usuario || "";
   $("#meNombre").value = u.nombre || "";
   $("#meRole").textContent = `${u.usuario || ""} · ${ROL_TXT[u.rol] || ""}`;
@@ -2349,7 +2411,7 @@ async function loadUsers() {
   if (r.usuarios.some((u) => u.rol === "colaborador") && !(S.secciones || []).length) { try { S.secciones = await api("api/secciones"); } catch {} }
   const secNom = (id) => ((S.secciones || []).find((s) => s.id === id) || {}).nombre || "#" + id;
   $("#userList").innerHTML = r.usuarios.map((u) => `<div class="urow ${u.activo ? "" : "off"}">
-      <div class="avatar">${esc(initials(u))}</div>
+      <div class="avatar">${avatarInner(u)}</div>
       <div class="uinfo"><b>${esc(u.nombre || u.usuario)}</b>${u.id === r.yo ? ' <span class="chip ok">Tú</span>' : ""}
         <small>${esc(u.usuario)} · ${u.ultimo_acceso ? "último acceso " + esc(u.ultimo_acceso.slice(0, 16)) : "nunca ha entrado"}${u.sesiones ? ` · ${u.sesiones} sesión${u.sesiones > 1 ? "es" : ""} abierta${u.sesiones > 1 ? "s" : ""}` : ""}</small>
         ${u.rol === "colaborador" ? `<small>📤 ${u.secciones.length ? u.secciones.map((i) => esc(secNom(i))).join(", ") : "Sin secciones asignadas"}</small>` : ""}</div>
@@ -2426,7 +2488,8 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-close-ses]"); if (!b) return;
   try {
     await run(() => api("api/mis-sesiones/" + b.dataset.closeSes, { method: "DELETE" }), "Sesión cerrada");
-    if (S.setSec === "usuarios") loadUsers(); else loadMyAccount();
+    if (!$("#perfil").classList.contains("hidden")) loadMyAccount();
+    if (S.tab === "ajustes" && S.setSec === "usuarios") loadUsers();
   } catch {}
 });
 $("#btnCloseOthers").onclick = async () => {

@@ -119,7 +119,45 @@ def me(req):
     return jsonr({"auth": req.authed, "version": VERSION,
                   "station": settings.get("station_name") or "",
                   "logo": _logo_url(),
-                  "usuario": {k: u.get(k) for k in ("id", "usuario", "nombre", "rol", "rol_nombre", "idioma")} if u else None})
+                  "usuario": {k: u.get(k) for k in ("id", "usuario", "nombre", "rol", "rol_nombre", "idioma", "foto")} if u else None})
+
+
+def _foto_path(uid):
+    return paths.data_dir() / "fotos" / "{}.jpg".format(int(uid))
+
+
+@app.route("/api/mi-foto", ("POST", "DELETE"), rol="colaborador")
+def mi_foto(req):
+    """Foto de perfil: el navegador ya la manda recortada a 256×256 en JPEG."""
+    uid = req.user["id"]
+    p = _foto_path(uid)
+    if req.method == "DELETE":
+        paths.rm(p)
+        auth.set_photo(uid, "")
+        return ok(foto="")
+    up = req.files.get("foto")
+    if not up:
+        raise ValueError("Elige una imagen")
+    with open(up.path, "rb") as f:
+        cabeza = f.read(3)
+    if cabeza != b"\xff\xd8\xff":
+        raise ValueError("La foto debe ser JPEG")
+    if os.path.getsize(up.path) > 2 * 1024 * 1024:
+        raise ValueError("La foto es muy grande")
+    os.makedirs(str(p.parent), exist_ok=True)
+    shutil.move(up.path, str(p))
+    up.path = None
+    v = str(int(time.time()))
+    auth.set_photo(uid, v)
+    return ok(foto=v)
+
+
+@app.route("/api/fotos/<int:uid>", rol="colaborador")
+def foto_usuario(req, uid):
+    p = _foto_path(uid)
+    if not p.is_file():
+        raise HTTPError(404)
+    return send_file(p, "image/jpeg")
 
 
 @app.route("/api/mi-nombre", ("PUT",), rol="colaborador")
@@ -171,6 +209,7 @@ def usuarios_editar(req, uid):
 @app.route("/api/usuarios/<int:uid>", ("DELETE",), rol="admin")
 def usuarios_borrar(req, uid):
     auth.delete_user(uid, req.user["id"])
+    paths.rm(_foto_path(uid))
     log.info("%s borró el usuario #%s", req.user["usuario"], uid)
     return ok()
 
@@ -517,11 +556,23 @@ def mi_evento(req, eid):
     secs = []
     for s in db.get_secciones_by_evento(eid):
         o = _sec_out(s)
-        secs.append({"nombre": s["nombre"], "tipo": s["tipo"], "duracion": float(s.get("duracion") or 0),
+        secs.append({"id": s["id"], "nombre": s["nombre"], "tipo": s["tipo"], "duracion": float(s.get("duracion") or 0),
                      "tiene_audio": o["tiene_audio"], "contabilizable": bool(s.get("contabilizable")),
                      "mia": s["id"] in mias})
-    return jsonr({"nombre": ev["nombre"], "tipo": ev.get("tipo") or "", "num": ev.get("num"),
-                  "numero": ev.get("numero"), "num_auto": ev.get("num_auto"), "secciones": secs})
+    return jsonr({"id": eid, "nombre": ev["nombre"], "tipo": ev.get("tipo") or "", "num": ev.get("num"),
+                  "numero": ev.get("numero"), "num_auto": ev.get("num_auto"), "secciones": secs,
+                  "pausa": float(settings.load().get("section_gap", 3) or 0)})
+
+
+@app.route("/api/mis-eventos/<int:eid>/secciones/<int:sid>/audio", rol="colaborador")
+def mi_evento_audio(req, eid, sid):
+    """Escuchar (solo escuchar) cualquier sección del evento donde sale la colaboración."""
+    if eid not in _mis_eventos(req):
+        raise HTTPError(404)
+    s = next((x for x in db.get_secciones_by_evento(eid) if x["id"] == sid), None)
+    if not s or not s.get("ruta_archivo") or not (paths.audios_dir() / s["ruta_archivo"]).is_file():
+        raise HTTPError(404)
+    return _browser_file(paths.audios_dir() / s["ruta_archivo"])
 
 
 @app.route("/api/mis-secciones/<int:sid>/audio", rol="colaborador")

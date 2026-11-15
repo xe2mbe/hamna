@@ -38,7 +38,7 @@ log = logging.getLogger("hamna.respaldo")
 MANIFEST = "hamna-respaldo.json"
 FORMATO = 1
 LOGO_RE = re.compile(r"^logo_[A-Za-z0-9]+\.(png|jpg|webp|gif)$")
-CARPETAS = ("sonidos", "audios")
+CARPETAS = ("sonidos", "audios", "fotos")
 # Ajustes que describen a ESTE nodo; se conservan al restaurar un respaldo
 # de otro nodo si así se pide. secret_key nunca se toma del respaldo.
 NODE_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "station_name", "logo_file"}
@@ -318,7 +318,7 @@ def restore(archivo, conservar_nodo, usuario):
             cur_logo = cur.get("logo_file") or ""
             if cur_logo and not conservar_nodo and (data / cur_logo).is_file():
                 os.replace(str(data / cur_logo), str(old / cur_logo))
-            folders = ["sonidos"] + (["audios"] if incluye_audios else [])
+            folders = ["sonidos", "fotos"] + (["audios"] if incluye_audios else [])
             for folder in folders:
                 if (data / folder).is_dir():
                     os.replace(str(data / folder), str(old / folder))

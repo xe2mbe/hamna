@@ -69,6 +69,8 @@ def init():
         cols = [r[1] for r in c.execute("PRAGMA table_info(usuarios)")]
         if "idioma" not in cols:
             c.execute("ALTER TABLE usuarios ADD COLUMN idioma TEXT")
+        if "foto" not in cols:      # versión de la foto de perfil ('' = sin foto); el archivo va en fotos/<id>.jpg
+            c.execute("ALTER TABLE usuarios ADD COLUMN foto TEXT DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS usuario_secciones (
                          usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
                          seccion_id INTEGER NOT NULL REFERENCES secciones(id) ON DELETE CASCADE,
@@ -220,7 +222,7 @@ def revoke_user(usuario_id, except_sid=None):
 
 # ── Usuarios ─────────────────────────────────────────────────────────────────
 def users():
-    out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso,
+    out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso, u.foto,
                        (SELECT COUNT(*) FROM sesiones_web s WHERE s.usuario_id=u.id AND s.expira > ?) AS sesiones
                      FROM usuarios u ORDER BY u.usuario COLLATE NOCASE""", (time.time(),))
     secs = {}
@@ -230,6 +232,10 @@ def users():
     for u in out:
         u["secciones"] = secs.get(u["id"], [])
     return out
+
+
+def set_photo(uid, version):
+    db.execute("UPDATE usuarios SET foto=? WHERE id=?", (version or "", uid))
 
 
 def user_sections(uid):
