@@ -57,6 +57,12 @@
     "Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.":
       "Each device or browser you sign in from is a session. It closes by itself if you don't use it for 30 days (and after 90 days at most). If you don't recognize one, close it with its button.",
     "Comandos y botones": "Commands and buttons",
+    "📲 Por Telegram a los administradores": "📲 By Telegram to the administrators",
+    "⚠ Primero configura el bot de Telegram en Ajustes → Avisos.": "⚠ First set up the Telegram bot in Settings → Alerts.",
+    "⚠ Ningún administrador tiene su Telegram vinculado. Vincúlalo en Mi perfil (clic en tu foto o nombre).":
+      "⚠ No administrator has linked their Telegram. Link it in My profile (click your photo or name).",
+    "(uno o varios)": "(one or more)",
+    "No hay destinos configurados (otro nodo, nube o Telegram)": "No destinations set up (another node, cloud or Telegram)",
     "📩 Mensajes privados al colaborador: le recuerdo subir su audio si no lo ha cambiado desde la última emisión, y le aviso cuando su sección sale al aire. También puede mandarme su audio por Telegram.":
       "📩 Private messages to contributors: I remind them to upload their audio if they haven't changed it since the last broadcast, and tell them when their section airs. They can also send me their audio on Telegram.",
     "Recordarle con (días de anticipación)": "Remind them (days in advance)",

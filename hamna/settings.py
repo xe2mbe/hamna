@@ -69,7 +69,8 @@ DEFAULTS = {
     "tg_on_health": True,
     "tg_on_collab": True,
     "tg_bot_on": True,
-    "tg_collab_dm": True,         # mensajes privados al colaborador (recordatorio y «salió al aire»)
+    "tg_collab_dm": True,
+    "ab_tg_on": False,            # respaldo diario (sin audios) a los administradores por Telegram         # mensajes privados al colaborador (recordatorio y «salió al aire»)
     "tg_recordar_dias": 2,        # días antes de la emisión para recordarle (0 = no recordar)            # el bot responde comandos y botones (solo un nodo por bot)
 
     # Respaldo automático (ver autobackup.py)

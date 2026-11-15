@@ -1365,7 +1365,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "tg_recordar_dias": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
@@ -1482,7 +1482,7 @@ def autorespaldo_info(req):
     return jsonr({"estado": st, "corriendo": autobackup.running(),
                   "destinos": autobackup.destinations(cfg), "rclone": autobackup.rclone_version(),
                   "nube": autobackup.cloud_info(), "nube_carpeta": autobackup._cloud_dir(cfg).split(":", 1)[1],
-                  "audios_cambiaron": autobackup.audios_changed(st)})
+                  "audios_cambiaron": autobackup.audios_changed(st), "telegram": autobackup.tg_info(cfg)})
 
 
 @app.route("/api/autorespaldo/ahora", ("POST",), rol="admin")

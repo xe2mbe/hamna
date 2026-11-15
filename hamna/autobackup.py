@@ -386,12 +386,54 @@ def send_to_cloud(path, name, cfg):
 # ═════════════════════════════════════════════════════════════════════════════
 #  Correr
 # ═════════════════════════════════════════════════════════════════════════════
+TG_MAX = 49 * 1024 * 1024       # Telegram: hasta 50 MB por archivo de un bot
+
+
+def tg_admins():
+    """Administradores activos con Telegram vinculado (el respaldo va solo a ellos, en privado)."""
+    return db.rows("SELECT id, usuario, nombre, tg_id, tg_nombre FROM usuarios "
+                   "WHERE rol='admin' AND activo=1 AND tg_id<>''")
+
+
+def tg_info(cfg=None):
+    cfg = cfg or settings.load()
+    return {"configurado": bool(cfg.get("tg_enabled") and cfg.get("tg_token")),
+            "admins": [a.get("nombre") or a["usuario"] for a in tg_admins()]}
+
+
+def send_to_telegram(path, name, cfg):
+    admins = tg_admins()
+    if not admins:
+        raise RuntimeError("Ningún administrador tiene su Telegram vinculado (Mi perfil → Vincular Telegram)")
+    size = os.path.getsize(path)
+    if size > TG_MAX:
+        raise RuntimeError("El respaldo sin audios pesa {:.0f} MB y Telegram acepta hasta 50 MB".format(size / 1048576.0))
+    est = cfg.get("station_name") or "HAMNA"
+    cap = ("💾 <b>Respaldo de {}</b>{} · {} · {:.1f} MB (sin audios)\n"
+           "Guárdalo: sirve para restaurar en Ajustes → Respaldo → Descargar y restaurar. "
+           "Contiene claves y contraseñas cifradas: no lo reenvíes.").format(
+        notify.esc(est), " · nodo " + notify.esc(cfg.get("node")) if cfg.get("node") else "",
+        dt.datetime.now().strftime("%d/%m/%Y %H:%M"), size / 1048576.0)
+    token, ok, fallas = cfg["tg_token"].strip(), [], []
+    for a in admins:
+        try:
+            notify.send_document(token, a["tg_id"], path, name, cap)
+            ok.append(a.get("tg_nombre") or a["usuario"])
+        except Exception as e:
+            fallas.append("{}: {}".format(a["usuario"], e))
+    if not ok:
+        raise RuntimeError("; ".join(fallas))
+    return "a " + ", ".join(ok) + (" (falló: " + "; ".join(fallas) + ")" if fallas else "")
+
+
 def destinations(cfg):
     out = []
     if cfg.get("ab_node_on") and cfg.get("ab_node_url") and cfg.get("ab_node_token"):
         out.append("nodo")
     if cfg.get("ab_cloud_on") and cloud_info():
         out.append("nube")
+    if cfg.get("ab_tg_on") and cfg.get("tg_enabled") and cfg.get("tg_token"):
+        out.append("telegram")
     return out
 
 
@@ -403,7 +445,7 @@ def run(origen="manual", audios="auto"):
         cfg = settings.load()
         dests = destinations(cfg)
         if not dests:
-            raise RuntimeError("No hay destinos configurados (otro nodo o nube)")
+            raise RuntimeError("No hay destinos configurados (otro nodo, nube o Telegram)")
         st = load_state()
         fp = audios_fingerprint()
         con = audios == "si" or (audios == "auto" and fp != st.get("fp_audios"))
@@ -425,7 +467,24 @@ def run(origen="manual", audios="auto"):
         res = {}
         for d in dests:
             try:
-                where = send_to_node(tmp, cfg, con) if d == "nodo" else send_to_cloud(tmp, name, cfg)
+                if d == "nodo":
+                    where = send_to_node(tmp, cfg, con)
+                elif d == "nube":
+                    where = send_to_cloud(tmp, name, cfg)
+                else:
+                    # A Telegram siempre sin audios (límite de 50 MB): si este lleva audios, se arma otro
+                    if con:
+                        name_tg = backup.filename(False)
+                        tmp_tg = str(paths.tmp_dir() / ("autorespaldo_tg_" + name_tg))
+                        try:
+                            with open(tmp_tg, "wb") as f:
+                                for chunk in backup.stream(False, "automático"):
+                                    f.write(chunk)
+                            where = send_to_telegram(tmp_tg, name_tg, cfg)
+                        finally:
+                            paths.rm(tmp_tg)
+                    else:
+                        where = send_to_telegram(tmp, name, cfg)
                 res[d] = {"ok": True, "detalle": where}
             except Exception as e:
                 log.warning("Respaldo a %s falló: %s", d, e)
@@ -444,7 +503,7 @@ def run(origen="manual", audios="auto"):
         log.info("Respaldo automático (%s): %s, %.1f MB, %s", origen, "con audios" if con else "sin audios",
                  size / 1048576.0, ", ".join("{} {}".format(k, "OK" if v["ok"] else "ERROR") for k, v in res.items()))
         if not all_ok:
-            fallas = "\n".join("• {}: {}".format("otro nodo" if k == "nodo" else "nube", notify.esc(v["detalle"]))
+            fallas = "\n".join("• {}: {}".format({"nodo": "otro nodo", "nube": "nube"}.get(k, k), notify.esc(v["detalle"]))
                                for k, v in res.items() if not v["ok"])
             notify.send("respaldo", "❌ Falló el respaldo automático\n" + fallas, dedupe="respaldo")
         return st["ultimo"]

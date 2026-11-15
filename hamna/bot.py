@@ -247,7 +247,10 @@ def _ayuda(user):
          "/proximo · los siguientes eventos"]
     if n >= auth.ROLES["lectura"]:
         t += ["/salud · temperatura, voltaje, disco y memoria", "/historial · las últimas emisiones"]
-    if _secciones_audio(user):
+    if _es_admin(user):
+        t += ["", "📲 <b>Mándame un audio o nota de voz</b> y te pregunto en qué sección lo pongo "
+                  "(cualquiera; primero te ofrezco las de los próximos eventos)."]
+    elif _secciones_audio(user):
         t += ["", "📲 <b>Mándame un audio o nota de voz</b> y lo pongo en tu sección ({}).".format(
             ", ".join("«" + notify.esc(s["nombre"]) + "»" for s in _secciones_audio(user)))]
     if n >= auth.ROLES["operador"]:
@@ -455,7 +458,7 @@ def _boton(token, q):
     user = auth.user_by_tg((q.get("from") or {}).get("id"))
     if not user:
         return avisa("Primero vincula tu Telegram en HAMNA → Mi perfil.", True)
-    if data.split(":")[0] in ("up", "upx", "ant"):
+    if data.split(":")[0] in ("up", "upx", "ant", "upl"):
         return _boton_audio(token, q, user, data, avisa, teclas)
     if _nivel(user) < auth.ROLES["operador"]:
         return avisa("Solo un operador o el administrador pueden usar estos botones.", True)
@@ -523,13 +526,60 @@ TIPOS = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/ogg": ".ogg", "audio/
          "audio/aac": ".aac", "audio/flac": ".flac", "audio/x-flac": ".flac"}
 
 
+def _es_admin(user):
+    return bool(user) and user.get("rol") == "admin"
+
+
 def _secciones_audio(user):
+    """Secciones de audio que puede cambiar: el admin, todas; los demás, las asignadas."""
+    if _es_admin(user):
+        return [s for s in db.get_secciones() if s["tipo"] in ("Audio", "Sonido")]
     out = []
     for sid in auth.user_sections(user["id"]) if user else []:
         s = db.get_seccion(sid)
         if s and s["tipo"] in ("Audio", "Sonido"):
             out.append(s)
     return out
+
+
+def _puede(user, sid):
+    if _es_admin(user):
+        s = db.get_seccion(sid)
+        return bool(s) and s["tipo"] in ("Audio", "Sonido")
+    return sid in auth.user_sections(user["id"])
+
+
+POR_PAGINA = 10
+
+
+def _teclado_proximas(key):
+    """Admin: primero las secciones de audio de los próximos eventos, luego «todas»."""
+    vistos, filas = set(), []
+    for _t, row in _proximos(5):
+        for s in db.get_secciones_by_evento(row["evento_id"]):
+            if s["tipo"] in ("Audio", "Sonido") and s["id"] not in vistos and len(filas) < 8:
+                vistos.add(s["id"])
+                filas.append([("🎙 {} · {}".format(s["nombre"][:28], (row.get("evento_nombre") or "")[:18]),
+                               "up:{}:{}".format(key, s["id"]))])
+    filas.append([("📚 Todas las secciones", "upl:{}:0".format(key))])
+    filas.append([("Cancelar", "upx:" + key)])
+    return filas
+
+
+def _teclado_todas(key, pag, secs):
+    n = max(1, (len(secs) + POR_PAGINA - 1) // POR_PAGINA)
+    pag = max(0, min(pag, n - 1))
+    filas = [[("🎙 " + s["nombre"][:40], "up:{}:{}".format(key, s["id"]))]
+             for s in secs[pag * POR_PAGINA:(pag + 1) * POR_PAGINA]]
+    nav = []
+    if pag > 0:
+        nav.append(("◀ Anteriores", "upl:{}:{}".format(key, pag - 1)))
+    if pag < n - 1:
+        nav.append(("Siguientes ▶", "upl:{}:{}".format(key, pag + 1)))
+    if nav:
+        filas.append(nav)
+    filas.append([("Cancelar", "upx:" + key)])
+    return filas
 
 
 def _audio_recibido(token, m, user):
@@ -566,7 +616,12 @@ def _audio_recibido(token, m, user):
                       "nombre": nombre, "exp": now + 30 * 60}
     dur = f.get("duration")
     desc = "«{}»{}".format(notify.esc(nombre), " ({})".format(_hm(dur)) if dur else "")
-    if len(secs) == 1:
+    if _es_admin(user):
+        filas = _teclado_proximas(key)
+        _responder(token, chat, "📥 Recibí {}. ¿En cuál sección lo pongo?\n{}".format(
+            desc, "Te muestro primero las de los próximos eventos." if len(filas) > 2 else ""),
+            botones=filas if len(filas) > 2 else _teclado_todas(key, 0, secs), a=mid)
+    elif len(secs) == 1:
         _responder(token, chat, "📥 Recibí {}. ¿Lo pongo como el audio nuevo de <b>{}</b>?\n"
                                 "El audio que tiene ahora queda como versión anterior.".format(desc, notify.esc(secs[0]["nombre"])),
                    botones=[[("✅ Sí, ponerlo", "up:{}:{}".format(key, secs[0]["id"])), ("Cancelar", "upx:" + key)]], a=mid)
@@ -582,7 +637,7 @@ def _boton_audio(token, q, user, data, avisa, teclas):
     mid = (q.get("message") or {}).get("message_id")
     if p[0] == "ant":
         sid = int(p[1])
-        if sid not in auth.user_sections(user["id"]):
+        if not _puede(user, sid):
             return avisa("Esa sección no es tuya.", True)
         from . import app as webapp
         try:
@@ -607,8 +662,11 @@ def _boton_audio(token, q, user, data, avisa, teclas):
             _pend.pop(p[1], None)
         teclas(None)
         return avisa("Cancelado: no cambié nada.")
+    if p[0] == "upl":                               # admin: lista completa, por páginas
+        teclas(_teclado_todas(p[1], int(p[2]), sorted(_secciones_audio(user), key=lambda s: s["nombre"].lower())))
+        return avisa("Página {}".format(int(p[2]) + 1))
     sid = int(p[2])
-    if sid not in auth.user_sections(user["id"]):
+    if not _puede(user, sid):
         return avisa("Esa sección no es tuya.", True)
     with _lock:
         _pend.pop(p[1], None)

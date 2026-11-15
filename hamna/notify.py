@@ -75,6 +75,35 @@ def _call(token, method, params, timeout=15):
     return out.get("result")
 
 
+def send_document(token, chat, path, filename, caption="", timeout=300):
+    """Manda un archivo al chat (Telegram acepta hasta 50 MB por bot)."""
+    bd = "hamna" + os.urandom(12).hex()
+    head = []
+    for k, v in (("chat_id", str(chat)), ("caption", caption), ("parse_mode", "HTML")):
+        head.append('--{}\r\nContent-Disposition: form-data; name="{}"\r\n\r\n{}\r\n'.format(bd, k, v))
+    head.append('--{}\r\nContent-Disposition: form-data; name="document"; filename="{}"\r\n'
+                'Content-Type: application/gzip\r\n\r\n'.format(bd, filename))
+    pre = "".join(head).encode("utf-8")
+    post = "\r\n--{}--\r\n".format(bd).encode()
+    with open(path, "rb") as f:
+        body = pre + f.read() + post
+    req = urllib.request.Request(API.format(token, "sendDocument"), data=body, headers={
+        "User-Agent": "HAMNA-Web", "Content-Type": "multipart/form-data; boundary=" + bd})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            out = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        try:
+            out = json.loads(e.read().decode("utf-8"))
+        except Exception:
+            out = {"ok": False, "description": "HTTP {}".format(e.code)}
+    except Exception as e:
+        raise RuntimeError("No pude conectar con Telegram: {}".format(e))
+    if not out.get("ok"):
+        raise RuntimeError("Telegram respondió: {}".format(out.get("description") or "error"))
+    return out.get("result")
+
+
 def send_now(text, token=None, chat=None, botones=None):
     """Envía ya (para la prueba). Devuelve nada o lanza RuntimeError."""
     cfg = settings.load()

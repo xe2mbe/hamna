@@ -1679,7 +1679,7 @@ $("#btnRestore").onclick = async () => {
 };
 /* ── Respaldo automático ─────────────────────────────────────────────────── */
 const fechaTs = (t) => (t ? new Date(t * 1000).toLocaleString() : "—");
-const DEST = { nodo: "otro nodo", nube: "nube" };
+const DEST = { nodo: "otro nodo", nube: "nube", telegram: "Telegram" };
 async function loadAutoBackup() {
   let d;
   try { d = await api("api/autorespaldo"); } catch (e) { $("#abStatus").textContent = e.message; return; }
@@ -1696,6 +1696,10 @@ async function loadAutoBackup() {
   html += `<div class="muted" style="font-size:.84rem;margin-top:4px">${d.audios_cambiaron ? "Los audios cambiaron desde el último respaldo con audios: el próximo los incluirá." : "Los audios no han cambiado desde el último respaldo con audios."}</div>`;
   $("#abStatus").innerHTML = html;
   renderCloud(d);
+  const t = d.telegram || {};
+  $("#abTg").innerHTML = !t.configurado ? "⚠ Primero configura el bot de Telegram en Ajustes → Avisos."
+    : t.admins.length ? `✅ Llega a: <b>${t.admins.map(esc).join(", ")}</b>`
+    : "⚠ Ningún administrador tiene su Telegram vinculado. Vincúlalo en Mi perfil (clic en tu foto o nombre).";
   clearTimeout(loadAutoBackup._t);
   if (d.corriendo) loadAutoBackup._t = setTimeout(() => { if (S.setSec === "respaldo") loadAutoBackup(); }, 3000);
 }

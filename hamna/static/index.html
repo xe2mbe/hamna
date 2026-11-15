@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.23.0">
+<link rel="stylesheet" href="static/app.css?v=1.24.0">
 </head>
 <body>
 
@@ -398,7 +398,7 @@
                 </div>
               </div>
 
-              <h4 class="bk-sub">2. Adónde se manda <span class="muted">(uno o los dos)</span></h4>
+              <h4 class="bk-sub">2. Adónde se manda <span class="muted">(uno o varios)</span></h4>
               <div class="grid2 bk-dest">
                 <div class="bk-card">
                   <label class="check bk-title"><input type="checkbox" name="ab_node_on"> 🖥️ A otro nodo HAMNA</label>
@@ -413,6 +413,11 @@
                   <div id="abCloud"></div>
                   <label>Carpeta en la nube<input name="ab_cloud_folder" placeholder="HAMNA"><small>Dentro de ella se crea una carpeta con el número de este nodo.</small></label>
                   <label>Respaldos sin audios a conservar en la nube<input type="number" name="ab_keep" min="1" max="60"><small>De los que traen audios se conservan los 2 últimos.</small></label>
+                </div>
+                <div class="bk-card">
+                  <label class="check bk-title"><input type="checkbox" name="ab_tg_on"> 📲 Por Telegram a los administradores</label>
+                  <p class="muted bk-note">Cada día te llega el respaldo <b>sin audios</b> (pesa poco) en tu chat privado con el bot. Nunca va al grupo de avisos: lleva claves y contraseñas cifradas.</p>
+                  <div id="abTg" class="muted bk-note"></div>
                 </div>
               </div>
             </div>
@@ -535,7 +540,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.23.0"></script>
-<script src="static/app.js?v=1.23.0"></script>
+<script src="static/i18n.js?v=1.24.0"></script>
+<script src="static/app.js?v=1.24.0"></script>
 </body>
 </html>

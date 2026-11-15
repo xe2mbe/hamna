@@ -644,7 +644,7 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
 .bk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .bk-head h4 { margin: 0; }
 .bk-sub { margin: 4px 0 10px; }
-.bk-dest { align-items: stretch; }
+.bk-dest { align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .bk-dest .bk-card { margin-bottom: 0; }
 .bk-title { font-weight: 600; }
 .bk-note { font-size: .86rem; margin: 2px 0 10px; }
