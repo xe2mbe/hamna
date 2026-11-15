@@ -33,7 +33,10 @@ VARIABLES = [
     ("{pausa_duracion}", "Duración de la pausa"),
     ("{pausa_alerta}", "Aviso antes de la pausa"),
     ("{evento}", "Nombre del evento"),
-    ("{numero}", "Número de edición del evento"),
+    ("{numero}", "Número de edición del evento (la emisión global si es automática)"),
+    ("{emision}", "Número de emisión global (numeración automática)"),
+    ("{emision_anio}", "Número de emisión del año: se reinicia cada 1 de enero"),
+    ("{anio}", "Año de la emisión"),
     ("{num_secciones}", "Secciones contabilizables del evento"),
     ("{duracion_total}", "Duración total del evento"),
     ("{dur_contabilizable}", "Duración de las secciones contabilizables"),
@@ -64,8 +67,9 @@ def resolve_variables(text, cfg, ctx=None):
         "{pausa_duracion}": fmt_seg(cfg.get("pause_duration", 10)),
         "{pausa_alerta}": fmt_seg(cfg.get("pause_alert_before", 10)),
         "{nodo}": " ".join(str(cfg.get("node", ""))),
+        "{anio}": str(ctx.get("anio") or now.year),
     }
-    for k in ("titulo", "descripcion", "evento", "numero", "num_secciones",
+    for k in ("titulo", "descripcion", "evento", "numero", "emision", "emision_anio", "num_secciones",
               "duracion_total", "dur_contabilizable"):
         rep["{" + k + "}"] = str(ctx.get(k, "") or "")
     for token, value in rep.items():
@@ -76,11 +80,17 @@ def resolve_variables(text, cfg, ctx=None):
 def event_context(evento, secs):
     if not evento:
         return {}
+    from . import numeracion
+    if evento.get("num_auto") and "num" not in evento:
+        evento = numeracion.aplicar(evento)
     dur_t = sum(float(s.get("duracion") or 0) for s in secs)
     cont = [s for s in secs if s.get("contabilizable", 1)]
     return {
         "evento": evento.get("nombre", ""),
         "numero": evento.get("numero") or "",
+        "emision": evento.get("numero") or "",
+        "emision_anio": evento.get("emision_anio") or "",
+        "anio": evento.get("anio") or "",
         "num_secciones": str(len(cont)),
         "duracion_total": fmt_seg(dur_t),
         "dur_contabilizable": fmt_seg(sum(float(s.get("duracion") or 0) for s in cont)),

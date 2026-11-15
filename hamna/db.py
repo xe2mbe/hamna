@@ -119,6 +119,12 @@ def init_db():
         cols = [r[1] for r in c.execute("PRAGMA table_info(programacion)")]
         if "zona" not in cols:
             c.execute("ALTER TABLE programacion ADD COLUMN zona TEXT DEFAULT ''")
+        # Numeración automática de emisiones (ver numeracion.py)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(eventos)")]
+        if "num_auto" not in cols:
+            c.execute("ALTER TABLE eventos ADD COLUMN num_auto INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE eventos ADD COLUMN num_ref_fecha TEXT DEFAULT ''")
+            c.execute("ALTER TABLE eventos ADD COLUMN num_ref_global INTEGER")
         if c.execute("SELECT COUNT(*) FROM eventos_type").fetchone()[0] == 0:
             c.executemany("INSERT INTO eventos_type (nombre) VALUES (?)", [
                 ("Transmisión en Vivo",), ("Grabación",),
@@ -194,7 +200,7 @@ def delete_seccion(sid):
 def get_eventos():
     return rows("""
         SELECT e.id, e.nombre, e.numero, e.tipo_evento_id, et.nombre AS tipo,
-               e.creado_en,
+               e.creado_en, e.num_auto, e.num_ref_fecha, e.num_ref_global,
                (SELECT COUNT(*) FROM evento_secciones es
                  WHERE es.evento_id = e.id) AS num_secciones,
                (SELECT COALESCE(SUM(s.duracion),0) FROM evento_secciones es
@@ -209,7 +215,8 @@ def get_eventos():
 
 def get_evento(eid):
     return row("""
-        SELECT e.id, e.nombre, e.numero, e.tipo_evento_id, et.nombre AS tipo
+        SELECT e.id, e.nombre, e.numero, e.tipo_evento_id, et.nombre AS tipo,
+               e.num_auto, e.num_ref_fecha, e.num_ref_global
         FROM eventos e LEFT JOIN eventos_type et ON et.id = e.tipo_evento_id
         WHERE e.id=?""", (eid,))
 
@@ -223,6 +230,11 @@ def insert_evento(nombre, tipo_evento_id=None, numero=None):
 def update_evento(eid, nombre, tipo_evento_id=None, numero=None):
     execute("UPDATE eventos SET nombre=?, tipo_evento_id=?, numero=? WHERE id=?",
             (nombre, tipo_evento_id, numero, eid))
+
+
+def set_numeracion(eid, auto, ref_fecha, ref_global):
+    execute("UPDATE eventos SET num_auto=?, num_ref_fecha=?, num_ref_global=? WHERE id=?",
+            (1 if auto else 0, ref_fecha or "", ref_global, eid))
 
 
 def delete_evento(eid):

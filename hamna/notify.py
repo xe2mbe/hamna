@@ -152,6 +152,8 @@ def _title(ev):
     t = "<b>{}</b>".format(esc(ev.get("nombre")))
     if ev.get("numero"):
         t += " #{}".format(esc(ev["numero"]))
+    if ev.get("emision_anio"):
+        t += " · {} #{}".format(esc(ev.get("anio")), esc(ev["emision_anio"]))
     return t
 
 

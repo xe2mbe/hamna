@@ -11,7 +11,7 @@ import os
 import threading
 import time
 
-from . import db, paths
+from . import db, numeracion, paths
 
 _hash_lock = threading.Lock()
 _hash_cache = {}          # (ruta, mtime, tamaño) -> sha256
@@ -99,7 +99,7 @@ def payload(evento_id):
             "duracion": s.get("duracion") or 0,
             "archivo": {"sha256": file_sha(p), "tam": p.stat().st_size, "ext": p.suffix.lower()} if p else None,
         })
-    return {"evento": {"nombre": ev["nombre"], "numero": ev.get("numero")}, "secciones": out}
+    return {"evento": {"nombre": ev["nombre"], "numero": numeracion.aplicar(ev).get("numero")}, "secciones": out}
 
 
 def file_for(evento_id, seccion_id):

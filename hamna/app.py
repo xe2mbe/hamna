@@ -13,7 +13,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -468,7 +468,7 @@ def tts_preview(req):
         raise ValueError("Escribe algún texto")
     cfg = settings.load()
     ctx = {"titulo": b.get("titulo") or "", "descripcion": b.get("descripcion") or "",
-           "evento": "Evento de prueba", "numero": "1"}
+           "evento": "Evento de prueba", "numero": "92", "emision": "92", "emision_anio": "46"}
     src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx)
     if not audio.can_play_in_browser(src):
         src = audio.prepare(src, None)
@@ -487,7 +487,8 @@ def tmp_file(req, carpeta, name):
 # ── Eventos ──────────────────────────────────────────────────────────────────
 @app.route("/api/eventos")
 def eventos(req):
-    return jsonr({"eventos": db.get_eventos(), "tipos": db.get_eventos_types()})
+    evs = [numeracion.aplicar(e) for e in db.get_eventos()]
+    return jsonr({"eventos": evs, "tipos": db.get_eventos_types()})
 
 
 @app.route("/api/eventos/<int:eid>")
@@ -497,7 +498,22 @@ def evento(req, eid):
         raise HTTPError(404)
     ev["secciones"] = [_sec_out(s) for s in db.get_secciones_by_evento(eid)]
     ev["conexiones"] = db.get_conexiones(eid)
+    try:
+        ev["num_calc"] = numeracion.calcular(ev)      # también sin activar: para sugerir la referencia
+    except ValueError:
+        ev["num_calc"] = None
+    ev = numeracion.aplicar(ev)
     return jsonr(ev)
+
+
+@app.route("/api/eventos/<int:eid>/numeracion", ("POST",))
+def evento_numeracion(req, eid):
+    """Vista previa de la numeración con la referencia que se está escribiendo."""
+    ev = db.get_evento(eid)
+    if not ev:
+        raise HTTPError(404)
+    _a, f, g = _num_fields(dict(req.json(), num_auto=True))
+    return ok(num=numeracion.calcular(ev, ref_fecha=f, ref_global=g))
 
 
 @app.route("/api/eventos/<int:eid>/conexiones", ("PUT",))
@@ -533,14 +549,35 @@ def _ev_fields(b):
     return nombre, (int(tipo) if tipo else None), (int(numero) if numero.isdigit() else None)
 
 
+def _num_fields(b):
+    auto = bool(b.get("num_auto"))
+    f = str(b.get("num_ref_fecha") or "").strip()
+    g = str(b.get("num_ref_global") or "").strip()
+    if f and not re.match(r"^\d{4}-\d{2}-\d{2}$", f):
+        raise ValueError("Fecha de referencia inválida")
+    if g and not re.match(r"^-?\d{1,7}$", g):
+        raise ValueError("El número de emisión global debe ser un número entero")
+    if auto and not (f and g):
+        raise ValueError("Para numerar solo, indica qué número global tiene la emisión de qué fecha")
+    return auto, f, (int(g) if g else None)
+
+
 @app.route("/api/eventos", ("POST",))
 def evento_new(req):
-    return ok(id=db.insert_evento(*_ev_fields(req.json())))
+    b = req.json()
+    num = _num_fields(b)
+    eid = db.insert_evento(*_ev_fields(b))
+    db.set_numeracion(eid, *num)
+    return ok(id=eid)
 
 
 @app.route("/api/eventos/<int:eid>", ("PUT",))
 def evento_edit(req, eid):
-    db.update_evento(eid, *_ev_fields(req.json()))
+    b = req.json()
+    num = _num_fields(b)
+    db.update_evento(eid, *_ev_fields(b))
+    if "num_auto" in b:
+        db.set_numeracion(eid, *num)
     return ok()
 
 

@@ -23,7 +23,7 @@ import uuid
 from collections import deque
 from pathlib import Path
 
-from . import audio, backends, db, links, notify, paths, settings, tts, tz
+from . import audio, backends, db, links, notify, numeracion, paths, settings, tts, tz
 
 log = logging.getLogger("hamna.engine")
 
@@ -291,7 +291,9 @@ class Engine:
         cfg = settings.load()
         be = backends.make(cfg)
         secs = [dict(s) for s in db.get_secciones_by_evento(ev["id"])]
-        hid = db.historial_inicio(ev["id"], ev["nombre"], origen)
+        ev = numeracion.aplicar(ev)
+        etq = numeracion.etiqueta(ev) if ev.get("num") else ""
+        hid = db.historial_inicio(ev["id"], ev["nombre"] + (" " + etq if etq else ""), origen)
         result = "incompleto"
         self._set(on_air=True, state="preparing", evento_id=ev["id"], evento=ev["nombre"],
                   origen=origen, error="", cur_sec=-1,
@@ -670,6 +672,7 @@ class Engine:
                 ev = db.get_evento(row["evento_id"])
                 if not ev:
                     continue
+                ev = numeracion.aplicar(ev)
                 secs = [dict(s) for s in db.get_secciones_by_evento(row["evento_id"])]
                 for s in secs:
                     s["tiene_audio"] = bool(self._file_of(s))

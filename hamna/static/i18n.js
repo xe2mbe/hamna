@@ -25,6 +25,31 @@
     jueves: "Thursday", viernes: "Friday", "sábado": "Saturday" };
 
   const D = {
+    // Numeración de emisiones
+    "Emisión global · emisión del año": "Overall broadcast · broadcast of the year",
+    "🔢 Numerar las emisiones automáticamente": "🔢 Number broadcasts automatically",
+    "Emisión global #": "Overall broadcast #", "…es la del día": "…is the one on",
+    "Lo pone la numeración automática.": "Set by automatic numbering.",
+    "Opcional. Se lee con {numero}.": "Optional. Read with {numero}.",
+    "Numeración automática: falta programar el evento": "Automatic numbering: the event isn't scheduled yet",
+    "⚠ Este evento todavía no tiene programación: sin fechas no hay qué contar. Prográmalo primero en Programación.":
+      "⚠ This event has no schedule yet: without dates there's nothing to count. Schedule it first in Schedule.",
+    "🔢 Después de guardarlo y programarlo podrás numerar sus emisiones automáticamente.":
+      "🔢 Once it's saved and scheduled you can number its broadcasts automatically.",
+    "Se lee con {emision} (global), {emision_anio} y {anio}. Las secciones que los usen deben tener 🔄 «Regenerar justo antes de transmitir».":
+      "Read with {emision} (overall), {emision_anio} and {anio}. Sections that use them must have 🔄 «Regenerate right before broadcasting».",
+    "🔄 Activé «Regenerar justo antes de transmitir»: el número de emisión cambia cada vez.":
+      "🔄 I turned on «Regenerate right before broadcasting»: the broadcast number changes every time.",
+    "Para numerar solo, indica qué número global tiene la emisión de qué fecha":
+      "For automatic numbering, say which overall number the broadcast of which date has",
+    "Fecha de referencia inválida": "Invalid reference date",
+    "El número de emisión global debe ser un número entero": "The overall broadcast number must be a whole number",
+    "Número de emisión global (numeración automática)": "Overall broadcast number (automatic numbering)",
+    "Número de emisión del año: se reinicia cada 1 de enero": "Broadcast number of the year: restarts every January 1",
+    "Año de la emisión": "Year of the broadcast",
+    "Cuenta las fechas de la programación de este evento. La emisión del año vuelve a #1 cada 1 de enero (el domingo 46 del año es la #46); la global sigue sumando de un año a otro.":
+      "Counts the dates in this event's schedule. The broadcast of the year goes back to #1 every January 1 (the 46th Sunday of the year is #46); the overall number keeps adding up from one year to the next.",
+    "Número de edición del evento (la emisión global si es automática)": "Event edition number (the overall broadcast if automatic)",
     // Entrada y estructura
     "Automatización de redes para tu nodo": "Net automation for your node",
     "Usuario": "Username", "Contraseña": "Password", "Entrar": "Sign in", "Entrando…": "Signing in…",
@@ -489,6 +514,8 @@
 
   const M = (re, fn) => [re, fn];
   const P = [
+    M(/^(🔢 )?Próxima emisión: (\S+) (\S+) · global #(-?\d+) · (\d+) #(\d+)$/,
+      (m, i, d, f, g, y, n) => `${i || ""}Next broadcast: ${DIA[d] || d} ${f} · overall #${g} · ${y} #${n}`),
     M(/^Exportar: (.+)$/, (m, a) => "Export: " + a),
     M(/^(\d+) de (\d+) · (\S+)$/, (m, a, b, d) => `${a} of ${b} · ${d}`),
     M(/^(\S+) · ⚠ sin audio, se omite$/, (m, d) => `${d} · ⚠ no audio, skipped`),

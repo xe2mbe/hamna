@@ -633,7 +633,7 @@ async function loadEventos() {
   const el = $("#eventosList");
   el.innerHTML = S.eventos.length ? S.eventos.map((e) => `
     <button class="list-item ${e.id === S.evSel ? "active" : ""}" data-id="${e.id}">
-      <b>${esc(e.nombre)}</b>${e.numero ? ` <span class="chip">#${e.numero}</span>` : ""}
+      <b>${esc(e.nombre)}</b> ${numChip(e)}
       <small>${evSummary(e)}</small>
     </button>`).join("") : `<p class="empty">Aún no hay eventos.</p>`;
   if (S.evSel && S.eventos.some((e) => e.id === S.evSel)) loadEvento(S.evSel);
@@ -653,7 +653,7 @@ async function loadEvento(id) {
   const cont = secs.filter((s) => s.contabilizable);
   $("#eventoDetail").innerHTML = `
     <div class="detail-head">
-      <div><h2>${esc(ev.nombre)} ${ev.numero ? `<span class="chip">#${ev.numero}</span>` : ""}</h2>
+      <div><h2>${esc(ev.nombre)} ${numChip(ev)}</h2>
       <div class="muted">${esc(ev.tipo || "")}</div></div>
       <div class="row gap wrap">
         <button class="btn primary" id="evTx">📡 Transmitir ahora</button>
@@ -663,7 +663,8 @@ async function loadEvento(id) {
       </div>
     </div>
     <div class="totals"><span>Duración total <b>${fmt(tot)}</b></span>
-      <span>Contabilizables <b>${cont.length}</b> · ${fmt(cont.reduce((a, s) => a + (s.duracion || 0), 0))}</span></div>
+      <span>Contabilizables <b>${cont.length}</b> · ${fmt(cont.reduce((a, s) => a + (s.duracion || 0), 0))}</span>
+      ${ev.num_auto ? `<span>🔢 ${ev.num ? esc(numTexto(ev.num)) : "Numeración automática: falta programar el evento"}</span>` : ""}</div>
     <div id="evSecs">${secs.length ? secs.map((s, i) => `
       <div class="sec-row" data-idx="${i}" data-id="${s.id}">
         <span class="n">${i + 1}</span>
@@ -939,25 +940,73 @@ async function addSecciones(ev) {
   };
 }
 $("#btnNewEvento").onclick = () => eventoForm(null);
+function numChip(e) {
+  if (e.num_auto && e.num) return `<span class="chip" title="Emisión global · emisión del año">${e.num.emision != null ? "#" + e.num.emision + " · " : ""}${e.num.anio} #${e.num.emision_anio}</span>`;
+  return e.numero ? `<span class="chip">#${e.numero}</span>` : "";
+}
+function numTexto(n) {
+  const d = new Date(n.fecha + "T12:00");
+  const f = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `Próxima emisión: ${DIAS[d.getDay()]} ${f} · global #${n.emision} · ${n.anio} #${n.emision_anio}`;
+}
 function eventoForm(ev) {
   ev = ev || { nombre: "", tipo_evento_id: "", numero: "" };
+  const sug = ev.num_calc || null;
+  const refF = ev.num_ref_fecha || (sug ? sug.fecha : "");
+  const refG = ev.num_ref_global ?? (sug ? sug.emision_anio : "");
   openModal(ev.id ? "Editar evento" : "Nuevo evento", `
     <form id="ef">
       <label>Nombre<input name="nombre" value="${esc(ev.nombre)}" required placeholder="Boletín dominical"></label>
       <div class="grid2">
         <label>Tipo<select name="tipo_evento_id"><option value="">—</option>${S.tipos.map((t) =>
           `<option value="${t.id}" ${t.id === ev.tipo_evento_id ? "selected" : ""}>${esc(t.nombre)}</option>`).join("")}</select></label>
-        <label>Número de edición<input name="numero" type="number" min="0" value="${esc(ev.numero ?? "")}"><small>Opcional. Se lee con {numero}.</small></label>
+        <label>Número de edición<input name="numero" type="number" min="0" value="${esc(ev.numero ?? "")}"><small id="efNumHint">Opcional. Se lee con {numero}.</small></label>
       </div>
+      ${ev.id ? `<label class="check"><input type="checkbox" name="num_auto" ${ev.num_auto ? "checked" : ""}> 🔢 Numerar las emisiones automáticamente</label>
+      <div id="efNum" class="bk-card">
+        <p class="muted bk-note">Cuenta las fechas de la programación de este evento. La emisión del año vuelve a #1 cada 1 de enero (el domingo 46 del año es la #46); la global sigue sumando de un año a otro.</p>
+        ${sug ? `<div class="grid2">
+          <label>Emisión global #<input name="num_ref_global" type="number" value="${esc(refG)}"></label>
+          <label>…es la del día<input name="num_ref_fecha" type="date" value="${esc(refF)}"></label>
+        </div>
+        <p class="muted" id="efNumPrev"></p>
+        <p class="muted bk-note">Se lee con {emision} (global), {emision_anio} y {anio}. Las secciones que los usen deben tener 🔄 «Regenerar justo antes de transmitir».</p>`
+        : `<p style="color:var(--warn);margin:0">⚠ Este evento todavía no tiene programación: sin fechas no hay qué contar. Prográmalo primero en Programación.</p>`}
+      </div>` : `<p class="muted bk-note">🔢 Después de guardarlo y programarlo podrás numerar sus emisiones automáticamente.</p>`}
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div>
     </form>`);
   $("#ef").onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target, data = { nombre: f.nombre.value, tipo_evento_id: f.tipo_evento_id.value, numero: f.numero.value };
+    if (f.num_auto) {
+      data.num_auto = f.num_auto.checked && !!f.num_ref_fecha;
+      if (f.num_ref_fecha) { data.num_ref_fecha = f.num_ref_fecha.value; data.num_ref_global = f.num_ref_global.value; }
+    }
     const r = await run(() => api("api/eventos" + (ev.id ? "/" + ev.id : ""), { method: ev.id ? "PUT" : "POST", json: data }), "Guardado");
     if (!ev.id) S.evSel = r.id;
     closeModal(); loadEventos();
   };
+  const ef = $("#ef");
+  if (!ef.num_auto) return;
+  let tmr = null;
+  const prev = async () => {
+    const p = $("#efNumPrev");
+    if (!p || !ef.num_auto.checked) return;
+    try {
+      const r = await api(`api/eventos/${ev.id}/numeracion`, { method: "POST", json: { num_ref_fecha: ef.num_ref_fecha.value, num_ref_global: ef.num_ref_global.value } });
+      p.textContent = r.num ? numTexto(r.num) : "";
+    } catch (err) { p.textContent = "⚠ " + err.message; }
+  };
+  const apply = () => {
+    const on = ef.num_auto.checked;
+    $("#efNum").classList.toggle("hidden", !on);
+    ef.numero.disabled = on;
+    $("#efNumHint").textContent = on ? "Lo pone la numeración automática." : "Opcional. Se lee con {numero}.";
+    if (on) prev();
+  };
+  ef.num_auto.onchange = apply;
+  $$("#efNum input").forEach((i) => { i.oninput = () => { clearTimeout(tmr); tmr = setTimeout(prev, 300); }; });
+  apply();
 }
 
 /* ── Secciones ───────────────────────────────────────────────────────────── */
@@ -1048,11 +1097,19 @@ async function seccionForm(s) {
     const b = e.target.closest("button"); if (!b) return;
     tipo = b.dataset.t; $$("#sfTipo button").forEach((x) => x.classList.toggle("active", x === b)); apply();
   };
+  const needRegen = () => {
+    if (!f.regenerar_antes.checked && /\{(numero|emision|emision_anio|anio)\}/.test(f.texto_tts.value)) {
+      f.regenerar_antes.checked = true;
+      $("#sfResolved").textContent = "🔄 Activé «Regenerar justo antes de transmitir»: el número de emisión cambia cada vez.";
+    }
+  };
+  f.texto_tts.addEventListener("input", needRegen);
   $(".vars", f).onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const ta = f.texto_tts, p = ta.selectionStart ?? ta.value.length;
     ta.value = ta.value.slice(0, p) + b.textContent + ta.value.slice(ta.selectionEnd ?? p);
     ta.focus(); ta.selectionStart = ta.selectionEnd = p + b.textContent.length;
+    needRegen();
   };
   $("#sfPrev").onclick = async () => {
     const b = $("#sfPrev"); busy(b, true, "Generando…");
