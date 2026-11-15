@@ -484,7 +484,35 @@ def mis_secciones(req):
                     if p and p.is_file() else None, "eventos": evs,
                     "anterior": {"duracion": float(s.get("anterior_duracion") or 0), "fecha": s.get("anterior_fecha") or ""}
                     if _sec_out(s)["tiene_anterior"] else None})
-    return jsonr({"secciones": out, "formatos": audio.formats()})
+    eids = _mis_eventos(req)
+    return jsonr({"secciones": out, "formatos": audio.formats(), "programacion": _prog_rows(eids),
+                  "ahora": now.strftime("%Y-%m-%d %H:%M:%S")})
+
+
+def _mis_eventos(req):
+    ids = auth.user_sections(req.user["id"])
+    if not ids:
+        return set()
+    q = ",".join("?" * len(ids))
+    return {r["evento_id"] for r in db.rows(
+        "SELECT DISTINCT evento_id FROM evento_secciones WHERE seccion_id IN (" + q + ")", ids)}
+
+
+@app.route("/api/mis-eventos/<int:eid>", rol="colaborador")
+def mi_evento(req, eid):
+    """Solo lectura: las secciones del evento donde sale la colaboración."""
+    if eid not in _mis_eventos(req):
+        raise HTTPError(404)
+    ev = numeracion.aplicar(db.get_evento(eid))
+    mias = set(auth.user_sections(req.user["id"]))
+    secs = []
+    for s in db.get_secciones_by_evento(eid):
+        o = _sec_out(s)
+        secs.append({"nombre": s["nombre"], "tipo": s["tipo"], "duracion": float(s.get("duracion") or 0),
+                     "tiene_audio": o["tiene_audio"], "contabilizable": bool(s.get("contabilizable")),
+                     "mia": s["id"] in mias})
+    return jsonr({"nombre": ev["nombre"], "tipo": ev.get("tipo") or "", "num": ev.get("num"),
+                  "numero": ev.get("numero"), "num_auto": ev.get("num_auto"), "secciones": secs})
 
 
 @app.route("/api/mis-secciones/<int:sid>/audio", rol="colaborador")
@@ -855,6 +883,11 @@ def cron_save(req):
 # ── Programación ─────────────────────────────────────────────────────────────
 @app.route("/api/programacion")
 def programacion(req):
+    return jsonr(_prog_rows())
+
+
+def _prog_rows(eventos=None):
+    """Programaciones con próxima fecha, zona, conexiones… (eventos: solo esos ids)."""
     out = []
     now = dt.datetime.now()
     durs = {e["id"]: e["duracion_total"] for e in db.get_eventos()}
@@ -876,6 +909,8 @@ def programacion(req):
     conex = {}
     for r in db.get_programacion():
         eid = r["evento_id"]
+        if eventos is not None and eid not in eventos:
+            continue
         if eid not in conex:
             conex[eid] = db.get_conexiones(eid)
         r["duracion"] = durs.get(eid) or 0
@@ -911,7 +946,7 @@ def programacion(req):
                     break
         out.append(r)
     out.sort(key=lambda r: (r["faltan_s"] is None, r["faltan_s"] or 0))
-    return jsonr(out)
+    return out
 
 
 def _prog_fields(b):

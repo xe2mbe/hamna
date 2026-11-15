@@ -44,7 +44,11 @@
       "Only sees «My sections» and uploads the audio for the sections you assign. You get a Telegram alert each time.",
     "📤 Cuando un colaborador sube el audio de una sección": "📤 When a contributor uploads a section's audio",
     "Elige el archivo de audio": "Choose the audio file", "Escribe el texto": "Write the text",
-    "↩ Regresar a la anterior": "↩ Go back to the previous one", "Sí, regresar": "Yes, go back",
+    "↩ Regresar a la anterior": "↩ Go back to the previous one",
+    "📡 Dónde sale tu colaboración": "📡 Where your contribution airs", "📋 Detalles": "📋 Details",
+    "Secciones del evento": "Event sections", "Tu sección": "Your section", "Cerrar": "Close",
+    "Solo puedes ver el orden y la duración; las demás secciones las maneja el administrador.":
+      "You can only see the order and length; the administrator manages the other sections.", "Sí, regresar": "Yes, go back",
     "Versión anterior restaurada": "Previous version restored",
     "↩ Al reemplazar el audio de una sección, guardar el anterior para poder regresarlo":
       "↩ When a section's audio is replaced, keep the previous one so it can be restored",
@@ -542,6 +546,7 @@
 
   const M = (re, fn) => [re, fn];
   const P = [
+    M(/^(\d+) secciones$/, (m, n) => `${n} sections`),
     M(/^¿Reemplazar el audio de (.+) con «(.+)»\?$/, (m, a, b) => `Replace the audio of ${a} with «${b}»?`),
     M(/^¿Regresar (.+) a la versión anterior\? La actual queda como anterior, por si cambias de opinión\.$/,
       (m, a) => `Go back to the previous version of ${a}? The current one becomes the previous one, in case you change your mind.`),

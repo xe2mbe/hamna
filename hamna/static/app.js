@@ -484,11 +484,20 @@ function renderProg() {
   S.prog = S.prog.slice().sort((a, b) => rank(a) - rank(b));
   // La franja del próximo evento va pegada encima de su tarjeta
   const nxt = S.prog.find((p) => p.activo && p.faltan_s != null && p.evento_id !== live);
-  el.innerHTML = S.prog.map((p) => {
+  el.innerHTML = S.prog.map((p) => progCard(p, { live, today, next: p === nxt, acciones: `
+        <button class="btn sm primary" data-act="tx" data-id="${p.evento_id}" data-n="${esc(p.evento_nombre)}">📡 Transmitir ahora</button>
+        <button class="btn sm ok-soft" data-act="edit" data-id="${p.id}">Editar</button>
+        <button class="btn sm neutral" data-act="toggle" data-id="${p.id}">${p.activo ? "Desactivar" : "Activar"}</button>
+        <button class="btn sm danger-soft" data-act="del" data-id="${p.id}">Borrar</button>` })).join("");
+  $("#nextCard").classList.add("hidden");
+  tickProg();
+}
+/* Tarjeta de una programación (Programación y «Mis secciones» del colaborador) */
+function progCard(p, { live = null, today = "", next = false, acciones = "" } = {}) {
     const isToday = p.proxima && p.proxima.startsWith(today);
-    const strip = p === nxt ? `<div class="next-strip"><div><span class="lbl">Próximo evento</span>
+    const strip = next ? `<div class="next-strip"><div><span class="lbl">Próximo evento</span>
         <small>${esc(p.proxima)}</small></div><div class="cd" id="nextLeft" data-left="${p.faltan_s}"></div></div>` : "";
-    return `<div class="prog-slot ${p === nxt ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
+    return `<div class="prog-slot ${next ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
       <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora_local || p.hora)}${p.nodo_zona_corta ? `<small class="zone">${esc(p.nodo_zona_corta)}</small>` : ""}</span>
         ${live === p.evento_id ? '<span class="chip live">AL AIRE</span>' : isToday ? '<span class="chip ok">HOY</span>' : ""}</div>
       <h3>${esc(p.evento_nombre)}</h3>
@@ -497,15 +506,7 @@ function renderProg() {
       ${p.cambio ? `<div class="meta tz-warn">${esc(cambioText(p.cambio))}</div>` : ""}
       <div class="meta" data-left="${p.faltan_s ?? ""}">${p.activo ? (p.proxima ? "Próxima: " + esc(p.proxima) + " · en <b class='left'>" + fmtLeft(p.faltan_s) + "</b>" : "Sin próximas fechas") : "Desactivada"}</div>
       ${progTimeline(p)}
-      <div class="actions">
-        <button class="btn sm primary" data-act="tx" data-id="${p.evento_id}" data-n="${esc(p.evento_nombre)}">📡 Transmitir ahora</button>
-        <button class="btn sm ok-soft" data-act="edit" data-id="${p.id}">Editar</button>
-        <button class="btn sm neutral" data-act="toggle" data-id="${p.id}">${p.activo ? "Desactivar" : "Activar"}</button>
-        <button class="btn sm danger-soft" data-act="del" data-id="${p.id}">Borrar</button>
-      </div></div></div>`;
-  }).join("");
-  $("#nextCard").classList.add("hidden");
-  tickProg();
+      <div class="actions">${acciones}</div></div></div>`;
 }
 function tickProg() {
   if (S.tab !== "prog" || !S.progLoaded) return;
@@ -1383,6 +1384,13 @@ async function loadCollab() {
   try { r = await api("api/mis-secciones"); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
   S.info = Object.assign(S.info || {}, { formatos: r.formatos });
   if (!r.secciones.length) { box.innerHTML = `<p class="empty">Todavía no tienes secciones asignadas. Pídele al administrador que te asigne una.</p>`; return; }
+  const hoy = (r.ahora || "").slice(0, 10), prog = r.programacion || [];
+  const nxt = prog.find((p) => p.activo && p.faltan_s != null);
+  $("#cbProg").innerHTML = prog.length ? `<h2 class="cb-h2">📡 Dónde sale tu colaboración</h2>
+    <div class="cards cb-cards">${prog.map((p) => progCard(p, { today: hoy, next: p === nxt,
+      acciones: `<button type="button" class="btn sm" data-detalles="${p.evento_id}">📋 Detalles</button>` })).join("")}</div>` : "";
+  const nl = $("#cbProg #nextLeft");
+  if (nl) nl.textContent = +nl.dataset.left > 86400 ? fmtLeft(+nl.dataset.left) : fmt(Math.max(0, +nl.dataset.left));
   box.innerHTML = r.secciones.map((s) => `<div class="bk-card cb-sec" data-id="${s.id}">
       <div class="cb-head"><h3>${s.tipo === "TTS" ? "🗣" : "🎙"} ${esc(s.nombre)}</h3>
         <span class="muted">${s.tiene_audio ? fmt(s.duracion) + (s.actualizado ? " · actualizado " + esc(fechaCorta(s.actualizado)) : "") : "⚠ Sin audio"}</span></div>
@@ -1426,6 +1434,24 @@ $("#cbList").addEventListener("click", async (e) => {
   try { await api(`api/mis-secciones/${card.dataset.id}`, { method: "POST", form: fd }); toast("Texto guardado ✓"); loadCollab(); }
   catch (err) { toast(err.message, true); } finally { busy(b, false); }
 });
+$("#cbProg").onclick = async (e) => {
+  const b = e.target.closest("[data-detalles]"); if (!b) return;
+  let ev;
+  try { ev = await api("api/mis-eventos/" + b.dataset.detalles); } catch (err) { return toast(err.message, true); }
+  const tot = ev.secciones.reduce((a, s) => a + s.duracion, 0);
+  const num = ev.num_auto && ev.num ? numChip(ev) : ev.numero ? `<span class="chip">#${ev.numero}</span>` : "";
+  openModal("Secciones del evento", `
+    <h3 class="cb-evname">${esc(ev.nombre)} ${num}</h3>
+    ${ev.tipo ? `<p class="muted" style="margin:0 0 6px">${esc(ev.tipo)}</p>` : ""}
+    ${ev.num_auto && ev.num ? `<p class="muted" style="margin:0 0 10px">🔢 ${esc(numTexto(ev.num))}</p>` : ""}
+    <div class="totals"><span>Duración total <b>${fmt(tot)}</b></span><span>${ev.secciones.length} secciones</span></div>
+    <div class="cb-evsecs">${ev.secciones.map((s, i) => `<div class="sec-row ${s.mia ? "mia" : ""}">
+        <span class="n">${i + 1}</span>
+        <span class="name"><span class="chip ${s.tipo}">${s.tipo}</span> ${esc(s.nombre)}${s.mia ? ' <span class="chip ok">Tu sección</span>' : ""}
+          <small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio"}</small></span></div>`).join("")}</div>
+    <p class="muted" style="font-size:.85rem;margin-top:12px">Solo puedes ver el orden y la duración; las demás secciones las maneja el administrador.</p>
+    <div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal()">Cerrar</button></div>`);
+};
 $("#cbLogout").onclick = logoutNow;
 $("#cbPw").onclick = () => {
   openModal("Cambiar contraseña", `<form id="cbPwForm">

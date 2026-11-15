@@ -681,3 +681,9 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   display: flex; flex-direction: column; gap: 8px; font-size: .88rem; color: var(--text2); }
 .prev-box audio { width: 100%; height: 36px; margin: 0; }
 .prev-box .btn { align-self: flex-start; }
+.cb-h2 { font-size: 1.15rem; margin: 26px 0 10px; }
+.cb-cards { display: grid; gap: 12px; }
+.cb-evname { font-size: 1.1rem; margin: 0 0 4px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.cb-evsecs { margin-top: 10px; max-height: 50vh; overflow: auto; }
+.cb-evsecs .sec-row { cursor: default; }
+.cb-evsecs .sec-row.mia { background: var(--accent-soft); border-color: var(--accent); }

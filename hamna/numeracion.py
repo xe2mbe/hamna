@@ -10,8 +10,9 @@ un reinicio o restaurar un respaldo no los mueven.
   emision       número global: el usuario indica «la emisión del día R es la
                 #N» y desde ahí se suma 1 por cada fecha programada.
 
-La fecha de la emisión es la de hoy si hoy toca, o la próxima que toque
-(así una prueba del sábado ya dice el número del domingo).
+La fecha de la emisión es la de hoy si hoy toca y todavía no termina (hora +
+duración + 30 min), o la próxima que toque (así una prueba del sábado ya dice
+el número del domingo).
 """
 import datetime as dt
 
@@ -22,12 +23,12 @@ MAX_DIAS = 366 * 100
 
 def _pats(eid):
     out = []
-    for r in db.rows("SELECT fecha, recurrencia, zona FROM programacion WHERE evento_id=? ORDER BY id", (eid,)):
+    for r in db.rows("SELECT fecha, hora, recurrencia, zona FROM programacion WHERE evento_id=? ORDER BY id", (eid,)):
         try:
             f = dt.datetime.strptime(r["fecha"] or "", "%Y-%m-%d").date()
         except ValueError:
             continue
-        out.append(((r["recurrencia"] or "ninguna").lower(), f, r.get("zona") or ""))
+        out.append(((r["recurrencia"] or "ninguna").lower(), f, r.get("zona") or "", r.get("hora") or ""))
     return out
 
 
@@ -35,7 +36,7 @@ def _toca(pats, d):
     """¿Hay emisión ese día? Las repetidas cuentan todo el año aunque la
     programación se haya creado después (el domingo 46 es el 46 aunque HAMNA
     empezara a transmitirlo en noviembre)."""
-    for rec, f, _ in pats:
+    for rec, f, _z, _h in pats:
         if rec == "ninguna":
             if d == f:
                 return True
@@ -69,7 +70,25 @@ def _fecha(s):
         return None
 
 
-def calcular(ev, hoy=None, ref_fecha=None, ref_global=None):
+def _ya_termino(ev, pats, hoy, ahora):
+    """¿Ya pasó la emisión de hoy? Cuenta hasta su hora + duración + 30 min."""
+    horas = []
+    for p in pats:
+        if _toca([p], hoy):
+            try:
+                h, m = map(int, p[3][:5].split(":"))
+                horas.append(dt.datetime.combine(hoy, dt.time(h, m)))
+            except ValueError:
+                pass
+    if not horas:
+        return False
+    r = db.row("""SELECT COALESCE(SUM(s.duracion),0) AS d FROM evento_secciones es
+                  JOIN secciones s ON s.id=es.seccion_id WHERE es.evento_id=?""", (ev["id"],))
+    fin = max(horas) + dt.timedelta(seconds=float((r or {}).get("d") or 0)) + dt.timedelta(minutes=30)
+    return ahora > fin
+
+
+def calcular(ev, hoy=None, ref_fecha=None, ref_global=None, ahora=None):
     """Números de la próxima emisión (o la de hoy). None si el evento no
     tiene programación. ref_* reemplazan a los guardados (vista previa)."""
     if not ev or not ev.get("id"):
@@ -78,7 +97,10 @@ def calcular(ev, hoy=None, ref_fecha=None, ref_global=None):
     if not pats:
         return None
     if hoy is None:
-        hoy = tz.node_to_zone(dt.datetime.now(), pats[0][2]).date()
+        ahora = ahora or tz.node_to_zone(dt.datetime.now(), pats[0][2])
+        hoy = ahora.date()
+        if _toca(pats, hoy) and _ya_termino(ev, pats, hoy, ahora):
+            hoy += dt.timedelta(days=1)         # la de hoy ya salió: la que sigue
     d = hoy
     for _ in range(400):
         if _toca(pats, d):
