@@ -1475,6 +1475,12 @@ async function loadCollab() {
   try { r = await api("api/mis-secciones"); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
   S.info = Object.assign(S.info || {}, { formatos: r.formatos });
   if (!r.secciones.length) { box.innerHTML = `<p class="empty">Todavía no tienes secciones asignadas. Pídele al administrador que te asigne una.</p>`; return; }
+  const tg = r.telegram || {};
+  $("#cbTg").innerHTML = !tg.disponible ? "" : tg.vinculado
+    ? `📲 También puedes <b>mandarle tu audio o una nota de voz al bot ${esc(tg.bot)}</b> por Telegram: lo pone en tu sección y te avisa cuando sale al aire.`
+    : `📲 Vincula tu Telegram en <a href="#" id="cbTgLink">Mi perfil</a> y podrás mandar tu audio desde el celular.`;
+  $("#cbTg").classList.toggle("hidden", !tg.disponible);
+  if ($("#cbTgLink")) $("#cbTgLink").onclick = (e) => { e.preventDefault(); openPerfil(); };
   const hoy = (r.ahora || "").slice(0, 10), prog = r.programacion || [];
   const nxt = prog.find((p) => p.activo && p.faltan_s != null);
   $("#cbProg").innerHTML = prog.length ? `<h2 class="cb-h2">📡 Dónde sale tu colaboración</h2>

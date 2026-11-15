@@ -17,11 +17,14 @@ A quien no está vinculado solo se le explica cómo vincularse.
 import datetime as dt
 import json
 import logging
+import os
 import random
 import threading
 import time
+import urllib.request
+import uuid
 
-from . import auth, db, health, notify, numeracion, paths, settings, sysmon
+from . import audio, auth, db, health, notify, numeracion, paths, settings, sysmon
 
 log = logging.getLogger("hamna.bot")
 
@@ -30,6 +33,9 @@ _rand = random.SystemRandom()
 _lock = threading.Lock()
 _codes = {}                     # código → (usuario_id, vence)
 _estado = {"activo": False, "error": "", "bot": "", "chats": {}, "token": ""}
+_pend = {}                      # audios recibidos esperando «¿en cuál sección?» → datos
+MAX_BAJAR = 20 * 1024 * 1024    # Telegram no deja que un bot baje archivos más grandes
+_tick = {"t": 0.0}
 _COMANDOS = [
     ("estado", "Qué está al aire ahora"),
     ("proximo", "Los siguientes eventos"),
@@ -191,6 +197,8 @@ def _atender(token, u):
     chat = m["chat"]["id"]
     privado = m["chat"].get("type") == "private"
     quien = m.get("from") or {}
+    if privado and (m.get("audio") or m.get("voice") or m.get("document")):
+        return _audio_recibido(token, m, auth.user_by_tg(quien.get("id")))
     if not texto:
         return
     if texto.startswith("/"):
@@ -239,6 +247,9 @@ def _ayuda(user):
          "/proximo · los siguientes eventos"]
     if n >= auth.ROLES["lectura"]:
         t += ["/salud · temperatura, voltaje, disco y memoria", "/historial · las últimas emisiones"]
+    if _secciones_audio(user):
+        t += ["", "📲 <b>Mándame un audio o nota de voz</b> y lo pongo en tu sección ({}).".format(
+            ", ".join("«" + notify.esc(s["nombre"]) + "»" for s in _secciones_audio(user)))]
     if n >= auth.ROLES["operador"]:
         t += ["", "En los avisos te pongo botones para <b>detener</b>, pasar a la <b>siguiente sección</b>, "
                   "<b>transmitir ya</b> o <b>saltar</b> una emisión (siempre te pido confirmar)."]
@@ -444,6 +455,8 @@ def _boton(token, q):
     user = auth.user_by_tg((q.get("from") or {}).get("id"))
     if not user:
         return avisa("Primero vincula tu Telegram en HAMNA → Mi perfil.", True)
+    if data.split(":")[0] in ("up", "upx", "ant"):
+        return _boton_audio(token, q, user, data, avisa, teclas)
     if _nivel(user) < auth.ROLES["operador"]:
         return avisa("Solo un operador o el administrador pueden usar estos botones.", True)
     p = data.split(":")
@@ -502,3 +515,225 @@ def _ejecutar(accion, args, user):
         engine.note("«{}» se adelantó desde Telegram ({})".format(row["evento_nombre"], who))
         return "▶ {quien} inició «" + nombre + "» ya (en lugar de las " + occ.strftime("%H:%M") + ").", True
     raise ValueError("Botón desconocido")
+
+
+# ── El colaborador manda su audio por Telegram ──────────────────────────────
+TIPOS = {"audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/ogg": ".ogg", "audio/opus": ".opus", "audio/wav": ".wav",
+         "audio/x-wav": ".wav", "audio/wave": ".wav", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a", "audio/m4a": ".m4a",
+         "audio/aac": ".aac", "audio/flac": ".flac", "audio/x-flac": ".flac"}
+
+
+def _secciones_audio(user):
+    out = []
+    for sid in auth.user_sections(user["id"]) if user else []:
+        s = db.get_seccion(sid)
+        if s and s["tipo"] in ("Audio", "Sonido"):
+            out.append(s)
+    return out
+
+
+def _audio_recibido(token, m, user):
+    chat, mid = m["chat"]["id"], m.get("message_id")
+    if not user:
+        return _responder(token, chat, "👋 Todavía no sé quién eres. Vincula tu Telegram en HAMNA → <b>Mi perfil</b> "
+                                       "y después mándame tu audio.")
+    secs = _secciones_audio(user)
+    if not secs:
+        return _responder(token, chat, "No tienes secciones de audio asignadas en HAMNA. "
+                                       "El administrador te las asigna (rol Colaborador).", a=mid)
+    f = m.get("audio") or m.get("voice") or m.get("document") or {}
+    nombre = f.get("file_name") or ("nota de voz" if m.get("voice") else "audio")
+    ext = os.path.splitext(nombre)[1].lower() or TIPOS.get((f.get("mime_type") or "").lower(), "")
+    if m.get("voice") and not ext:
+        ext = ".ogg"
+    if m.get("document") and not (f.get("mime_type") or "").startswith("audio/") and ext not in audio.formats():
+        return _responder(token, chat, "Eso no parece un audio. Mándame un MP3, una nota de voz o un archivo de audio.", a=mid)
+    if ext not in audio.formats():
+        return _responder(token, chat, "Este nodo no puede leer audios {}. Mándalo en MP3 o súbelo en la página.".format(
+            notify.esc(ext.upper().lstrip(".") or "de ese tipo")), a=mid)
+    if int(f.get("file_size") or 0) > MAX_BAJAR:
+        return _responder(token, chat, "Pesa {:.0f} MB y Telegram no deja que un bot baje archivos de más de 20 MB. "
+                                       "Mándalo en MP3 (pesa menos) o súbelo en la página.".format(
+                                           int(f["file_size"]) / 1048576.0), a=mid)
+    if not os.path.splitext(nombre)[1]:
+        nombre += ext
+    key = uuid.uuid4().hex[:8]
+    now = time.time()
+    with _lock:
+        for k in [k for k, v in _pend.items() if v["exp"] < now]:
+            del _pend[k]
+        _pend[key] = {"tg": str(user.get("tg_id") or ""), "uid": user["id"], "file_id": f.get("file_id"),
+                      "nombre": nombre, "exp": now + 30 * 60}
+    dur = f.get("duration")
+    desc = "«{}»{}".format(notify.esc(nombre), " ({})".format(_hm(dur)) if dur else "")
+    if len(secs) == 1:
+        _responder(token, chat, "📥 Recibí {}. ¿Lo pongo como el audio nuevo de <b>{}</b>?\n"
+                                "El audio que tiene ahora queda como versión anterior.".format(desc, notify.esc(secs[0]["nombre"])),
+                   botones=[[("✅ Sí, ponerlo", "up:{}:{}".format(key, secs[0]["id"])), ("Cancelar", "upx:" + key)]], a=mid)
+    else:
+        _responder(token, chat, "📥 Recibí {}. ¿En cuál de tus secciones lo pongo?".format(desc),
+                   botones=[[("🎙 " + s["nombre"][:40], "up:{}:{}".format(key, s["id"]))] for s in secs] +
+                   [[("Cancelar", "upx:" + key)]], a=mid)
+
+
+def _boton_audio(token, q, user, data, avisa, teclas):
+    p = data.split(":")
+    chat = ((q.get("message") or {}).get("chat") or {}).get("id")
+    mid = (q.get("message") or {}).get("message_id")
+    if p[0] == "ant":
+        sid = int(p[1])
+        if sid not in auth.user_sections(user["id"]):
+            return avisa("Esa sección no es tuya.", True)
+        from . import app as webapp
+        try:
+            webapp._restaurar_anterior(sid)
+        except ValueError as e:
+            return avisa(str(e), True)
+        teclas(None)
+        avisa("Listo")
+        s = db.get_seccion(sid)
+        webapp._aviso_colaborador(user, sid, "regresó la versión anterior de", "telegram")
+        return _responder(token, chat, "↩ «{}» volvió a la versión anterior ({}).".format(
+            notify.esc(s["nombre"]), _hm(s.get("duracion"))), a=mid)
+    with _lock:
+        pend = _pend.get(p[1])
+    if not pend:
+        teclas(None)
+        return avisa("Ese audio ya no está pendiente; mándamelo otra vez.", True)
+    if pend["uid"] != user["id"]:
+        return avisa("Ese audio no es tuyo.", True)
+    if p[0] == "upx":
+        with _lock:
+            _pend.pop(p[1], None)
+        teclas(None)
+        return avisa("Cancelado: no cambié nada.")
+    sid = int(p[2])
+    if sid not in auth.user_sections(user["id"]):
+        return avisa("Esa sección no es tuya.", True)
+    with _lock:
+        _pend.pop(p[1], None)
+    teclas(None)
+    avisa("Descargando…")
+    threading.Thread(target=_poner_audio, args=(token, chat, mid, user, sid, pend), daemon=True).start()
+
+
+def _poner_audio(token, chat, mid, user, sid, pend):
+    from . import app as webapp
+    from .web import UploadedFile
+    tmp = paths.tmp_dir() / ("tg_" + uuid.uuid4().hex + os.path.splitext(pend["nombre"])[1])
+    try:
+        info = notify._call(token, "getFile", {"file_id": pend["file_id"]})
+        req = urllib.request.Request(notify.FILE_API.format(token, info["file_path"]), headers={"User-Agent": "HAMNA-Web"})
+        with urllib.request.urlopen(req, timeout=180) as r, open(str(tmp), "wb") as out:
+            while True:
+                b = r.read(1 << 16)
+                if not b:
+                    break
+                out.write(b)
+        up = UploadedFile(pend["nombre"], str(tmp))
+        s = webapp.colaborador_audio(user, sid, up, via="telegram")
+        sale = [_linea_proximo(t, r) for t, r in _proximos(20, {e["evento_id"] for e in db.rows(
+            "SELECT evento_id FROM evento_secciones WHERE seccion_id=?", (sid,))})][:2]
+        _responder(token, chat, "✅ Listo: <b>{}</b> ya tiene tu audio nuevo ({}).{}\n\nSi te equivocaste, puedes regresar al anterior.".format(
+            notify.esc(s["nombre"]), _hm(s.get("duracion")), "\n📡 Sale: " + "\n".join(sale) if sale else ""),
+            botones=[[("↩ Regresar a la anterior", "ant:{}".format(sid))]] if s.get("anterior_archivo") else None, a=mid)
+    except ValueError as e:
+        _responder(token, chat, "❌ No lo pude poner: {}".format(notify.esc(e)), a=mid)
+    except Exception as e:
+        log.exception("No pude bajar el audio de Telegram")
+        _responder(token, chat, "❌ No pude bajar el audio de Telegram ({}). Intenta otra vez o súbelo en la página.".format(
+            notify.esc(e)), a=mid)
+    finally:
+        if tmp.exists():
+            paths.rm(tmp)
+
+
+# ── Mensajes privados al colaborador ────────────────────────────────────────
+def _colaboradores_de(sid):
+    """Usuarios activos con esa sección asignada y Telegram vinculado."""
+    return db.rows("""SELECT u.* FROM usuario_secciones us JOIN usuarios u ON u.id=us.usuario_id
+                      WHERE us.seccion_id=? AND u.activo=1 AND u.tg_id<>''""", (sid,))
+
+
+def _dm_listo(cfg):
+    return cfg.get("tg_enabled") and cfg.get("tg_token") and cfg.get("tg_collab_dm", True)
+
+
+def al_aire(ev, secs, estados):
+    """Al terminar una emisión: «tu sección salió al aire» a cada colaborador cuya sección salió completa."""
+    cfg = settings.load()
+    if not _dm_listo(cfg):
+        return
+    token = cfg["tg_token"].strip()
+    etq = numeracion.etiqueta(ev) if ev.get("num") or ev.get("numero") else ""
+
+    def work():
+        for i, s in enumerate(secs):
+            if i >= len(estados) or estados[i] != "ok":
+                continue
+            for u in _colaboradores_de(s["id"]):
+                try:
+                    notify._call(token, "sendMessage", {"chat_id": u["tg_id"], "parse_mode": "HTML", "text":
+                        "📡 Tu sección <b>{}</b> salió al aire en «{}»{} ✓".format(
+                            notify.esc(s["nombre"]), notify.esc(ev.get("nombre")), " " + notify.esc(etq) if etq else "")})
+                except Exception as e:
+                    log.warning("No pude avisarle a %s: %s", u["usuario"], e)
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _avisos_file():
+    return paths.data_dir() / "recordatorios.json"
+
+
+def tick(now):
+    """Recordatorio al colaborador si se acerca la emisión y no ha subido su audio
+    desde la última vez que salió al aire. Se revisa cada 10 min, de 9 a 21 h."""
+    cfg = settings.load()
+    dias = int(cfg.get("tg_recordar_dias", 2) or 0)
+    if not _dm_listo(cfg) or dias <= 0 or not 9 <= now.hour < 21:
+        return
+    if time.time() - _tick["t"] < 600:
+        return
+    _tick["t"] = time.time()
+    try:
+        hechos = json.loads(_avisos_file().read_text())
+    except Exception:
+        hechos = {}
+    hechos = {k: v for k, v in hechos.items() if time.time() - v < 40 * 86400}
+    token, cambio = cfg["tg_token"].strip(), False
+    for r in db.rows("""SELECT DISTINCT us.seccion_id FROM usuario_secciones us JOIN usuarios u ON u.id=us.usuario_id
+                        WHERE u.activo=1 AND u.tg_id<>''"""):
+        s = db.get_seccion(r["seccion_id"])
+        if not s or s["tipo"] not in ("Audio", "Sonido"):
+            continue
+        p = paths.audios_dir() / s["ruta_archivo"] if s.get("ruta_archivo") else None
+        mt = dt.datetime.fromtimestamp(p.stat().st_mtime) if p and p.is_file() else None
+        eids = {e["evento_id"] for e in db.rows("SELECT evento_id FROM evento_secciones WHERE seccion_id=?", (s["id"],))}
+        for t, row in _proximos(1, eids):
+            if (t - now).total_seconds() > dias * 86400:
+                continue
+            ult = db.row("SELECT MAX(inicio) AS i FROM historial WHERE evento_id=? AND inicio < ?",
+                         (row["evento_id"], now.strftime("%Y-%m-%d %H:%M:%S")))
+            ult = dt.datetime.strptime(ult["i"], "%Y-%m-%d %H:%M:%S") if ult and ult.get("i") else None
+            if mt and (not ult or mt > ult):
+                continue                            # ya la actualizó desde la última emisión
+            for u in _colaboradores_de(s["id"]):
+                key = "{}:{}:{}".format(u["id"], s["id"], t.strftime("%Y%m%d%H%M"))
+                if key in hechos:
+                    continue
+                try:
+                    notify._call(token, "sendMessage", {"chat_id": u["tg_id"], "parse_mode": "HTML", "text":
+                        "⏰ Hola, {}. Recuerda subir tu audio para <b>{}</b>: sale en «{}» el {} (en {}).\n\n"
+                        "📲 Mándamelo por aquí (audio o nota de voz) o súbelo en la página.".format(
+                            notify.esc(u.get("nombre") or u["usuario"]), notify.esc(s["nombre"]),
+                            notify.esc(row.get("evento_nombre")), _cuando(t), _falta((t - now).total_seconds()))})
+                    hechos[key] = time.time()
+                    cambio = True
+                    log.info("Recordatorio a %s para «%s»", u["usuario"], s["nombre"])
+                except Exception as e:
+                    log.warning("No pude mandar el recordatorio a %s: %s", u["usuario"], e)
+    if cambio:
+        try:
+            _avisos_file().write_text(json.dumps(hechos))
+        except Exception:
+            pass

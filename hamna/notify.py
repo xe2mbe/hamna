@@ -21,7 +21,9 @@ from . import settings
 
 log = logging.getLogger("hamna.avisos")
 
-API = os.environ.get("HAMNA_TG_API", "https://api.telegram.org").rstrip("/") + "/bot{}/{}"   # cambiable solo para pruebas
+BASE = os.environ.get("HAMNA_TG_API", "https://api.telegram.org").rstrip("/")   # cambiable solo para pruebas
+API = BASE + "/bot{}/{}"
+FILE_API = BASE + "/file/bot{}/{}"
 DEDUPE_SECS = 15 * 60
 _recent = {}
 _lock = threading.Lock()

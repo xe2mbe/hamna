@@ -393,6 +393,11 @@ class Engine:
             notify.send("error" if result.startswith("error") or result == "incompleto" else "fin",
                         resumen, dedupe="fin:{}".format(hid))
             try:
+                from . import bot
+                bot.al_aire(ev, secs, estados)
+            except Exception:
+                log.exception("No pude avisar a los colaboradores")
+            try:
                 self._links_after(ev, cfg)
             except Exception as e:
                 self.note("Conexiones al terminar: {}".format(e), "warn")
@@ -637,6 +642,11 @@ class Engine:
             sync.tick(now)
         except Exception:
             log.exception("Error al revisar las sincronizaciones")
+        try:
+            from . import bot
+            bot.tick(now)
+        except Exception:
+            log.exception("Error al revisar los recordatorios")
         try:
             from . import autobackup
             autobackup.tick(now, self.busy())

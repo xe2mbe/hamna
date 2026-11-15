@@ -720,3 +720,5 @@ label.btn { margin: 0; }
 .bot-help { font-size: .82rem; margin: 0 0 14px 30px; }
 a.btn { text-decoration: none; }
 .bot-st.ok { color: var(--ok); } .bot-st.bad { color: var(--warn); }
+.cb-tg { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-sm); padding: 10px 14px; margin: 0 0 14px; font-size: .92rem; }

@@ -557,8 +557,12 @@ def mis_secciones(req):
                     "anterior": {"duracion": float(s.get("anterior_duracion") or 0), "fecha": s.get("anterior_fecha") or ""}
                     if _sec_out(s)["tiene_anterior"] else None})
     eids = _mis_eventos(req)
+    from . import bot
+    tg = db.row("SELECT tg_id FROM usuarios WHERE id=?", (req.user["id"],)) or {}
     return jsonr({"secciones": out, "formatos": audio.formats(), "programacion": _prog_rows(eids),
-                  "ahora": now.strftime("%Y-%m-%d %H:%M:%S")})
+                  "ahora": now.strftime("%Y-%m-%d %H:%M:%S"),
+                  "telegram": {"disponible": bot.activo(), "vinculado": bool(tg.get("tg_id")),
+                               "bot": ("@" + bot.estado()["bot"]) if bot.estado()["bot"] else ""}})
 
 
 def _mis_eventos(req):
@@ -644,25 +648,37 @@ def mi_seccion_subir(req, sid):
             raise ValueError("Escribe el texto")
         db.update_seccion(sid, texto_tts=texto)
         _generate_tts(sid)
-        que = "cambió el texto de"
+        _aviso_colaborador(req.user, sid, "cambió el texto de")
     else:
         up = req.files.get("archivo")
         if not up:
             raise ValueError("Elige el archivo de audio")
-        db.update_seccion(sid, **_reemplazar_audio(sid, up))
-        if not settings.load().get("keep_originals", True):
-            _compact_section(sid)
-        que = "subió un audio nuevo para"
+        colaborador_audio(req.user, sid, up)
     s = db.get_seccion(sid)
-    quien = req.user.get("nombre") or req.user["usuario"]
-    log.info("%s (colaborador) %s la sección «%s»", req.user["usuario"], que, s["nombre"])
+    return ok(seccion={"id": sid, "duracion": float(s.get("duracion") or 0)})
+
+
+def colaborador_audio(user, sid, up, via=""):
+    """El colaborador reemplaza el audio de su sección (desde la página o por
+    Telegram): guarda la versión anterior, avisa al admin y prepara los eventos."""
+    db.update_seccion(sid, **_reemplazar_audio(sid, up))
+    if not settings.load().get("keep_originals", True):
+        _compact_section(sid)
+    _aviso_colaborador(user, sid, "subió un audio nuevo para", via)
+    return db.get_seccion(sid)
+
+
+def _aviso_colaborador(user, sid, que, via=""):
+    s = db.get_seccion(sid)
+    quien = user.get("nombre") or user["usuario"]
+    log.info("%s (colaborador) %s la sección «%s»%s", user["usuario"], que, s["nombre"], " por Telegram" if via else "")
     evs = [e["nombre"] for e in db.rows("""SELECT e.nombre FROM evento_secciones es JOIN eventos e ON e.id=es.evento_id
                                           WHERE es.seccion_id=?""", (sid,))]
-    notify.send("colaborador", "📤 <b>{}</b> {} «{}» ({}){}".format(
+    notify.send("colaborador", "📤 <b>{}</b> {} «{}» ({}){}{}".format(
         notify.esc(quien), que, notify.esc(s["nombre"]), notify.dur(s.get("duracion") or 0),
+        " · 📲 por Telegram" if via else "",
         "\n📋 Se usa en: " + notify.esc(", ".join(evs)) if evs else ""))
     threading.Thread(target=_prep_eventos_de, args=(sid,), daemon=True).start()
-    return ok(seccion={"id": sid, "duracion": float(s.get("duracion") or 0)})
 
 
 def _prep_eventos_de(sid):
@@ -1345,10 +1361,11 @@ def sesiones_accion(req, accion):
 NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_pitch": int,
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
-            "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int}
+            "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int,
+            "tg_recordar_dias": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
@@ -1383,6 +1400,8 @@ def ajustes_save(req):
         upd["tg_upcoming_mins"] = ", ".join(str(m) for m in notify.upcoming_minutes(upd))
     if "ab_hora" in upd and not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", upd["ab_hora"]):
         raise ValueError("Hora del respaldo inválida (HH:MM)")
+    if "tg_recordar_dias" in upd and not 0 <= upd["tg_recordar_dias"] <= 14:
+        raise ValueError("Días para el recordatorio: de 0 a 14")
     for k in ("ab_keep", "ab_recv_keep"):
         if k in upd and not 1 <= upd[k] <= 60:
             raise ValueError("Copias a conservar: de 1 a 60")

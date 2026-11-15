@@ -57,6 +57,11 @@
     "Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.":
       "Each device or browser you sign in from is a session. It closes by itself if you don't use it for 30 days (and after 90 days at most). If you don't recognize one, close it with its button.",
     "Comandos y botones": "Commands and buttons",
+    "📩 Mensajes privados al colaborador: le recuerdo subir su audio si no lo ha cambiado desde la última emisión, y le aviso cuando su sección sale al aire. También puede mandarme su audio por Telegram.":
+      "📩 Private messages to contributors: I remind them to upload their audio if they haven't changed it since the last broadcast, and tell them when their section airs. They can also send me their audio on Telegram.",
+    "Recordarle con (días de anticipación)": "Remind them (days in advance)",
+    "0 = no recordar. Los recordatorios se mandan de 9 a 21 h.": "0 = no reminder. Reminders are sent from 9 am to 9 pm.",
+    "Días para el recordatorio: de 0 a 14": "Reminder days: from 0 to 14",
     "🤖 El bot responde comandos (/estado, /proximo, /salud, /historial) y pone botones en los avisos para detener, pasar a la siguiente sección, transmitir ya o saltar una emisión.":
       "🤖 The bot answers commands (/estado, /proximo, /salud, /historial) and puts buttons on alerts to stop, skip to the next section, broadcast now or skip a broadcast.",
     "Cada usuario vincula su Telegram en Mi perfil (clic en su foto o nombre). Los botones solo los pueden usar operadores y el administrador. Si varios nodos usan el mismo bot, actívalo solo en uno.":

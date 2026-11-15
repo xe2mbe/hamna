@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.22.0">
+<link rel="stylesheet" href="static/app.css?v=1.23.0">
 </head>
 <body>
 
@@ -39,6 +39,7 @@
   <main class="collab-main">
     <h1>Mis secciones</h1>
     <p class="muted">Aquí subes el audio de las secciones que te asignaron. El audio nuevo sale al aire en la próxima transmisión.</p>
+    <p class="cb-tg hidden" id="cbTg"></p>
     <div id="cbList"><p class="muted">Cargando…</p></div>
     <div id="cbProg"></div>
   </main>
@@ -337,6 +338,9 @@
             <h3>Comandos y botones</h3>
             <label class="check"><input type="checkbox" name="tg_bot_on"> 🤖 El bot responde comandos (/estado, /proximo, /salud, /historial) y pone botones en los avisos para detener, pasar a la siguiente sección, transmitir ya o saltar una emisión.</label>
             <p class="muted bot-st" id="botSt"></p>
+            <label class="check"><input type="checkbox" name="tg_collab_dm"> 📩 Mensajes privados al colaborador: le recuerdo subir su audio si no lo ha cambiado desde la última emisión, y le aviso cuando su sección sale al aire. También puede mandarme su audio por Telegram.</label>
+            <label class="tg-sub">Recordarle con (días de anticipación)<input name="tg_recordar_dias" type="number" min="0" max="14" step="1" placeholder="2">
+              <small>0 = no recordar. Los recordatorios se mandan de 9 a 21 h.</small></label>
             <p class="muted bot-help">Cada usuario vincula su Telegram en Mi perfil (clic en su foto o nombre). Los botones solo los pueden usar operadores y el administrador. Si varios nodos usan el mismo bot, actívalo solo en uno.</p>
             <h3>Probar</h3>
             <p class="muted" style="margin-top:0">Manda a Telegram un mensaje de prueba o un ejemplo de cada aviso armado con los datos de un evento. No se transmite nada. Usa el token y el chat escritos arriba, aunque no los hayas guardado.</p>
@@ -531,7 +535,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.22.0"></script>
-<script src="static/app.js?v=1.22.0"></script>
+<script src="static/i18n.js?v=1.23.0"></script>
+<script src="static/app.js?v=1.23.0"></script>
 </body>
 </html>
