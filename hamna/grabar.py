@@ -90,7 +90,7 @@ class Grabadora:
             w.setframerate(RATE)
             self.g = {"titulo": (titulo or "Grabación")[:120], "origen": origen, "evento_id": evento_id,
                       "base": base, "part": part, "w": w, "inicio": now, "ultimo_audio": now, "ultimo_rx": 0.0,
-                      "frames": 0, "frames_activos": 0, "frames_ult_audio": 0,
+                      "frames": 0, "frames_activos": 0, "frames_ult_audio": 0, "sil_seguido": 0.0,
                       "silencio_max": max(1, int(cfg.get("rec_silencio_min", 5) or 5)) * 60,
                       "tope": max(10, int(cfg.get("rec_max_min", 180) or 180)) * 60}
         if not live.started:
@@ -109,16 +109,27 @@ class Grabadora:
             data = data[:len(data) - len(data) % 2]
             now = time.time()
             n = len(data) // 2
+            activo = _rms(data) > UMBRAL_RMS
+            # Sin aire muerto: app_rpt manda silencio continuo (ceros) y a veces deja de mandar;
+            # de cualquier silencio solo se guarda hasta HUECO_MAX segundos seguidos.
             if g["ultimo_rx"]:
                 hueco = now - g["ultimo_rx"] - n / float(RATE)
                 if hueco > 0.05:
-                    relleno = int(min(hueco, HUECO_MAX) * RATE)
-                    g["w"].writeframes(b"\0\0" * relleno)
-                    g["frames"] += relleno
+                    relleno = int(min(hueco, max(0.0, HUECO_MAX - g["sil_seguido"])) * RATE)
+                    if relleno:
+                        g["w"].writeframes(b"\0\0" * relleno)
+                        g["frames"] += relleno
+                        g["sil_seguido"] += relleno / float(RATE)
+            g["ultimo_rx"] = now
+            if activo:
+                g["sil_seguido"] = 0.0
+            elif g["sil_seguido"] >= HUECO_MAX:
+                return                              # silencio largo: no se graba
+            else:
+                g["sil_seguido"] += n / float(RATE)
             g["w"].writeframes(data)
             g["frames"] += n
-            g["ultimo_rx"] = now
-            if _rms(data) > UMBRAL_RMS:
+            if activo:
                 g["ultimo_audio"] = now
                 g["frames_activos"] += n
                 g["frames_ult_audio"] = g["frames"]
