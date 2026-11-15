@@ -50,6 +50,7 @@ DEFAULTS = {
     "section_normalize": True,
     "normalize_target": -18.0,
     "pause_volume": 95,
+    "keep_previous": True,        # al reemplazar un audio se guarda el anterior para poder regresarlo
     "keep_originals": True,       # False: al subir se guarda solo la versión para el aire
 
     # Avisos por Telegram
@@ -66,6 +67,7 @@ DEFAULTS = {
     "tg_on_section": False,
     "tg_on_backup": True,
     "tg_on_health": True,
+    "tg_on_collab": True,
 
     # Respaldo automático (ver autobackup.py)
     "ab_enabled": False,

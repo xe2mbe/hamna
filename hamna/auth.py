@@ -23,8 +23,9 @@ import time
 from . import db, settings
 from .web import check_password, hash_password
 
-ROLES = {"lectura": 1, "operador": 2, "admin": 3}
-ROL_NOMBRE = {"lectura": "Solo lectura", "operador": "Operador", "admin": "Administrador"}
+# colaborador (nivel 0): solo entra a «Mis secciones» y sube el audio de las que el admin le asignó
+ROLES = {"colaborador": 0, "lectura": 1, "operador": 2, "admin": 3}
+ROL_NOMBRE = {"colaborador": "Colaborador", "lectura": "Solo lectura", "operador": "Operador", "admin": "Administrador"}
 SESSION_DAYS = 30
 TOUCH_SECS = 60                 # actualizar "última actividad" a lo mucho cada minuto
 MAX_USER_IP, MAX_IP, LOCK_SECS = 5, 20, 15 * 60
@@ -68,6 +69,10 @@ def init():
         cols = [r[1] for r in c.execute("PRAGMA table_info(usuarios)")]
         if "idioma" not in cols:
             c.execute("ALTER TABLE usuarios ADD COLUMN idioma TEXT")
+        c.execute("""CREATE TABLE IF NOT EXISTS usuario_secciones (
+                         usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                         seccion_id INTEGER NOT NULL REFERENCES secciones(id) ON DELETE CASCADE,
+                         PRIMARY KEY (usuario_id, seccion_id))""")
         c.execute("DELETE FROM sesiones_web WHERE expira < ?", (time.time(),))
 
 
@@ -218,7 +223,35 @@ def users():
     out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso,
                        (SELECT COUNT(*) FROM sesiones_web s WHERE s.usuario_id=u.id AND s.expira > ?) AS sesiones
                      FROM usuarios u ORDER BY u.usuario COLLATE NOCASE""", (time.time(),))
-    return [_clean_user(u) for u in out]
+    secs = {}
+    for r in db.rows("SELECT usuario_id, seccion_id FROM usuario_secciones"):
+        secs.setdefault(r["usuario_id"], []).append(r["seccion_id"])
+    out = [_clean_user(u) for u in out]
+    for u in out:
+        u["secciones"] = secs.get(u["id"], [])
+    return out
+
+
+def user_sections(uid):
+    return [r["seccion_id"] for r in db.rows("SELECT seccion_id FROM usuario_secciones WHERE usuario_id=?", (uid,))]
+
+
+def set_user_sections(uid, ids):
+    ids = sorted({int(i) for i in ids or []})
+    with db.conn() as c:
+        c.execute("DELETE FROM usuario_secciones WHERE usuario_id=?", (uid,))
+        for i in ids:
+            if c.execute("SELECT 1 FROM secciones WHERE id=?", (i,)).fetchone():
+                c.execute("INSERT INTO usuario_secciones (usuario_id, seccion_id) VALUES (?,?)", (uid, i))
+
+
+def can_edit_section(user, sid):
+    if not user:
+        return False
+    if ROLES.get(user.get("rol"), 0) >= ROLES["operador"]:
+        return True
+    return bool(db.row("SELECT 1 AS x FROM usuario_secciones WHERE usuario_id=? AND seccion_id=?",
+                       (user["id"], sid)))
 
 
 def _check_pw(pw):

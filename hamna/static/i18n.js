@@ -25,6 +25,33 @@
     jueves: "Thursday", viernes: "Friday", "sábado": "Saturday" };
 
   const D = {
+    // Colaborador
+    "Colaborador": "Contributor", "Mis secciones": "My sections", "🔑 Contraseña": "🔑 Password", "Salir": "Sign out",
+    "Aquí subes el audio de las secciones que te asignaron. El audio nuevo sale al aire en la próxima transmisión.":
+      "Here you upload the audio for the sections assigned to you. The new audio goes on air in the next broadcast.",
+    "⬆ Subir audio nuevo": "⬆ Upload new audio", "Texto que lee la voz": "Text read by the voice", "Guardar texto": "Save text",
+    "Generando voz…": "Generating voice…", "Texto guardado ✓": "Text saved ✓", "Audio actualizado ✓": "Audio updated ✓",
+    "Sí, reemplazar": "Yes, replace", "⚠ Sin audio": "⚠ No audio",
+    "Cambiar": "Change", "Contraseña cambiada": "Password changed",
+    "Todavía no tienes secciones asignadas. Pídele al administrador que te asigne una.":
+      "You don't have any sections assigned yet. Ask the administrator to assign you one.",
+    "Secciones que puede actualizar": "Sections they can update", "Sin secciones asignadas": "No sections assigned",
+    "Todavía no hay secciones.": "There are no sections yet.",
+    "Todo, incluidos usuarios, ajustes y respaldos.": "Everything, including users, settings and backups.",
+    "Programa, transmite y edita eventos y secciones.": "Schedules, broadcasts and edits events and sections.",
+    "Solo ve; no puede cambiar nada.": "Can only view; can't change anything.",
+    "Solo entra a «Mis secciones» y sube el audio de las secciones que le asignes. Te llega un aviso por Telegram cada vez.":
+      "Only sees «My sections» and uploads the audio for the sections you assign. You get a Telegram alert each time.",
+    "📤 Cuando un colaborador sube el audio de una sección": "📤 When a contributor uploads a section's audio",
+    "Elige el archivo de audio": "Choose the audio file", "Escribe el texto": "Write the text",
+    "↩ Regresar a la anterior": "↩ Go back to the previous one", "Sí, regresar": "Yes, go back",
+    "Versión anterior restaurada": "Previous version restored",
+    "↩ Al reemplazar el audio de una sección, guardar el anterior para poder regresarlo":
+      "↩ When a section's audio is replaced, keep the previous one so it can be restored",
+    "Esta sección no tiene versión anterior": "This section has no previous version",
+    "No encontré el archivo de la versión anterior": "Couldn't find the previous version's file",
+    "No se pudo cambiar el audio (¿se está usando en este momento?). Intenta de nuevo en un momento.":
+      "Couldn't switch the audio (is it in use right now?). Try again in a moment.",
     // Numeración de emisiones
     "Emisión global · emisión del año": "Overall broadcast · broadcast of the year",
     "🔢 Numerar las emisiones automáticamente": "🔢 Number broadcasts automatically",
@@ -134,6 +161,7 @@
     ": todo.": ": everything.", ": transmitir, programar, editar eventos y secciones, conectar nodos y ver el cron.":
       ": broadcast, schedule, edit events and sections, connect nodes and view cron.",
     ": ver estado, programación, eventos y conexiones.": ": view status, schedule, events and connections.",
+    ": solo sube el audio de las secciones que le asignes (por ejemplo, el editorial).": ": only uploads the audio for the sections you assign (for example, the editorial).",
     "+ Nuevo usuario": "+ New user", "Sesiones abiertas": "Open sessions", "Idioma": "Language",
     "Nuevo usuario": "New user", "Editar usuario": "Edit user", "Nombre": "Name", "Rol": "Role",
     "Para entrar. Letras, números, punto o guion.": "Used to sign in. Letters, numbers, dot or dash.",
@@ -514,6 +542,13 @@
 
   const M = (re, fn) => [re, fn];
   const P = [
+    M(/^¿Reemplazar el audio de (.+) con «(.+)»\?$/, (m, a, b) => `Replace the audio of ${a} with «${b}»?`),
+    M(/^¿Regresar (.+) a la versión anterior\? La actual queda como anterior, por si cambias de opinión\.$/,
+      (m, a) => `Go back to the previous version of ${a}? The current one becomes the previous one, in case you change your mind.`),
+    M(/^↩ Versión anterior: (\S+)( · reemplazada (\S+) (\S+) (\S+))?$/,
+      (m, d, x, dia, f, h) => `↩ Previous version: ${d}` + (x ? ` · replaced ${DIA[dia] || dia} ${f} ${h}` : "")),
+    M(/^(.+) · actualizado (\S+) (\S+) (\S+)$/, (m, d, dia, f, h) => `${d} · updated ${DIA[dia] || dia} ${f} ${h}`),
+    M(/^📡 (.+) · sale (\S+) (\S+) (\S+)$/, (m, e, dia, f, h) => `📡 ${e} · airs ${DIA[dia] || dia} ${f} ${h}`),
     M(/^(🔢 )?Próxima emisión: (\S+) (\S+) · global #(-?\d+) · (\d+) #(\d+)$/,
       (m, i, d, f, g, y, n) => `${i || ""}Next broadcast: ${DIA[d] || d} ${f} · overall #${g} · ${y} #${n}`),
     M(/^Exportar: (.+)$/, (m, a) => "Export: " + a),

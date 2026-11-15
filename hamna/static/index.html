@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.19.0">
+<link rel="stylesheet" href="static/app.css?v=1.20.0">
 </head>
 <body>
 
@@ -27,6 +27,21 @@
     <div class="lang-pick" translate="no"><button type="button" data-lang="en">English</button><span>·</span><button type="button" data-lang="es">Español</button></div>
   </form>
 </section>
+
+<!-- Colaborador: solo sus secciones -->
+<div id="collab" class="collab hidden">
+  <header class="collab-top">
+    <div class="collab-brand"><img class="brand-mark" src="static/logo.svg" alt=""><img id="cbLogo" class="top-logo hidden" alt=""><b id="cbStation">HAMNA Web</b></div>
+    <div class="collab-user"><span class="muted" id="cbUser"></span>
+      <button type="button" class="btn sm" id="cbPw">🔑 Contraseña</button>
+      <button type="button" class="btn sm" id="cbLogout">Salir</button></div>
+  </header>
+  <main class="collab-main">
+    <h1>Mis secciones</h1>
+    <p class="muted">Aquí subes el audio de las secciones que te asignaron. El audio nuevo sale al aire en la próxima transmisión.</p>
+    <div id="cbList"><p class="muted">Cargando…</p></div>
+  </main>
+</div>
 
 <!-- App -->
 <div id="app" class="hidden">
@@ -282,6 +297,7 @@
             </div>
             <p class="muted">Todo se convierte a 8 kHz mono, el formato que usan Asterisk e IRLP. El nivel se mide en mono, como sale al aire, con limitador de picos a -2 dB.</p>
             <h3>Espacio en disco</h3>
+            <label class="check"><input type="checkbox" name="keep_previous"> ↩ Al reemplazar el audio de una sección, guardar el anterior para poder regresarlo</label>
             <label class="check"><input type="checkbox" name="keep_originals"> Guardar los audios originales</label>
             <p class="muted">Si lo desactivas, al subir un audio se guarda solo la versión ya lista para el aire y se borra el original: ocupa casi la mitad, porque ya no se guardan dos copias de cada audio. A cambio, si después cambias el nivel objetivo, esos audios no se vuelven a nivelar, y lo que descargues desde la página será la versión de 8 kHz.</p>
             <div class="row gap"><button type="button" class="btn" id="btnCompactar">Convertir los ya subidos y borrar originales</button></div>
@@ -314,6 +330,7 @@
               <small>Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.</small></label>
             <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones</label>
             <label class="check"><input type="checkbox" name="tg_on_backup"> 💾 Si falla el respaldo automático</label>
+            <label class="check"><input type="checkbox" name="tg_on_collab"> 📤 Cuando un colaborador sube el audio de una sección</label>
             <label class="check"><input type="checkbox" name="tg_on_health"> 🩺 Salud del nodo: errores de la tarjeta SD, escritura lenta, bajo voltaje, temperatura alta, poco disco (y cuando se normaliza)</label>
             <label class="check"><input type="checkbox" name="tg_on_section"> 🔹 Al empezar cada sección (cuál es, cuánto dura y cuál sigue)</label>
             <label class="check"><input type="checkbox" name="tg_on_end"> ✅ Resumen al terminar: cuánto duró y qué secciones salieron completas, interrumpidas o sin audio</label>
@@ -355,7 +372,7 @@
           <fieldset data-set="usuarios" class="hidden">
             <legend>Usuarios</legend>
             <div class="row gap wrap" style="justify-content:space-between;margin-bottom:14px">
-              <p class="muted" style="margin:0;max-width:640px"><b>Administrador</b>: todo. <b>Operador</b>: transmitir, programar, editar eventos y secciones, conectar nodos y ver el cron. <b>Solo lectura</b>: ver estado, programación, eventos y conexiones.</p>
+              <p class="muted" style="margin:0;max-width:640px"><b>Administrador</b>: todo. <b>Operador</b>: transmitir, programar, editar eventos y secciones, conectar nodos y ver el cron. <b>Solo lectura</b>: ver estado, programación, eventos y conexiones. <b>Colaborador</b>: solo sube el audio de las secciones que le asignes (por ejemplo, el editorial).</p>
               <button type="button" class="btn primary" id="btnUserNew">+ Nuevo usuario</button>
             </div>
             <div id="userList" class="ulist"><p class="muted">Cargando…</p></div>
@@ -496,7 +513,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.19.0"></script>
-<script src="static/app.js?v=1.19.0"></script>
+<script src="static/i18n.js?v=1.20.0"></script>
+<script src="static/app.js?v=1.20.0"></script>
 </body>
 </html>

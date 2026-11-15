@@ -122,7 +122,7 @@ def me(req):
                   "usuario": {k: u.get(k) for k in ("id", "usuario", "nombre", "rol", "rol_nombre", "idioma")} if u else None})
 
 
-@app.route("/api/mi-idioma", ("PUT",), rol="lectura")
+@app.route("/api/mi-idioma", ("PUT",), rol="colaborador")
 def mi_idioma(req):
     auth.set_language(req.user["id"], (req.json().get("idioma") or "").lower())
     return ok()
@@ -140,6 +140,8 @@ def usuarios(req):
 def usuarios_crear(req):
     b = req.json()
     uid = auth.create_user(b.get("usuario"), b.get("nombre"), b.get("rol") or "operador", b.get("password"))
+    if "secciones" in b:
+        auth.set_user_sections(uid, b["secciones"])
     log.info("%s creó el usuario %s (%s)", req.user["usuario"], b.get("usuario"), b.get("rol"))
     return ok(id=uid)
 
@@ -151,6 +153,8 @@ def usuarios_editar(req, uid):
     if uid == req.user["id"] and (f.get("rol", "admin") != "admin" or f.get("activo") is False):
         raise ValueError("No puedes quitarte el rol de administrador ni desactivarte a ti mismo")
     auth.update_user(uid, cur_sid=req.user["sid"], **f)
+    if "secciones" in b:
+        auth.set_user_sections(uid, b["secciones"])
     log.info("%s modificó el usuario #%s (%s)", req.user["usuario"], uid, ", ".join(sorted(f)))
     return ok()
 
@@ -168,12 +172,12 @@ def usuarios_desbloquear(req):
     return ok()
 
 
-@app.route("/api/mis-sesiones", rol="lectura")
+@app.route("/api/mis-sesiones", rol="colaborador")
 def mis_sesiones(req):
     return jsonr({"sesiones": auth.sessions(req.user["id"]), "mi_sesion": req.user["sid"]})
 
 
-@app.route("/api/mis-sesiones/<int:sid>", ("DELETE",), rol="lectura")
+@app.route("/api/mis-sesiones/<int:sid>", ("DELETE",), rol="colaborador")
 def cerrar_sesion(req, sid):
     if req.user["rol"] == "admin":
         auth.revoke(sid)                   # el administrador puede cerrar cualquiera
@@ -182,7 +186,7 @@ def cerrar_sesion(req, sid):
     return ok()
 
 
-@app.route("/api/mis-sesiones/otras", ("POST",), rol="lectura")
+@app.route("/api/mis-sesiones/otras", ("POST",), rol="colaborador")
 def cerrar_otras(req):
     auth.revoke_user(req.user["id"], except_sid=req.user["sid"])
     return ok()
@@ -306,7 +310,87 @@ def info(req):
 def _sec_out(s):
     s = dict(s)
     s["tiene_audio"] = bool(s.get("ruta_archivo")) and (paths.audios_dir() / s["ruta_archivo"]).is_file()
+    s["tiene_anterior"] = bool(s.get("anterior_archivo")) and (_anteriores_dir() / s["anterior_archivo"]).is_file()
     return s
+
+
+# ── Versión anterior del audio de una sección ───────────────────────────────
+def _anteriores_dir():
+    d = paths.audios_dir() / "anteriores"
+    if not d.is_dir():
+        os.makedirs(str(d), exist_ok=True)
+    return d
+
+
+def _reemplazar_audio(sid, up):
+    """Guarda el archivo subido como audio de la sección. Si está activado,
+    el audio que tenía pasa a ser la versión anterior (una sola por sección).
+    Devuelve los campos para db.update_seccion."""
+    s = db.get_seccion(sid) or {}
+    old = s.get("ruta_archivo") or ""
+    oldp = paths.audios_dir() / old if old else None
+    prev = None
+    if oldp and oldp.is_file() and settings.load().get("keep_previous", True):
+        d = _anteriores_dir()
+        if s.get("anterior_archivo"):
+            paths.rm(d / s["anterior_archivo"])
+        shutil.move(str(oldp), str(d / old))       # antes de guardar: el nuevo puede llamarse igual
+        prev = {"anterior_archivo": old, "anterior_duracion": float(s.get("duracion") or 0),
+                "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M")}
+    try:
+        dest = save_upload(up, paths.audios_dir(), str(sid))
+    except Exception:
+        if prev:
+            shutil.move(str(_anteriores_dir() / old), str(oldp))
+            prev = None
+        raise
+    if not prev and old and old != dest.name:
+        paths.rm(oldp)
+    f = {"ruta_archivo": dest.name, "duracion": audio.duration(dest)}
+    f.update(prev or {})
+    return f
+
+
+def _restaurar_anterior(sid):
+    """Intercambia el audio actual con la versión anterior."""
+    s = db.get_seccion(sid)
+    if not s or not s.get("anterior_archivo"):
+        raise ValueError("Esta sección no tiene versión anterior")
+    d = _anteriores_dir()
+    ap = d / s["anterior_archivo"]
+    if not ap.is_file():
+        raise ValueError("No encontré el archivo de la versión anterior")
+    tmp = d / ("cambio_" + uuid.uuid4().hex)
+    shutil.move(str(ap), str(tmp))
+    cur = s.get("ruta_archivo") or ""
+    cp = paths.audios_dir() / cur if cur else None
+    campos = {"anterior_archivo": "", "anterior_duracion": 0, "anterior_fecha": ""}
+    target = paths.audios_dir() / s["anterior_archivo"]
+    movido = False
+    try:
+        if cp and cp.is_file():
+            shutil.move(str(cp), str(d / cur))
+            movido = True
+            campos = {"anterior_archivo": cur, "anterior_duracion": float(s.get("duracion") or 0),
+                      "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M")}
+        shutil.move(str(tmp), str(target))
+    except Exception:
+        log.exception("No se pudo regresar la versión anterior de la sección #%s", sid)
+        # dejar todo como estaba
+        if movido and not cp.exists():
+            shutil.move(str(d / cur), str(cp))
+        if tmp.exists():
+            shutil.move(str(tmp), str(ap))
+        raise ValueError("No se pudo cambiar el audio (¿se está usando en este momento?). Intenta de nuevo en un momento.")
+    campos.update(ruta_archivo=target.name, duracion=audio.duration(target))
+    db.update_seccion(sid, **campos)
+    threading.Thread(target=_prep_eventos_de, args=(sid,), daemon=True).start()
+
+
+def _audio_anterior(s):
+    if not s or not s.get("anterior_archivo") or not (_anteriores_dir() / s["anterior_archivo"]).is_file():
+        raise HTTPError(404)
+    return _browser_file(_anteriores_dir() / s["anterior_archivo"])
 
 
 @app.route("/api/secciones")
@@ -360,18 +444,121 @@ def _apply_section(req, sid, tipo, is_new):
     if "nombre" in fields and not fields["nombre"]:
         raise ValueError("La sección necesita un nombre")
     up = req.files.get("archivo")
-    old = db.get_seccion(sid)
     if up:
-        dest = save_upload(up, paths.audios_dir(), str(sid))
-        fields["ruta_archivo"] = dest.name
-        fields["duracion"] = audio.duration(dest)
-        if old and old.get("ruta_archivo") and old["ruta_archivo"] != dest.name:
-            paths.rm(paths.audios_dir() / old["ruta_archivo"])
+        fields.update(_reemplazar_audio(sid, up))
     db.update_seccion(sid, **fields)
     if up and not settings.load().get("keep_originals", True):
         _compact_section(sid)
     if tipo == "TTS" and (is_new or truthy(form.get("generar", "0"))):
         _generate_tts(sid)
+
+
+# ── Mis secciones (rol colaborador) ──────────────────────────────────────────
+def _mi_seccion(req, sid):
+    s = db.get_seccion(sid)
+    if not s or sid not in auth.user_sections(req.user["id"]):
+        raise HTTPError(404)
+    return s
+
+
+@app.route("/api/mis-secciones", rol="colaborador")
+def mis_secciones(req):
+    ids = auth.user_sections(req.user["id"])
+    progs = db.get_programacion(solo_activos=True)
+    now = dt.datetime.now()
+    out = []
+    for sid in ids:
+        s = db.get_seccion(sid)
+        if not s:
+            continue
+        p = paths.audios_dir() / s["ruta_archivo"] if s.get("ruta_archivo") else None
+        evs = db.rows("""SELECT e.id, e.nombre FROM evento_secciones es JOIN eventos e ON e.id=es.evento_id
+                         WHERE es.seccion_id=? ORDER BY e.nombre COLLATE NOCASE""", (sid,))
+        for e in evs:
+            nxt = [t for t in (engine.next_run(r, now) for r in progs if r["evento_id"] == e["id"]) if t]
+            e["proxima"] = min(nxt).strftime("%Y-%m-%d %H:%M") if nxt else None
+        out.append({"id": sid, "nombre": s["nombre"], "tipo": s["tipo"], "titulo": s.get("titulo") or "",
+                    "texto_tts": s.get("texto_tts") or "" if s["tipo"] == "TTS" else "",
+                    "duracion": float(s.get("duracion") or 0), "tiene_audio": bool(p and p.is_file()),
+                    "actualizado": dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                    if p and p.is_file() else None, "eventos": evs,
+                    "anterior": {"duracion": float(s.get("anterior_duracion") or 0), "fecha": s.get("anterior_fecha") or ""}
+                    if _sec_out(s)["tiene_anterior"] else None})
+    return jsonr({"secciones": out, "formatos": audio.formats()})
+
+
+@app.route("/api/mis-secciones/<int:sid>/audio", rol="colaborador")
+def mi_seccion_audio(req, sid):
+    s = _mi_seccion(req, sid)
+    if not s.get("ruta_archivo"):
+        raise HTTPError(404)
+    return _browser_file(paths.audios_dir() / s["ruta_archivo"])
+
+
+@app.route("/api/mis-secciones/<int:sid>/anterior", rol="colaborador")
+def mi_seccion_anterior(req, sid):
+    return _audio_anterior(_mi_seccion(req, sid))
+
+
+@app.route("/api/mis-secciones/<int:sid>/anterior", ("POST",), rol="colaborador")
+def mi_seccion_regresar(req, sid):
+    s = _mi_seccion(req, sid)
+    _restaurar_anterior(sid)
+    quien = req.user.get("nombre") or req.user["usuario"]
+    log.info("%s (colaborador) regresó la versión anterior de «%s»", req.user["usuario"], s["nombre"])
+    notify.send("colaborador", "↩ <b>{}</b> regresó la versión anterior de «{}»".format(
+        notify.esc(quien), notify.esc(s["nombre"])))
+    return ok()
+
+
+@app.route("/api/secciones/<int:sid>/anterior")
+def seccion_anterior(req, sid):
+    return _audio_anterior(db.get_seccion(sid))
+
+
+@app.route("/api/secciones/<int:sid>/anterior", ("POST",))
+def seccion_regresar(req, sid):
+    _restaurar_anterior(sid)
+    log.info("%s regresó la versión anterior de la sección #%s", req.user["usuario"], sid)
+    return ok(seccion=_sec_out(db.get_seccion(sid)))
+
+
+@app.route("/api/mis-secciones/<int:sid>", ("POST",), rol="colaborador")
+def mi_seccion_subir(req, sid):
+    s = _mi_seccion(req, sid)
+    if s["tipo"] == "TTS":
+        texto = (req.form.get("texto_tts") or "").strip()
+        if not texto:
+            raise ValueError("Escribe el texto")
+        db.update_seccion(sid, texto_tts=texto)
+        _generate_tts(sid)
+        que = "cambió el texto de"
+    else:
+        up = req.files.get("archivo")
+        if not up:
+            raise ValueError("Elige el archivo de audio")
+        db.update_seccion(sid, **_reemplazar_audio(sid, up))
+        if not settings.load().get("keep_originals", True):
+            _compact_section(sid)
+        que = "subió un audio nuevo para"
+    s = db.get_seccion(sid)
+    quien = req.user.get("nombre") or req.user["usuario"]
+    log.info("%s (colaborador) %s la sección «%s»", req.user["usuario"], que, s["nombre"])
+    evs = [e["nombre"] for e in db.rows("""SELECT e.nombre FROM evento_secciones es JOIN eventos e ON e.id=es.evento_id
+                                          WHERE es.seccion_id=?""", (sid,))]
+    notify.send("colaborador", "📤 <b>{}</b> {} «{}» ({}){}".format(
+        notify.esc(quien), que, notify.esc(s["nombre"]), notify.dur(s.get("duracion") or 0),
+        "\n📋 Se usa en: " + notify.esc(", ".join(evs)) if evs else ""))
+    threading.Thread(target=_prep_eventos_de, args=(sid,), daemon=True).start()
+    return ok(seccion={"id": sid, "duracion": float(s.get("duracion") or 0)})
+
+
+def _prep_eventos_de(sid):
+    for r in db.rows("SELECT evento_id FROM evento_secciones WHERE seccion_id=?", (sid,)):
+        try:
+            engine.prepare_event(r["evento_id"])
+        except Exception as e:
+            log.warning("No se pudo preparar el evento #%s: %s", r["evento_id"], e)
 
 
 @app.route("/api/secciones", ("POST",))
@@ -411,6 +598,8 @@ def seccion_del(req, sid):
     if s:
         if s.get("ruta_archivo"):
             paths.rm(paths.audios_dir() / s["ruta_archivo"])
+        if s.get("anterior_archivo"):
+            paths.rm(_anteriores_dir() / s["anterior_archivo"])
         db.delete_seccion(sid)
     return ok()
 
@@ -1035,9 +1224,9 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int}
-BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals",
+BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
@@ -1241,7 +1430,7 @@ def remoto_respaldo(req):
     return ok(guardado=name)
 
 
-@app.route("/api/ajustes/password", ("POST",), rol="lectura")
+@app.route("/api/ajustes/password", ("POST",), rol="colaborador")
 def ajustes_password(req):
     """Cada quien cambia su propia contraseña; cierra sus otras sesiones."""
     b = req.json()

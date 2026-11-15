@@ -119,6 +119,12 @@ def init_db():
         cols = [r[1] for r in c.execute("PRAGMA table_info(programacion)")]
         if "zona" not in cols:
             c.execute("ALTER TABLE programacion ADD COLUMN zona TEXT DEFAULT ''")
+        # Versión anterior del audio de cada sección (audios/anteriores/)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(secciones)")]
+        if "anterior_archivo" not in cols:
+            c.execute("ALTER TABLE secciones ADD COLUMN anterior_archivo TEXT DEFAULT ''")
+            c.execute("ALTER TABLE secciones ADD COLUMN anterior_duracion REAL DEFAULT 0")
+            c.execute("ALTER TABLE secciones ADD COLUMN anterior_fecha TEXT DEFAULT ''")
         # Numeración automática de emisiones (ver numeracion.py)
         cols = [r[1] for r in c.execute("PRAGMA table_info(eventos)")]
         if "num_auto" not in cols:
@@ -150,7 +156,8 @@ def get_eventos_types():
 # ── Secciones ──────────────────────────────────────────────────────────────────
 _SEC_SELECT = """
     SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
-           s.duracion, s.regenerar_antes, s.titulo, s.descripcion, s.creado_en
+           s.duracion, s.regenerar_antes, s.titulo, s.descripcion, s.creado_en,
+           s.anterior_archivo, s.anterior_duracion, s.anterior_fecha
     FROM secciones s LEFT JOIN tipos_seccion ts ON ts.id = s.tipo_seccion_id
 """
 
@@ -180,7 +187,8 @@ def insert_seccion(nombre, tipo, texto_tts=None, regenerar_antes=False,
 
 def update_seccion(sid, **fields):
     allowed = {"nombre", "ruta_archivo", "texto_tts", "duracion",
-               "regenerar_antes", "titulo", "descripcion"}
+               "regenerar_antes", "titulo", "descripcion",
+               "anterior_archivo", "anterior_duracion", "anterior_fecha"}
     sets, vals = [], []
     for k, v in fields.items():
         if k in allowed:

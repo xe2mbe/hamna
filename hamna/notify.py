@@ -36,6 +36,7 @@ KINDS = {
     "seccion": "tg_on_section",      # al empezar cada sección
     "respaldo": "tg_on_backup",      # respaldo automático fallido
     "salud": "tg_on_health",         # SD, voltaje, temperatura, disco (health.py)
+    "colaborador": "tg_on_collab",   # un colaborador subió el audio de una sección
 }
 MAX_LINES = 40          # Telegram corta en 4096 caracteres
 

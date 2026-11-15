@@ -83,7 +83,7 @@ function confirmBox(msg, okLabel = "Sí, continuar", danger = true) {
 
 /* ── Sesión ──────────────────────────────────────────────────────────────── */
 function showLogin() {
-  $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
+  $("#app").classList.add("hidden"); $("#collab").classList.add("hidden"); $("#login").classList.remove("hidden");
   S.polling = false; clearTimeout(S.pollTimer);
   clearInterval(S.clockTimer); S.clockTimer = null;
   let last = ""; try { last = localStorage.getItem("hamna.user") || ""; } catch {}
@@ -110,7 +110,11 @@ $("#loginForm").onsubmit = async (e) => {
 };
 
 async function start() {
-  $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
+  $("#login").classList.add("hidden");
+  let me = null;
+  try { me = await api("api/me"); S.me = me.usuario; } catch {}
+  if (S.me && S.me.rol === "colaborador") return startCollab(me);
+  $("#app").classList.remove("hidden");
   try { S.cfg = await api("api/ajustes"); } catch { return; }
   try { S.me = (await api("api/me")).usuario; } catch {}
   if (S.me) {
@@ -1080,6 +1084,9 @@ async function seccionForm(s) {
         <label>Archivo de audio<input type="file" name="archivo" accept="${info.formatos.join(",")},audio/*">
           <small>${!isNew && s.ruta_archivo ? "Actual: " + esc(s.ruta_archivo) + " · " + fmt(s.duracion) + ". Sube otro solo si quieres reemplazarlo." : info.formatos.map((f) => f.slice(1).toUpperCase()).join(", ") + ". Se convierte solo al formato del nodo."}</small></label>
         <div id="sfProg" class="bar hidden"><div></div></div>
+        ${!isNew && s.tiene_anterior ? `<div class="prev-box"><span>↩ Versión anterior: ${fmt(s.anterior_duracion)}${s.anterior_fecha ? " · reemplazada " + esc(fechaCorta(s.anterior_fecha)) : ""}</span>
+          <audio controls preload="none" src="api/secciones/${s.id}/anterior?t=${encodeURIComponent(s.anterior_fecha || "")}"></audio>
+          <button type="button" class="btn sm" id="sfPrevBack">↩ Regresar a la anterior</button></div>` : ""}
       </div>
       <div class="modal-actions">
         <button type="button" class="btn" onclick="closeModal()">Cancelar</button>
@@ -1118,6 +1125,10 @@ async function seccionForm(s) {
       const a = $("#sfAudio"); a.src = r.url; a.classList.remove("hidden"); a.play();
       $("#sfResolved").textContent = "Se leerá: " + r.texto;
     } catch (e) { toast(e.message, true); } finally { busy(b, false); }
+  };
+  if ($("#sfPrevBack")) $("#sfPrevBack").onclick = async () => {
+    if (!(await confirmBox(`¿Regresar «${s.nombre}» a la versión anterior? La actual queda como anterior, por si cambias de opinión.`, "Sí, regresar", false))) return;
+    try { await run(() => api(`api/secciones/${s.id}/anterior`, { method: "POST" }), "Versión anterior restaurada"); closeModal(); loadSecciones(); } catch {}
   };
   f.onsubmit = async (e) => {
     e.preventDefault();
@@ -1352,6 +1363,80 @@ async function nodeReadyAudio(file) {
   for (let i = 0; i < pcm.length; i++) { const v = Math.max(-1, Math.min(1, pcm[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true); }
   return new File([dv.buffer], file.name.replace(/\.[^.]+$/, "") + ".wav", { type: "audio/wav" });
 }
+/* ── Colaborador: «Mis secciones» ────────────────────────────────────────────── */
+async function startCollab(me) {
+  if (S.me.idioma && S.me.idioma !== window.HAMNA_LANG) { window.hamnaSetLang(S.me.idioma); return; }
+  if (!S.me.idioma) api("api/mi-idioma", { method: "PUT", json: { idioma: window.HAMNA_LANG } }).catch(() => {});
+  $("#app").classList.add("hidden"); $("#collab").classList.remove("hidden");
+  $("#cbStation").textContent = (me && me.station) || "HAMNA Web";
+  if (me && me.logo) { $("#cbLogo").src = me.logo; $("#cbLogo").classList.remove("hidden"); }
+  $("#cbUser").textContent = S.me.nombre || S.me.usuario;
+  loadCollab();
+}
+const fechaCorta = (s) => {
+  const d = new Date(s.replace(" ", "T"));
+  return isNaN(d) ? s : `${DIAS[d.getDay()]} ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+async function loadCollab() {
+  const box = $("#cbList");
+  let r;
+  try { r = await api("api/mis-secciones"); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  S.info = Object.assign(S.info || {}, { formatos: r.formatos });
+  if (!r.secciones.length) { box.innerHTML = `<p class="empty">Todavía no tienes secciones asignadas. Pídele al administrador que te asigne una.</p>`; return; }
+  box.innerHTML = r.secciones.map((s) => `<div class="bk-card cb-sec" data-id="${s.id}">
+      <div class="cb-head"><h3>${s.tipo === "TTS" ? "🗣" : "🎙"} ${esc(s.nombre)}</h3>
+        <span class="muted">${s.tiene_audio ? fmt(s.duracion) + (s.actualizado ? " · actualizado " + esc(fechaCorta(s.actualizado)) : "") : "⚠ Sin audio"}</span></div>
+      ${s.eventos.length ? `<p class="muted cb-ev">📡 ${s.eventos.map((e) => esc(e.nombre) + (e.proxima ? " · sale " + esc(fechaCorta(e.proxima)) : "")).join("<br>📡 ")}</p>` : ""}
+      ${s.tiene_audio ? `<audio controls preload="none" src="api/mis-secciones/${s.id}/audio?t=${encodeURIComponent(s.actualizado || "")}"></audio>` : ""}
+      ${s.tipo === "TTS" ? `<label>Texto que lee la voz<textarea rows="6" data-texto>${esc(s.texto_tts)}</textarea></label>
+        <div class="row gap"><button type="button" class="btn primary" data-guardar>Guardar texto</button></div>`
+      : `<div class="row gap wrap"><label class="btn primary cb-up">⬆ Subir audio nuevo<input type="file" accept="${r.formatos.join(",")},audio/*" hidden data-file></label>
+          <span class="muted" style="font-size:.85rem">${r.formatos.map((f) => f.slice(1).toUpperCase()).join(", ")}</span></div>
+        <div class="bar hidden" data-bar><div></div></div>`}
+      ${s.anterior ? `<div class="prev-box"><span>↩ Versión anterior: ${fmt(s.anterior.duracion)}${s.anterior.fecha ? " · reemplazada " + esc(fechaCorta(s.anterior.fecha)) : ""}</span>
+        <audio controls preload="none" src="api/mis-secciones/${s.id}/anterior?t=${encodeURIComponent(s.anterior.fecha)}"></audio>
+        <button type="button" class="btn sm" data-regresar>↩ Regresar a la anterior</button></div>` : ""}
+    </div>`).join("");
+}
+$("#cbList").addEventListener("change", async (e) => {
+  const inp = e.target.closest("[data-file]"); if (!inp || !inp.files[0]) return;
+  const card = inp.closest(".cb-sec"), id = card.dataset.id, nombre = $("h3", card).textContent.trim();
+  const file = inp.files[0]; inp.value = "";
+  if (!(await confirmBox(`¿Reemplazar el audio de ${nombre} con «${file.name}»?`, "Sí, reemplazar", false))) return;
+  const btn = $(".cb-up", card);
+  try {
+    const af = await nodeReadyAudio(file);
+    const fd = new FormData(); fd.append("archivo", af, af.name);
+    await upload(`api/mis-secciones/${id}`, fd, btn, $("[data-bar]", card));
+    toast("Audio actualizado ✓"); loadCollab();
+  } catch (err) { toast(err.message, true); }
+});
+$("#cbList").addEventListener("click", async (e) => {
+  const rg = e.target.closest("[data-regresar]");
+  if (rg) {
+    const card = rg.closest(".cb-sec"), nombre = $("h3", card).textContent.trim();
+    if (!(await confirmBox(`¿Regresar ${nombre} a la versión anterior? La actual queda como anterior, por si cambias de opinión.`, "Sí, regresar", false))) return;
+    try { await run(() => api(`api/mis-secciones/${card.dataset.id}/anterior`, { method: "POST" }), "Versión anterior restaurada"); loadCollab(); } catch {}
+    return;
+  }
+  const b = e.target.closest("[data-guardar]"); if (!b) return;
+  const card = b.closest(".cb-sec"), fd = new FormData();
+  fd.append("texto_tts", $("[data-texto]", card).value);
+  busy(b, true, "Generando voz…");
+  try { await api(`api/mis-secciones/${card.dataset.id}`, { method: "POST", form: fd }); toast("Texto guardado ✓"); loadCollab(); }
+  catch (err) { toast(err.message, true); } finally { busy(b, false); }
+});
+$("#cbLogout").onclick = logoutNow;
+$("#cbPw").onclick = () => {
+  openModal("Cambiar contraseña", `<form id="cbPwForm">
+      <label>Contraseña actual<input type="password" name="actual" autocomplete="current-password" required></label>
+      <label>Contraseña nueva<input type="password" name="nueva" autocomplete="new-password" minlength="8" required><small>Al menos 8 caracteres.</small></label>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Cambiar</button></div></form>`);
+  $("#cbPwForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try { await run(() => api("api/ajustes/password", { method: "POST", json: { actual: e.target.actual.value, nueva: e.target.nueva.value } }), "Contraseña cambiada"); closeModal(); } catch {}
+  };
+};
 /* ── Salud del equipo ─────────────────────────────────────────────────────── */
 const SALUD_ICO = { ok: "✅", nd: "➖", aviso: "⚠️", grave: "❌" };
 function renderHealthBadge(worst) {
@@ -2146,12 +2231,12 @@ $("#sesConnect").onsubmit = async (e) => {
 };
 
 /* ── Usuarios, roles y sesiones ─────────────────────────────────────────────── */
-const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura" };
+const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura", colaborador: "Colaborador" };
 const isAdmin = () => S.me && S.me.rol === "admin";
 const initials = (u) => ((u.nombre || u.usuario || "?").trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2) || "?").toUpperCase();
 function applyRole() {
   const u = S.me || {};
-  document.body.classList.remove("rol-admin", "rol-operador", "rol-lectura");
+  document.body.classList.remove("rol-admin", "rol-operador", "rol-lectura", "rol-colaborador");
   if (u.rol) document.body.classList.add("rol-" + u.rol);
   $("#userAvatar").textContent = initials(u);
   $("#userName").textContent = u.nombre || u.usuario || "";
@@ -2205,14 +2290,23 @@ async function loadMyAccount() {
     $("#mySessions").innerHTML = sessionRows(r.sesiones, r.mi_sesion, false);
   } catch (e) { $("#mySessions").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
+const ROL_AYUDA = {
+  admin: "Todo, incluidos usuarios, ajustes y respaldos.",
+  operador: "Programa, transmite y edita eventos y secciones.",
+  lectura: "Solo ve; no puede cambiar nada.",
+  colaborador: "Solo entra a «Mis secciones» y sube el audio de las secciones que le asignes. Te llega un aviso por Telegram cada vez.",
+};
 async function loadUsers() {
   let r;
   try { r = await api("api/usuarios"); } catch (e) { $("#userList").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
   S.users = r.usuarios;
+  if (r.usuarios.some((u) => u.rol === "colaborador") && !(S.secciones || []).length) { try { S.secciones = await api("api/secciones"); } catch {} }
+  const secNom = (id) => ((S.secciones || []).find((s) => s.id === id) || {}).nombre || "#" + id;
   $("#userList").innerHTML = r.usuarios.map((u) => `<div class="urow ${u.activo ? "" : "off"}">
       <div class="avatar">${esc(initials(u))}</div>
       <div class="uinfo"><b>${esc(u.nombre || u.usuario)}</b>${u.id === r.yo ? ' <span class="chip ok">Tú</span>' : ""}
-        <small>${esc(u.usuario)} · ${u.ultimo_acceso ? "último acceso " + esc(u.ultimo_acceso.slice(0, 16)) : "nunca ha entrado"}${u.sesiones ? ` · ${u.sesiones} sesión${u.sesiones > 1 ? "es" : ""} abierta${u.sesiones > 1 ? "s" : ""}` : ""}</small></div>
+        <small>${esc(u.usuario)} · ${u.ultimo_acceso ? "último acceso " + esc(u.ultimo_acceso.slice(0, 16)) : "nunca ha entrado"}${u.sesiones ? ` · ${u.sesiones} sesión${u.sesiones > 1 ? "es" : ""} abierta${u.sesiones > 1 ? "s" : ""}` : ""}</small>
+        ${u.rol === "colaborador" ? `<small>📤 ${u.secciones.length ? u.secciones.map((i) => esc(secNom(i))).join(", ") : "Sin secciones asignadas"}</small>` : ""}</div>
       <span class="chip rol-${u.rol}">${esc(u.rol_nombre)}</span>
       ${u.activo ? "" : '<span class="chip warn">Desactivado</span>'}
       <div class="mini"><button type="button" class="btn" data-uedit="${u.id}" title="Editar">✎</button>
@@ -2234,16 +2328,32 @@ function userForm(u) {
           <small>Para entrar. Letras, números, punto o guion.</small></label>
         <label>Nombre<input name="nombre" value="${esc(u.nombre || "")}" placeholder="Pedro · XE2ABC"></label>
       </div>
-      <label>Rol<select name="rol">${Object.entries(ROL_TXT).map(([k, v]) => `<option value="${k}" ${u.rol === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>Rol<select name="rol">${Object.entries(ROL_TXT).map(([k, v]) => `<option value="${k}" ${u.rol === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+        <small id="ufRolHelp"></small></label>
+      <div id="ufSecs" class="hidden"><b>Secciones que puede actualizar</b>
+        <div class="pick" id="ufSecList"><p class="muted">Cargando…</p></div></div>
       <label>${isNew ? "Contraseña" : "Contraseña nueva"}<input name="password" type="password" autocomplete="new-password" minlength="8" ${isNew ? "required" : ""} placeholder="${isNew ? "" : "Déjala vacía para no cambiarla"}">
         <small>Al menos 8 caracteres.${isNew ? "" : " Si la cambias, se cierran sus sesiones."}</small></label>
       ${isNew ? "" : `<label class="check"><input type="checkbox" name="activo" ${u.activo ? "checked" : ""}> Activo (si lo desactivas, sale de inmediato y no puede entrar)</label>`}
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button>
         <button class="btn primary">${isNew ? "Crear usuario" : "Guardar"}</button></div>
     </form>`);
+  const uf = $("#ufForm");
+  const rolUi = () => {
+    $("#ufRolHelp").textContent = ROL_AYUDA[uf.rol.value] || "";
+    $("#ufSecs").classList.toggle("hidden", uf.rol.value !== "colaborador");
+  };
+  uf.rol.onchange = rolUi; rolUi();
+  (async () => {
+    try { S.secciones = await api("api/secciones"); } catch (err) { $("#ufSecList").textContent = err.message; return; }
+    const mine = new Set(u.secciones || []);
+    $("#ufSecList").innerHTML = S.secciones.length ? S.secciones.map((s) => `<label><input type="checkbox" value="${s.id}" ${mine.has(s.id) ? "checked" : ""}>
+      <span class="chip ${s.tipo}">${s.tipo}</span> ${esc(s.nombre)}</label>`).join("") : `<p class="muted">Todavía no hay secciones.</p>`;
+  })();
   $("#ufForm").onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target, body = { nombre: f.nombre.value, rol: f.rol.value };
+    if (f.rol.value === "colaborador" && $("#ufSecList input")) body.secciones = $$("#ufSecList input:checked").map((c) => +c.value);
     if (f.password.value) body.password = f.password.value;
     try {
       if (isNew) { body.usuario = f.usuario.value.trim(); await api("api/usuarios", { method: "POST", json: body }); }
