@@ -45,7 +45,11 @@
     "📤 Cuando un colaborador sube el audio de una sección": "📤 When a contributor uploads a section's audio",
     "Elige el archivo de audio": "Choose the audio file", "Escribe el texto": "Write the text",
     "↩ Regresar a la anterior": "↩ Go back to the previous one",
-    "📡 Dónde sale tu colaboración": "📡 Where your contribution airs", "📋 Detalles": "📋 Details",
+    "📡 Dónde sale tu colaboración": "📡 Where your contribution airs",
+    "Mi nombre": "My name", "Guardar nombre": "Save name", "Nombre guardado": "Name saved", "👤 Mi perfil": "👤 My profile",
+    "Mi perfil": "My profile", "Perfil guardado": "Profile saved", "Déjalo vacío si no quieres cambiarla.": "Leave it empty if you don't want to change it.",
+    "Así te ven los demás usuarios y así apareces en los avisos. Para entrar sigues usando tu usuario.":
+      "This is how other users see you and how you appear in alerts. You still sign in with your username.", "📋 Detalles": "📋 Details",
     "Secciones del evento": "Event sections", "Tu sección": "Your section", "Cerrar": "Close",
     "Solo puedes ver el orden y la duración; las demás secciones las maneja el administrador.":
       "You can only see the order and length; the administrator manages the other sections.", "Sí, regresar": "Yes, go back",
@@ -546,7 +550,8 @@
 
   const M = (re, fn) => [re, fn];
   const P = [
-    M(/^(\d+) secciones$/, (m, n) => `${n} sections`),
+    M(/^Así apareces para el administrador y en los avisos\. Para entrar sigues usando «(.+)»\.$/,
+      (m, u) => `This is how the administrator and alerts see you. You still sign in with «${u}».`),
     M(/^¿Reemplazar el audio de (.+) con «(.+)»\?$/, (m, a, b) => `Replace the audio of ${a} with «${b}»?`),
     M(/^¿Regresar (.+) a la versión anterior\? La actual queda como anterior, por si cambias de opinión\.$/,
       (m, a) => `Go back to the previous version of ${a}? The current one becomes the previous one, in case you change your mind.`),

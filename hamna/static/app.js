@@ -500,7 +500,7 @@ function progCard(p, { live = null, today = "", next = false, acciones = "" } = 
     return `<div class="prog-slot ${next ? "is-next" : ""}">${strip}<div class="card ${!p.activo ? "off" : ""} ${live === p.evento_id ? "live" : isToday ? "today" : ""}">
       <div class="row" style="justify-content:space-between"><span class="when">${esc(p.hora_local || p.hora)}${p.nodo_zona_corta ? `<small class="zone">${esc(p.nodo_zona_corta)}</small>` : ""}</span>
         ${live === p.evento_id ? '<span class="chip live">AL AIRE</span>' : isToday ? '<span class="chip ok">HOY</span>' : ""}</div>
-      <h3>${esc(p.evento_nombre)}</h3>
+      <h3>${esc(p.evento_nombre)} ${numChip(p)}</h3>
       <div class="meta">${esc(recText(p))}${p.evento_tipo ? " · " + esc(p.evento_tipo) : ""}</div>
       ${p.zona && p.zona !== p.nodo_zona ? `<div class="meta here">Se emite desde: <b>${esc(p.hora)} ${esc(p.zona_corta || zoneShort(p))}</b></div>` : ""}
       ${p.cambio ? `<div class="meta tz-warn">${esc(cambioText(p.cambio))}</div>` : ""}
@@ -1303,6 +1303,12 @@ $("#btnVoices").onclick = async () => {
     toast(`${r.voces.length} voces en español`);
   } catch (e) { toast(e.message, true); } finally { busy(b, false); }
 };
+$("#btnMeNombre").onclick = async () => {
+  try {
+    const r = await run(() => api("api/mi-nombre", { method: "PUT", json: { nombre: $("#meNombre").value } }), "Nombre guardado");
+    S.me.nombre = r.nombre; applyRole(); loadMyAccount();
+  } catch {}
+};
 $("#btnPw").onclick = async () => {
   try {
     await run(() => api("api/ajustes/password", { method: "POST", json: { actual: $("#pwOld").value, nueva: $("#pwNew").value } }), "Contraseña cambiada; tus otras sesiones se cerraron");
@@ -1454,13 +1460,25 @@ $("#cbProg").onclick = async (e) => {
 };
 $("#cbLogout").onclick = logoutNow;
 $("#cbPw").onclick = () => {
-  openModal("Cambiar contraseña", `<form id="cbPwForm">
-      <label>Contraseña actual<input type="password" name="actual" autocomplete="current-password" required></label>
-      <label>Contraseña nueva<input type="password" name="nueva" autocomplete="new-password" minlength="8" required><small>Al menos 8 caracteres.</small></label>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Cambiar</button></div></form>`);
+  openModal("Mi perfil", `<form id="cbPwForm">
+      <label>Mi nombre<input name="nombre" maxlength="60" value="${esc(S.me.nombre || "")}" placeholder="Pedro · XE2ABC">
+        <small>Así apareces para el administrador y en los avisos. Para entrar sigues usando «${esc(S.me.usuario)}».</small></label>
+      <h3>Cambiar contraseña</h3>
+      <p class="muted" style="margin:0 0 8px;font-size:.85rem">Déjalo vacío si no quieres cambiarla.</p>
+      <label>Contraseña actual<input type="password" name="actual" autocomplete="current-password"></label>
+      <label>Contraseña nueva<input type="password" name="nueva" autocomplete="new-password" minlength="8"><small>Al menos 8 caracteres.</small></label>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
   $("#cbPwForm").onsubmit = async (e) => {
     e.preventDefault();
-    try { await run(() => api("api/ajustes/password", { method: "POST", json: { actual: e.target.actual.value, nueva: e.target.nueva.value } }), "Contraseña cambiada"); closeModal(); } catch {}
+    const f = e.target;
+    try {
+      if (f.nombre.value.trim() !== (S.me.nombre || "")) {
+        const r = await api("api/mi-nombre", { method: "PUT", json: { nombre: f.nombre.value } });
+        S.me.nombre = r.nombre; $("#cbUser").textContent = r.nombre || S.me.usuario;
+      }
+      if (f.nueva.value || f.actual.value) await api("api/ajustes/password", { method: "POST", json: { actual: f.actual.value, nueva: f.nueva.value } });
+      toast("Perfil guardado"); closeModal();
+    } catch (err) { toast(err.message, true); }
   };
 };
 /* ── Salud del equipo ─────────────────────────────────────────────────────── */
@@ -2259,7 +2277,8 @@ $("#sesConnect").onsubmit = async (e) => {
 /* ── Usuarios, roles y sesiones ─────────────────────────────────────────────── */
 const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura", colaborador: "Colaborador" };
 const isAdmin = () => S.me && S.me.rol === "admin";
-const initials = (u) => ((u.nombre || u.usuario || "?").trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2) || "?").toUpperCase();
+const initials = (u) => ((u.nombre || u.usuario || "?").trim().split(/\s+/).filter((w) => /^[\p{L}\p{N}]/u.test(w))
+  .map((w) => w[0]).join("").slice(0, 2) || "?").toUpperCase();
 function applyRole() {
   const u = S.me || {};
   document.body.classList.remove("rol-admin", "rol-operador", "rol-lectura", "rol-colaborador");
@@ -2310,6 +2329,7 @@ async function loadMyAccount() {
   $("#meLang").value = window.HAMNA_LANG;
   $("#meAvatar").textContent = initials(u);
   $("#meName").textContent = u.nombre || u.usuario || "";
+  $("#meNombre").value = u.nombre || "";
   $("#meRole").textContent = `${u.usuario || ""} · ${ROL_TXT[u.rol] || ""}`;
   try {
     const r = await api("api/mis-sesiones");

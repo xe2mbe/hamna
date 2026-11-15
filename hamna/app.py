@@ -122,6 +122,15 @@ def me(req):
                   "usuario": {k: u.get(k) for k in ("id", "usuario", "nombre", "rol", "rol_nombre", "idioma")} if u else None})
 
 
+@app.route("/api/mi-nombre", ("PUT",), rol="colaborador")
+def mi_nombre(req):
+    """Cada quien cambia el nombre con que aparece (no el usuario para entrar)."""
+    nombre = (req.json().get("nombre") or "").strip()[:60]
+    auth.update_user(req.user["id"], nombre=nombre)
+    log.info("%s cambió su nombre a «%s»", req.user["usuario"], nombre)
+    return ok(nombre=nombre)
+
+
 @app.route("/api/mi-idioma", ("PUT",), rol="colaborador")
 def mi_idioma(req):
     auth.set_language(req.user["id"], (req.json().get("idioma") or "").lower())
@@ -906,13 +915,16 @@ def _prog_rows(eventos=None):
             if a != b:
                 return "verano" if b else "invierno"
         return ""
-    conex = {}
+    conex, nums = {}, {}
     for r in db.get_programacion():
         eid = r["evento_id"]
         if eventos is not None and eid not in eventos:
             continue
         if eid not in conex:
             conex[eid] = db.get_conexiones(eid)
+            ev = numeracion.aplicar(db.get_evento(eid) or {})
+            nums[eid] = {"num_auto": ev.get("num_auto"), "num": ev.get("num"), "numero": ev.get("numero")}
+        r.update(nums[eid])                     # número de edición / emisión
         r["duracion"] = durs.get(eid) or 0
         r["conexiones"] = conex[eid]
         try:
