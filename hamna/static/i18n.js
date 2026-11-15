@@ -70,6 +70,7 @@
     "Se renueva en cada emisión": "Renewed every broadcast",
     "🔁 Se renueva en cada emisión (por ejemplo, el editorial o las noticias de la semana). Te aviso si sigue la de la emisión anterior.":
       "🔁 Renewed every broadcast (for example the editorial or the week's news). I'll warn you if it's still the previous one.",
+    "⏺ Cuando empieza y termina una grabación (con botón para detenerla)": "⏺ When a recording starts and ends (with a button to stop it)",
     "Grabaciones": "Recordings", "Grabación": "Recording", "⏺ Grabar ahora": "⏺ Record now", "⏹ Detener": "⏹ Stop",
     "Lo que se escucha en el nodo: la toma de reportes, las redes…": "What is heard on the node: check-ins, nets…",
     "Grabar ahora": "Record now", "Título": "Title", "⏺ Grabar": "⏺ Record", "Grabando": "Recording",

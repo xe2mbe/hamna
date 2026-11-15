@@ -77,6 +77,7 @@ DEFAULTS = {
     "hub_pin": "",
     "hub_alerta_min": 10,         # en el hub: avisar si un nodo deja de reportar (0 = no avisar)
     "tg_on_nodes": True,
+    "tg_on_rec": True,
     "rec_auto": "fin",            # grabar solo: "fin" (al terminar cada evento), "inicio" o "no"
     "rec_silencio_min": 5,        # la grabación termina tras N min sin actividad
     "rec_max_min": 180,           # tope de duración

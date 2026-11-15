@@ -42,6 +42,7 @@ _COMANDOS = [
     ("salud", "Temperatura, voltaje, disco y memoria del nodo"),
     ("historial", "Las últimas emisiones"),
     ("nodos", "Cómo están los nodos que reportan a este hub"),
+    ("grabar", "Empezar a grabar lo que se escucha en el nodo"),
     ("ayuda", "Qué puedo hacer"),
 ]
 DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
@@ -223,9 +224,13 @@ def _atender(token, u):
             "👋 Hola. Todavía no sé quién eres.\n\n"
             "Entra a HAMNA → <b>Mi perfil</b> (clic en tu foto o nombre) → <b>🔗 Vincular Telegram</b>, "
             "y mándame el código que te da."), a=None if privado else m.get("message_id"))
-    resp = _comando(cmd, user)
+    resp = _comando(cmd, user, arg, chat)
+    if isinstance(resp, tuple):
+        resp, botones = resp
+    else:
+        botones = None
     if resp:
-        _responder(token, chat, resp, a=None if privado else m.get("message_id"))
+        _responder(token, chat, resp, botones=botones, a=None if privado else m.get("message_id"))
 
 
 def _vincular(token, chat, quien, code, msg_id):
@@ -256,13 +261,16 @@ def _ayuda(user):
         t += ["", "📲 <b>Mándame un audio o nota de voz</b> y lo pongo en tu sección ({}).".format(
             ", ".join("«" + notify.esc(s["nombre"]) + "»" for s in _secciones_audio(user)))]
     if n >= auth.ROLES["operador"]:
+        t += ["/grabar · empezar a grabar lo que se escucha en el nodo (/grabar Toma de reportes le pone título)"]
         t += ["", "En los avisos te pongo botones para <b>detener</b>, pasar a la <b>siguiente sección</b>, "
                   "<b>transmitir ya</b> o <b>saltar</b> una emisión (siempre te pido confirmar)."]
     return "\n".join(t)
 
 
-def _comando(cmd, user):
+def _comando(cmd, user, arg="", chat=None):
     n = _nivel(user)
+    if cmd == "grabar":
+        return _grabar(user, arg, chat)
     if cmd in ("ayuda", "help", "start"):
         return _ayuda(user)
     if cmd == "estado":
@@ -274,6 +282,28 @@ def _comando(cmd, user):
             return "Ese comando no está disponible para tu usuario."
         return _txt_salud() if cmd == "salud" else _txt_historial() if cmd == "historial" else _txt_nodos()
     return "No conozco ese comando.\n\n" + _ayuda(user)
+
+
+def _grabar(user, arg, chat):
+    if _nivel(user) < auth.ROLES["operador"]:
+        return "Solo un operador o el administrador pueden poner a grabar el nodo."
+    from . import grabar
+    e = grabar.grabadora.estado()
+    parar = [[("⏹ Detener grabación", "rstop:0")]]
+    if e.get("grabando"):
+        return ("⏺ Ya se está grabando «{}» · lleva {}{}".format(
+            notify.esc(e["titulo"]), _hm(e["dur"]),
+            " · sin actividad desde hace {}, se detiene en {}".format(_hm(e["silencio"]), _hm(e["faltan"]))
+            if e["silencio"] > 15 else ""), parar)
+    titulo = (arg or "").strip()[:120] or "Grabación de {}".format(user.get("nombre") or user["usuario"])
+    try:
+        grabar.grabadora.iniciar(titulo, "Telegram · " + user["usuario"])
+    except ValueError as ex:
+        return str(ex)
+    if str(chat) == str(settings.load().get("tg_chat") or "") and settings.load().get("tg_on_rec", True):
+        return None                                 # el aviso de «empezó a grabar» ya llega a este chat
+    return ("⏺ Listo, grabando «{}». Se detiene sola tras {} min sin actividad.".format(
+        notify.esc(titulo), int(settings.load().get("rec_silencio_min", 5) or 5)), parar)
 
 
 # ── Textos de las consultas ─────────────────────────────────────────────────
@@ -455,11 +485,13 @@ def botones_proximo(pid, occ):
 
 
 _PREGUNTA = {"det": "✅ Sí, detener", "sig": "✅ Sí, siguiente sección", "tx": "✅ Sí, transmitir ya",
-             "skip": "✅ Sí, saltar esta vez"}
+             "skip": "✅ Sí, saltar esta vez", "rstop": "✅ Sí, detener la grabación"}
 
 
 def _original(data):
     p = data.split(":")
+    if p[0] == "rstop":
+        return [[("⏹ Detener grabación", "rstop:0")]]
     if p[0] in ("sig", "det"):
         return [[("⏭ Siguiente sección", "sig:" + p[1]), ("⏹ Detener", "det:" + p[1])]]
     return [[("▶ Transmitir ya", "tx:{}:{}".format(p[1], p[2])), ("⏸ Saltar esta vez", "skip:{}:{}".format(p[1], p[2]))]]
@@ -510,6 +542,14 @@ def _ejecutar(accion, args, user):
     """Hace lo pedido; devuelve (texto para el chat con {quien}, ¿quitar botones?)."""
     from .engine import engine
     who = user["usuario"]
+    if accion == "rstop":
+        from . import grabar
+        e = grabar.grabadora.estado()
+        if not e.get("grabando"):
+            raise ValueError("Ya no se está grabando.")
+        grabar.grabadora.detener("manual")
+        engine.note("Grabación detenida desde Telegram por {}".format(who))
+        return "⏹ {quien} detuvo la grabación «" + notify.esc(e["titulo"]) + "». Se está guardando.", True
     if accion in ("sig", "det"):
         eid = int(args[0])
         st = engine.status()

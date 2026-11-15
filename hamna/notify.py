@@ -41,6 +41,7 @@ KINDS = {
     "salud": "tg_on_health",         # SD, voltaje, temperatura, disco (health.py)
     "colaborador": "tg_on_collab",   # un colaborador subió el audio de una sección
     "nodos": "tg_on_nodes",          # un nodo dejó de reportar al hub (o volvió)
+    "grabacion": "tg_on_rec",        # empezó / terminó una grabación
 }
 MAX_LINES = 40          # Telegram corta en 4096 caracteres
 

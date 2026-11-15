@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.26.1">
+<link rel="stylesheet" href="static/app.css?v=1.27.0">
 </head>
 <body>
 
@@ -366,6 +366,7 @@
               <small>Uno o varios, separados por coma. Ejemplo: «60, 15, 5» manda tres avisos.</small></label>
             <label class="check"><input type="checkbox" name="tg_on_start"> ▶ Resumen al empezar: el evento, la hora de término aproximada, sus secciones con duración y las conexiones</label>
             <label class="check"><input type="checkbox" name="tg_on_backup"> 💾 Si falla el respaldo automático</label>
+            <label class="check"><input type="checkbox" name="tg_on_rec"> ⏺ Cuando empieza y termina una grabación (con botón para detenerla)</label>
             <label class="check"><input type="checkbox" name="tg_on_nodes"> 🗺 Un nodo dejó de reportar al panel de nodos (y cuando vuelve)</label>
             <label class="check"><input type="checkbox" name="tg_on_collab"> 📤 Cuando un colaborador sube el audio de una sección</label>
             <label class="check"><input type="checkbox" name="tg_on_health"> 🩺 Salud del nodo: errores de la tarjeta SD, escritura lenta, bajo voltaje, temperatura alta, poco disco (y cuando se normaliza)</label>
@@ -597,7 +598,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.26.1"></script>
-<script src="static/app.js?v=1.26.1"></script>
+<script src="static/i18n.js?v=1.27.0"></script>
+<script src="static/app.js?v=1.27.0"></script>
 </body>
 </html>

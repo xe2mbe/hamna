@@ -98,6 +98,7 @@ class Grabadora:
         live.add_tap(self._pcm)
         threading.Thread(target=self._vigilar, name="grabar", daemon=True).start()
         log.info("Grabación: empieza «%s» (%s)", titulo, origen)
+        _avisar_inicio(self.g)
         return self.estado()
 
     def _pcm(self, data):
@@ -170,6 +171,8 @@ class Grabadora:
             if g["frames_activos"] / float(RATE) < MIN_AUDIO:
                 paths.rm(part)
                 log.info("Grabación «%s»: no hubo audio; no se guardó", g["titulo"])
+                notify.send("grabacion", "⏹ La grabación «{}» terminó sin audio ({}); no se guardó.".format(
+                    notify.esc(g["titulo"]), MOTIVOS.get(motivo, motivo)), dedupe="rec-fin:" + g["base"])
                 return
             # quitar el final sin actividad (deja 2 s)
             hasta = min(g["frames"], g["frames_ult_audio"] + 2 * RATE)
@@ -202,7 +205,10 @@ class Grabadora:
             (carpeta() / (g["base"] + ".json")).write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
             log.info("Grabación guardada: %s (%s, %s)", final.name, _hm(meta["dur"]), motivo)
             limpiar()
-            _a_telegram(final, meta)
+            if not _a_telegram(final, meta):        # si no se mandó el audio, al menos el aviso
+                notify.send("grabacion", "⏹ Terminó la grabación <b>{}</b>\n🕗 {} · dura {} · {}\nEstá en HAMNA → Grabaciones.".format(
+                    notify.esc(meta["titulo"]), meta["inicio"][11:16], _hm(meta["dur"]), MOTIVOS.get(motivo, motivo)),
+                    dedupe="rec-fin:" + g["base"])
         except Exception:
             log.exception("No pude cerrar la grabación «%s»", g["titulo"])
 
@@ -216,17 +222,29 @@ def _hm(s):
 MOTIVOS = {"silencio": "sin actividad", "tope": "llegó al tope de duración", "manual": "detenida a mano"}
 
 
+def _avisar_inicio(g):
+    try:
+        from . import bot
+        botones = [[("⏹ Detener grabación", "rstop:0")]] if bot.activo() else None
+        notify.send("grabacion", "⏺ Empezó a grabar <b>{}</b>\n{} · se detiene sola tras {} min sin actividad".format(
+            notify.esc(g["titulo"]), notify.esc(g["origen"]), g["silencio_max"] // 60),
+            dedupe="rec-ini:" + g["base"], botones=botones)
+    except Exception:
+        log.exception("No pude avisar que empezó la grabación")
+
+
 def _a_telegram(path, meta):
+    """Manda la grabación al grupo si está activado. True si se mandó (eso ya sirve de aviso)."""
     cfg = settings.load()
     if not (cfg.get("rec_tg") and cfg.get("tg_enabled") and cfg.get("tg_token") and cfg.get("tg_chat")):
-        return
+        return False
     cap = "🎙 <b>{}</b>\n{} · {} · {}".format(notify.esc(meta["titulo"]), meta["inicio"][:16], _hm(meta["dur"]),
                                               MOTIVOS.get(meta["motivo"], meta["motivo"]))
     try:
         if path.stat().st_size > TG_MAX:
             notify.send_now(notify.header(cfg) + "\n" + cap + "\n(pesa {:.0f} MB: Telegram acepta hasta 50; está en HAMNA → Grabaciones)".format(
                 path.stat().st_size / 1048576.0))
-            return
+            return True
         audio_mp3 = path.suffix == ".mp3"
         notify.send_document(cfg["tg_token"].strip(), cfg["tg_chat"].strip(), str(path),
                              nombre_bonito(meta["titulo"], path.suffix),
@@ -234,8 +252,10 @@ def _a_telegram(path, meta):
                              metodo="sendAudio" if audio_mp3 else "sendDocument",
                              campo="audio" if audio_mp3 else "document",
                              tipo="audio/mpeg" if audio_mp3 else "audio/wav")
+        return True
     except Exception as e:
         log.warning("No pude mandar la grabación a Telegram: %s", e)
+        return False
 
 
 # ── Lista y limpieza ────────────────────────────────────────────────────────
