@@ -160,6 +160,30 @@ def foto_usuario(req, uid):
     return send_file(p, "image/jpeg")
 
 
+@app.route("/api/mi-telegram", rol="colaborador")
+def mi_telegram(req):
+    from . import bot
+    u = db.row("SELECT tg_id, tg_nombre FROM usuarios WHERE id=?", (req.user["id"],)) or {}
+    return jsonr({"vinculado": bool(u.get("tg_id")), "nombre": u.get("tg_nombre") or "",
+                  "disponible": bot.activo(), "bot": ("@" + bot.estado()["bot"]) if bot.estado()["bot"] else ""})
+
+
+@app.route("/api/mi-telegram", ("POST", "DELETE"), rol="colaborador")
+def mi_telegram_cambiar(req):
+    from . import bot
+    if req.method == "DELETE":
+        auth.set_tg(req.user["id"], "", "")
+        log.info("%s desvinculó su Telegram", req.user["usuario"])
+        return ok()
+    return ok(**bot.nuevo_codigo(req.user["id"]))
+
+
+@app.route("/api/bot", rol="admin")
+def bot_estado(req):
+    from . import bot
+    return jsonr(bot.estado())
+
+
 @app.route("/api/mi-nombre", ("PUT",), rol="colaborador")
 def mi_nombre(req):
     """Cada quien cambia el nombre con que aparece (no el usuario para entrar)."""
@@ -1324,7 +1348,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "ab_enabled", "ab_node_on", "ab_cloud_on"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",

@@ -70,6 +70,9 @@ def init():
         cols = [r[1] for r in c.execute("PRAGMA table_info(usuarios)")]
         if "idioma" not in cols:
             c.execute("ALTER TABLE usuarios ADD COLUMN idioma TEXT")
+        if "tg_id" not in cols:     # Telegram vinculado (bot.py)
+            c.execute("ALTER TABLE usuarios ADD COLUMN tg_id TEXT DEFAULT ''")
+            c.execute("ALTER TABLE usuarios ADD COLUMN tg_nombre TEXT DEFAULT ''")
         if "foto" not in cols:      # versión de la foto de perfil ('' = sin foto); el archivo va en fotos/<id>.jpg
             c.execute("ALTER TABLE usuarios ADD COLUMN foto TEXT DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS usuario_secciones (
@@ -228,7 +231,7 @@ def revoke_user(usuario_id, except_sid=None):
 
 # ── Usuarios ─────────────────────────────────────────────────────────────────
 def users():
-    out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso, u.foto,
+    out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso, u.foto, u.tg_nombre,
                        (SELECT COUNT(*) FROM sesiones_web s WHERE s.usuario_id=u.id AND s.expira > ?) AS sesiones
                      FROM usuarios u ORDER BY u.usuario COLLATE NOCASE""", (time.time(),))
     secs = {}
@@ -238,6 +241,20 @@ def users():
     for u in out:
         u["secciones"] = secs.get(u["id"], [])
     return out
+
+
+def user_by_tg(tg_id):
+    """Usuario activo con ese Telegram vinculado, o None."""
+    if not tg_id:
+        return None
+    return _clean_user(db.row("SELECT * FROM usuarios WHERE tg_id=? AND activo=1", (str(tg_id),)))
+
+
+def set_tg(uid, tg_id, tg_nombre):
+    with db.conn() as c:
+        if tg_id:   # un Telegram, un usuario
+            c.execute("UPDATE usuarios SET tg_id='', tg_nombre='' WHERE tg_id=? AND id<>?", (tg_id, uid))
+        c.execute("UPDATE usuarios SET tg_id=?, tg_nombre=? WHERE id=?", (tg_id or "", (tg_nombre or "")[:60], uid))
 
 
 def set_photo(uid, version):

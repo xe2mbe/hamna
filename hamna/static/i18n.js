@@ -56,6 +56,18 @@
     "Cerrar la sesión en ese equipo": "Sign out that device",
     "Cada equipo o navegador donde entras es una sesión. Se cierra sola si no la usas en 30 días (y a los 90 días como máximo). Si no reconoces una, ciérrala con su botón.":
       "Each device or browser you sign in from is a session. It closes by itself if you don't use it for 30 days (and after 90 days at most). If you don't recognize one, close it with its button.",
+    "Comandos y botones": "Commands and buttons",
+    "🤖 El bot responde comandos (/estado, /proximo, /salud, /historial) y pone botones en los avisos para detener, pasar a la siguiente sección, transmitir ya o saltar una emisión.":
+      "🤖 The bot answers commands (/estado, /proximo, /salud, /historial) and puts buttons on alerts to stop, skip to the next section, broadcast now or skip a broadcast.",
+    "Cada usuario vincula su Telegram en Mi perfil (clic en su foto o nombre). Los botones solo los pueden usar operadores y el administrador. Si varios nodos usan el mismo bot, actívalo solo en uno.":
+      "Each user links their Telegram in My profile (click their photo or name). Only operators and the administrator can use the buttons. If several nodes use the same bot, turn it on in only one.",
+    "Telegram desvinculado": "Telegram unlinked", "Desvincular": "Unlink", "🔗 Vincular Telegram": "🔗 Link Telegram",
+    "Tu código": "Your code", "Abrir Telegram": "Open Telegram", "Telegram vinculado ✓": "Telegram linked ✓",
+    "Escríbele al bot /estado, /proximo o /ayuda.": "Send the bot /estado, /proximo or /ayuda.",
+    "¿Desvincular tu Telegram? El bot ya no te reconocerá hasta que lo vuelvas a vincular.": "Unlink your Telegram? The bot won't recognize you until you link it again.",
+    "El bot de Telegram no está escuchando en este nodo (el administrador lo activa en Ajustes → Avisos)":
+      "The Telegram bot isn't listening on this node (the administrator turns it on in Settings → Alerts)",
+    "El bot no está escuchando (activa Telegram y esta casilla, y guarda).": "The bot isn't listening (turn on Telegram and this box, and save).",
     "Mi nombre": "My name", "Guardar nombre": "Save name", "Nombre guardado": "Name saved", "👤 Mi perfil": "👤 My profile",
     "Mi perfil": "My profile", "Perfil guardado": "Profile saved", "Déjalo vacío si no quieres cambiarla.": "Leave it empty if you don't want to change it.",
     "Así te ven los demás usuarios y así apareces en los avisos. Para entrar sigues usando tu usuario.":

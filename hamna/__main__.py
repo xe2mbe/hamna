@@ -95,6 +95,8 @@ def main():
     threading.Thread(target=engine.scheduler_loop, daemon=True).start()
     from . import health
     health.start()
+    from . import bot
+    bot.start()
     from .live import live
     live.start()
     app.serve(a.host, a.port)

@@ -68,6 +68,7 @@ DEFAULTS = {
     "tg_on_backup": True,
     "tg_on_health": True,
     "tg_on_collab": True,
+    "tg_bot_on": True,            # el bot responde comandos y botones (solo un nodo por bot)
 
     # Respaldo automático (ver autobackup.py)
     "ab_enabled": False,

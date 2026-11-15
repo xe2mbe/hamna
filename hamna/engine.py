@@ -319,10 +319,11 @@ class Engine:
             self._sync_secs(secs)
             for s in secs:
                 s["tiene_audio"] = bool(s.get("_prep"))
+            from . import bot
             notify.send("inicio", notify.msg_start(
                 ev, secs, origen, inicio, cfg.get("section_gap", 3),
                 "nodo {} · {}".format(cfg.get("node"), be.name) if cfg.get("node") else be.name,
-                db.get_conexiones(ev["id"])), dedupe="inicio:{}".format(hid))
+                db.get_conexiones(ev["id"])), dedupe="inicio:{}".format(hid), botones=bot.botones_inicio(ev["id"]))
             if linked_at is not None:
                 self._wait(LINK_SETTLE - (time.monotonic() - linked_at))
 
@@ -641,9 +642,22 @@ class Engine:
             autobackup.tick(now, self.busy())
         except Exception:
             log.exception("Error al revisar el respaldo automático")
-        # olvidar disparos de otros días
-        self._fired = {k for k in self._fired if k[1] == today}
-        self._prewarmed = {k for k in self._prewarmed if k[1] == today}
+        # olvidar disparos de días pasados (un salto puede ser de mañana: 00:10 avisado a las 23:55)
+        self._fired = {k for k in self._fired if k[1] >= today}
+        self._prewarmed = {k for k in self._prewarmed if k[1] >= today}
+
+    def skip(self, pid, occ):
+        """No transmitir esa fecha de una programación: ni el inicio, ni las
+        conexiones «N min antes», ni la revisión previa, ni más avisos «sale en»."""
+        d, hhmm = occ.date(), occ.strftime("%H:%M")
+        self._fired.add((pid, d, hhmm))
+        self._prewarmed.add((pid, d, "previa"))
+        row = db.row("SELECT evento_id FROM programacion WHERE id=?", (pid,))
+        if row:
+            for a in db.get_conexiones(row["evento_id"]):
+                self._fired.add((pid, d, "link", a["id"]))
+        for m in range(0, 24 * 60 + 1):
+            self._upcoming.add((pid, occ, m))
 
     def _tick_upcoming(self, now):
         """Aviso por Telegram N minutos antes de cada evento programado. Mira
@@ -676,9 +690,10 @@ class Engine:
                 secs = [dict(s) for s in db.get_secciones_by_evento(row["evento_id"])]
                 for s in secs:
                     s["tiene_audio"] = bool(self._file_of(s))
+                from . import bot
                 notify.send("proximo", notify.msg_upcoming(
                     ev, secs, occ, left, db.get_conexiones(row["evento_id"]), cfg.get("section_gap", 3)),
-                    dedupe="proximo:{}:{}:{}".format(row["id"], occ, left))
+                    dedupe="proximo:{}:{}:{}".format(row["id"], occ, left), botones=bot.botones_proximo(row["id"], occ))
 
     def _tick_links(self, row, now, today, h, m):
         """Acciones 'N minutos antes' de un evento programado."""

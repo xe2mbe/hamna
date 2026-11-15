@@ -6,6 +6,7 @@ y el chat donde llegan los mensajes. Los envíos van en segundo plano (nunca
 detienen una transmisión) y un mismo aviso no se repite en 15 minutos.
 """
 import datetime as dt
+import os
 import html
 import json
 import re
@@ -20,7 +21,7 @@ from . import settings
 
 log = logging.getLogger("hamna.avisos")
 
-API = "https://api.telegram.org/bot{}/{}"
+API = os.environ.get("HAMNA_TG_API", "https://api.telegram.org").rstrip("/") + "/bot{}/{}"   # cambiable solo para pruebas
 DEDUPE_SECS = 15 * 60
 _recent = {}
 _lock = threading.Lock()
@@ -72,18 +73,21 @@ def _call(token, method, params, timeout=15):
     return out.get("result")
 
 
-def send_now(text, token=None, chat=None):
+def send_now(text, token=None, chat=None, botones=None):
     """Envía ya (para la prueba). Devuelve nada o lanza RuntimeError."""
     cfg = settings.load()
     token = (token or cfg.get("tg_token") or "").strip()
     chat = (chat or cfg.get("tg_chat") or "").strip()
     if not token or not chat:
         raise ValueError("Falta el token del bot o el chat")
-    _call(token, "sendMessage", {"chat_id": chat, "text": text, "parse_mode": "HTML",
-                                 "disable_web_page_preview": "true"})
+    p = {"chat_id": chat, "text": text, "parse_mode": "HTML", "disable_web_page_preview": "true"}
+    if botones:
+        from .bot import teclado
+        p["reply_markup"] = teclado(botones)
+    _call(token, "sendMessage", p)
 
 
-def send(kind, text, dedupe=None):
+def send(kind, text, dedupe=None, botones=None):
     """Aviso en segundo plano si está activado ese tipo. No lanza errores."""
     cfg = settings.load()
     if not cfg.get("tg_enabled") or not cfg.get("tg_token") or not cfg.get("tg_chat"):
@@ -105,7 +109,7 @@ def send(kind, text, dedupe=None):
     def work():
         for intento in range(3):
             try:
-                send_now(msg)
+                send_now(msg, botones=botones)
                 return
             except Exception as e:
                 if intento == 2:
@@ -120,6 +124,9 @@ def find_chats(token=None):
     if not token:
         raise ValueError("Falta el token del bot")
     me = _call(token, "getMe", {})
+    from . import bot
+    if bot.activo():    # el bot ya está escuchando: Telegram no deja leer los mensajes dos veces a la vez
+        return {"bot": "@" + (me or {}).get("username", ""), "chats": bot.chats_vistos()}
     upd = _call(token, "getUpdates", {"limit": 100, "timeout": 0})
     chats = {}
     for u in upd or []:

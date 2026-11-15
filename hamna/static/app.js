@@ -1189,6 +1189,15 @@ function showSet(k) {
   if (k === "sistema") loadSistema();
   if (k === "respaldo") loadRespaldo();
   if (k === "usuarios") loadUsers();
+  if (k === "avisos") loadBotSt();
+}
+async function loadBotSt() {
+  const el = $("#botSt"); if (!el) return;
+  try {
+    const b = await api("api/bot");
+    el.textContent = b.activo ? `✅ El bot @${b.bot} está escuchando.` : b.error ? "⚠ " + b.error : "El bot no está escuchando (activa Telegram y esta casilla, y guarda).";
+    el.className = "muted bot-st" + (b.activo ? " ok" : b.error ? " bad" : "");
+  } catch { el.textContent = ""; }
 }
 async function loadAjustes() {
   S.cfg = await api("api/ajustes");
@@ -1312,6 +1321,39 @@ $("#btnMeNombre").onclick = async () => {
     S.me.nombre = r.nombre; refreshMe();
   } catch {}
 };
+/* ── Telegram en Mi perfil ─────────────────────────────────────────────── */
+async function loadMiTelegram() {
+  const box = $("#meTg");
+  let r;
+  try { r = await api("api/mi-telegram"); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  clearInterval(S.tgPoll);
+  if (r.vinculado) {
+    box.innerHTML = `<div class="row gap wrap" style="align-items:center"><span>✅ Vinculado con <b>${esc(r.nombre || "tu Telegram")}</b>${r.bot ? ` · bot ${esc(r.bot)}` : ""}</span>
+      <button type="button" class="btn sm" id="btnTgOff">Desvincular</button></div>
+      <p class="muted tg-help">Escríbele al bot /estado, /proximo o /ayuda.</p>`;
+    $("#btnTgOff").onclick = async () => {
+      if (!(await confirmBox("¿Desvincular tu Telegram? El bot ya no te reconocerá hasta que lo vuelvas a vincular.", "Desvincular"))) return;
+      try { await run(() => api("api/mi-telegram", { method: "DELETE" }), "Telegram desvinculado"); loadMiTelegram(); } catch {}
+    };
+  } else if (!r.disponible) {
+    box.innerHTML = `<p class="muted tg-help">El bot de Telegram no está activo en este nodo. ${isAdmin() ? "Actívalo en Ajustes → Avisos («Responder comandos y botones»)." : "Pídele al administrador que lo active."}</p>`;
+  } else {
+    box.innerHTML = `<p class="muted tg-help">Vincula tu Telegram para consultar el nodo desde el celular${S.me && ["operador", "admin"].includes(S.me.rol) ? " y controlar las emisiones con botones" : ""}.</p>
+      <button type="button" class="btn sm primary" id="btnTgOn">🔗 Vincular Telegram</button>`;
+    $("#btnTgOn").onclick = async () => {
+      let c;
+      try { c = await api("api/mi-telegram", { method: "POST" }); } catch (e) { return toast(e.message, true); }
+      box.innerHTML = `<div class="tg-code"><span class="muted">Tu código</span><b translate="no">${esc(c.codigo)}</b><small class="muted">vale ${c.minutos} min</small></div>
+        ${c.enlace ? `<a class="btn primary sm" href="${esc(c.enlace)}" target="_blank" rel="noopener">Abrir Telegram</a>` : ""}
+        <p class="muted tg-help">Con el botón se abre el chat con ${esc(c.bot || "el bot")}: toca <b>Iniciar</b> y listo. Si no se abre, mándale al bot <code>/vincular ${esc(c.codigo)}</code>.</p>`;
+      const hasta = Date.now() + c.minutos * 60000;
+      S.tgPoll = setInterval(async () => {
+        if ($("#perfil").classList.contains("hidden") || Date.now() > hasta) return clearInterval(S.tgPoll);
+        try { const x = await api("api/mi-telegram"); if (x.vinculado) { toast("Telegram vinculado ✓"); loadMiTelegram(); } } catch {}
+      }, 3000);
+    };
+  }
+}
 /* ── Mi perfil (todos los usuarios) ─────────────────────────────────────── */
 function openPerfil() { $("#perfil").classList.remove("hidden"); loadMyAccount(); }
 function closePerfil() { $("#perfil").classList.add("hidden"); $("#pwOld").value = $("#pwNew").value = ""; }
@@ -2398,6 +2440,7 @@ async function loadMyAccount() {
   try {
     const r = await api("api/mis-sesiones");
     $("#mySessions").innerHTML = sessionRows(r.sesiones, r.mi_sesion, false);
+    loadMiTelegram();
     // «Cerrar las demás» solo vale la pena con 2 o más sesiones en otros equipos
     $("#btnCloseOthers").classList.toggle("hidden", r.sesiones.filter((s) => s.id !== r.mi_sesion).length < 2);
   } catch (e) { $("#mySessions").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
