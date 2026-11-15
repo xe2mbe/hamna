@@ -244,7 +244,7 @@ def _run(eid, origen):
             dest = _download(cfg, rs, paths.audios_dir(), sid)
             if old and old.get("ruta_archivo") and old["ruta_archivo"] != dest.name:
                 paths.rm(paths.audios_dir() / old["ruta_archivo"])
-            db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest))
+            db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest), audio_ts=time.time())
             db.execute("UPDATE sync_map SET sha256=? WHERE evento_id=? AND seccion_id=?", (a["sha256"], eid, sid))
             cambiados += 1
             bajado += a.get("tam", 0)

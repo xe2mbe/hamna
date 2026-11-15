@@ -125,6 +125,16 @@ def init_db():
             c.execute("ALTER TABLE secciones ADD COLUMN anterior_archivo TEXT DEFAULT ''")
             c.execute("ALTER TABLE secciones ADD COLUMN anterior_duracion REAL DEFAULT 0")
             c.execute("ALTER TABLE secciones ADD COLUMN anterior_fecha TEXT DEFAULT ''")
+        # «Se renueva en cada emisión» y cuándo se cambió el audio (para saber si ya está lista)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(secciones)")]
+        if "renovar" not in cols:
+            c.execute("ALTER TABLE secciones ADD COLUMN renovar INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE secciones ADD COLUMN audio_ts REAL")
+            c.execute("ALTER TABLE secciones ADD COLUMN anterior_ts REAL")
+            for sid, ruta in c.execute("SELECT id, ruta_archivo FROM secciones").fetchall():
+                p = paths.audios_dir() / ruta if ruta else None
+                if p and p.is_file():       # al estrenar la columna: la fecha del archivo
+                    c.execute("UPDATE secciones SET audio_ts=? WHERE id=?", (p.stat().st_mtime, sid))
         # Numeración automática de emisiones (ver numeracion.py)
         cols = [r[1] for r in c.execute("PRAGMA table_info(eventos)")]
         if "num_auto" not in cols:
@@ -157,7 +167,8 @@ def get_eventos_types():
 _SEC_SELECT = """
     SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
            s.duracion, s.regenerar_antes, s.titulo, s.descripcion, s.creado_en,
-           s.anterior_archivo, s.anterior_duracion, s.anterior_fecha
+           s.anterior_archivo, s.anterior_duracion, s.anterior_fecha,
+           s.renovar, s.audio_ts, s.anterior_ts
     FROM secciones s LEFT JOIN tipos_seccion ts ON ts.id = s.tipo_seccion_id
 """
 
@@ -188,7 +199,8 @@ def insert_seccion(nombre, tipo, texto_tts=None, regenerar_antes=False,
 def update_seccion(sid, **fields):
     allowed = {"nombre", "ruta_archivo", "texto_tts", "duracion",
                "regenerar_antes", "titulo", "descripcion",
-               "anterior_archivo", "anterior_duracion", "anterior_fecha"}
+               "anterior_archivo", "anterior_duracion", "anterior_fecha",
+               "renovar", "audio_ts", "anterior_ts"}
     sets, vals = [], []
     for k, v in fields.items():
         if k in allowed:
@@ -253,7 +265,7 @@ def get_secciones_by_evento(eid):
     return rows("""
         SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
                s.duracion, s.regenerar_antes, s.titulo, s.descripcion,
-               es.orden, es.contabilizable
+               s.renovar, s.audio_ts, es.orden, es.contabilizable
         FROM secciones s
         JOIN evento_secciones es ON es.seccion_id = s.id
         LEFT JOIN tipos_seccion ts ON ts.id = s.tipo_seccion_id

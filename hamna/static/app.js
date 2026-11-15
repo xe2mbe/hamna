@@ -1025,29 +1025,70 @@ function eventoForm(ev) {
 
 /* ── Secciones ───────────────────────────────────────────────────────────── */
 async function loadSecciones() {
-  S.secciones = await api("api/secciones");
+  const [secs, g] = await Promise.all([api("api/secciones"), api("api/secciones/grupos").catch(() => null)]);
+  S.secciones = secs; S.secGrupos = g;
   renderSecciones();
 }
-function renderSecciones() {
-  const q = $("#secSearch").value.toLowerCase(), t = $("#secFilter").value;
-  const list = S.secciones.filter((s) => (!t || s.tipo === t) &&
-    (!q || (s.nombre + " " + (s.texto_tts || "") + " " + (s.titulo || "")).toLowerCase().includes(q)));
-  $("#secList").innerHTML = `<div class="trow head"><span>Tipo</span><span>Nombre</span><span>Duración</span><span>Eventos</span><span></span></div>` +
-    (list.length ? list.map((s) => `
-    <div class="trow" data-id="${s.id}">
+try { const v = localStorage.getItem("hamna.secvista"); if (v) $("#secVista").value = v; } catch {}
+const fechaDM = (s) => { if (!s) return ""; const [d, h] = s.split(" "), p = d.split("-"); return `${p[2]}/${p[1]}`; };
+function secFila(s, opt = {}) {
+  const ev = s.eventos || [];
+  const otros = opt.evento ? ev.filter((n) => n !== opt.evento) : ev;
+  let act = s.tiene_audio ? `<span class="muted">${esc(fechaDM(s.actualizado)) || "—"}</span>` : "⚠";
+  if (s.renovar && opt.fresca === true) act = `<span class="sec-ok" title="Cambiada después de la última emisión">✅ ${esc(fechaDM(s.actualizado))}</span>`;
+  else if (s.renovar && opt.fresca === false) act = `<span class="sec-vieja" title="Sigue la de la emisión anterior">⚠ ${esc(fechaDM(s.actualizado)) || "sin audio"}</span>`;
+  else if (s.renovar) act = `<span title="Se renueva en cada emisión">🔁 ${esc(fechaDM(s.actualizado)) || "—"}</span>`;
+  return `<div class="trow ${opt.fresca === false ? "vieja" : ""}" data-id="${s.id}">
       <span class="chipcol"><span class="chip ${s.tipo}">${s.tipo}</span></span>
-      <span class="name"><b>${esc(s.nombre)}</b>${s.regenerar_antes ? " 🔄" : ""}
-        <small>${esc(s.tipo === "TTS" ? s.texto_tts : s.ruta_archivo || "")}</small></span>
+      <span class="name"><b>${opt.n ? `<span class="sec-n">${opt.n}.</span> ` : ""}${esc(s.nombre)}</b>${s.regenerar_antes ? " 🔄" : ""}${s.renovar ? ' <span class="sec-ren" title="Se renueva en cada emisión">🔁</span>' : ""}
+        <small>${otros.length ? (opt.evento ? "También en: " : "En: ") + otros.map(esc).join(", ") + " · " : ""}${esc(s.tipo === "TTS" ? s.texto_tts : s.ruta_archivo || "")}</small></span>
       <span class="num">${s.tiene_audio ? fmt(s.duracion) : "⚠"}</span>
-      <span class="num">${s.usos}</span>
+      <span class="num sec-act">${act}</span>
       <span class="mini">
         <button class="btn ro" data-act="play" title="Escuchar aquí" ${s.tiene_audio ? "" : "disabled"}>▶</button>
         <button class="btn" data-act="air" title="Transmitir por el nodo" ${s.tiene_audio ? "" : "disabled"}>📡</button>
         <button class="btn" data-act="edit" title="Editar">✎</button>
         <button class="btn" data-act="del" title="Borrar">🗑</button>
       </span>
-    </div>`).join("") : `<p class="empty">${S.secciones.length ? "Nada coincide con la búsqueda." : "La biblioteca está vacía. Crea una sección TTS o sube un audio."}</p>`);
+    </div>`;
 }
+const SEC_HEAD = `<div class="trow head"><span>Tipo</span><span>Nombre</span><span>Duración</span><span>Actualizada</span><span></span></div>`;
+function renderSecciones() {
+  const q = $("#secSearch").value.toLowerCase(), t = $("#secFilter").value, vista = $("#secVista").value;
+  const pasa = (s) => s && (!t || s.tipo === t) && (!q || (s.nombre + " " + (s.texto_tts || "") + " " + (s.titulo || "")).toLowerCase().includes(q));
+  const byId = {}; S.secciones.forEach((s) => (byId[s.id] = s));
+  const vacio = `<p class="empty">${S.secciones.length ? "Nada coincide con la búsqueda." : "La biblioteca está vacía. Crea una sección TTS o sube un audio."}</p>`;
+  $("#secList").classList.toggle("table", vista !== "evento");
+  if (vista !== "evento" || !S.secGrupos) {
+    const list = S.secciones.filter(pasa);
+    $("#secSub").textContent = `${S.secciones.length} secciones en la biblioteca`;
+    $("#secList").innerHTML = SEC_HEAD + (list.length ? list.map((s) => secFila(s)).join("") : vacio);
+    return;
+  }
+  const html = S.secGrupos.grupos.map((g) => {
+    const items = g.secciones.map((x, i) => ({ s: byId[x.id], fresca: x.fresca, n: i + 1 })).filter((x) => pasa(x.s));
+    if (!items.length && (q || t)) return "";
+    const ren = g.secciones.filter((x) => x.fresca !== null), ok = ren.filter((x) => x.fresca).length;
+    const estado = !ren.length ? `<span class="sec-lista nada" title="Marca en cada sección si se renueva en cada emisión">Marca las secciones que cambian en cada emisión</span>`
+      : ok === ren.length ? `<span class="sec-lista ok">✅ Lista: ${ok} de ${ren.length} actualizadas</span>`
+      : `<span class="sec-lista warn">⚠ Faltan ${ren.length - ok}: ${ok} de ${ren.length} actualizadas</span>`;
+    return `<div class="sec-grupo">
+      <div class="sec-ghead"><div><span><b>${esc(g.nombre)}</b>${g.etiqueta ? ` <span class="chip">${esc(g.etiqueta)}</span>` : ""}</span>
+        <small class="muted">${g.proxima ? "Sale " + esc(fechaCorta(g.proxima)) : "Sin programar"}${g.ultima ? " · última emisión " + esc(fechaCorta(g.ultima)) : ""}</small></div>${estado}</div>
+      <div class="table">${SEC_HEAD}${items.length ? items.map((x) => secFila(x.s, { evento: g.nombre, fresca: x.fresca, n: x.n })).join("") : `<p class="empty">Este evento no tiene secciones.</p>`}</div>
+    </div>`;
+  }).join("");
+  const sin = S.secGrupos.sin_usar.map((id) => byId[id]).filter(pasa);
+  let abierto = false; try { abierto = localStorage.getItem("hamna.secsin") === "1"; } catch {}
+  const sinHtml = sin.length ? `<details class="sec-grupo sec-sin" ${abierto || q ? "open" : ""}><summary><b>Sin usar en ningún evento</b> <span class="muted">(${sin.length})</span></summary>
+      <div class="table">${SEC_HEAD}${sin.map((s) => secFila(s)).join("")}</div></details>` : "";
+  const nGr = S.secGrupos.grupos.length;
+  $("#secSub").textContent = `${S.secciones.length} secciones · ${nGr} evento${nGr === 1 ? "" : "s"}${S.secGrupos.sin_usar.length ? ` · ${S.secGrupos.sin_usar.length} sin usar` : ""}`;
+  $("#secList").innerHTML = (html + sinHtml) || vacio;
+  const det = $("#secList .sec-sin");
+  if (det) det.ontoggle = () => { try { localStorage.setItem("hamna.secsin", det.open ? "1" : "0"); } catch {} };
+}
+$("#secVista").onchange = () => { try { localStorage.setItem("hamna.secvista", $("#secVista").value); } catch {} renderSecciones(); };
 $("#secSearch").oninput = renderSecciones;
 $("#secFilter").onchange = renderSecciones;
 $("#btnNewSec").onclick = () => seccionForm(null);
@@ -1079,6 +1120,8 @@ async function seccionForm(s) {
       ${isNew ? `<div class="seg" id="sfTipo">${["TTS", "Audio", "Sonido"].map((t) =>
         `<button type="button" class="btn ${t === s.tipo ? "active" : ""}" data-t="${t}">${t === "TTS" ? "🗣 Texto a voz" : t === "Audio" ? "🎵 Audio" : "🔔 Sonido"}</button>`).join("")}</div>` : ""}
       <label>Nombre<input name="nombre" value="${esc(s.nombre)}" required placeholder="Bienvenida"></label>
+      ${(s.eventos || []).length > 1 ? `<p class="sec-compartida">ℹ Esta sección se usa en ${s.eventos.length} eventos: ${s.eventos.map(esc).join(", ")}. Lo que cambies aquí cambia en todos.</p>` : ""}
+      <label class="check"><input type="checkbox" name="renovar" ${s.renovar ? "checked" : ""}> 🔁 Se renueva en cada emisión (por ejemplo, el editorial o las noticias de la semana). Te aviso si sigue la de la emisión anterior.</label>
       <div class="only-tts">
         <div class="grid2">
           <label>Título<input name="titulo" value="${esc(s.titulo || "")}"><small>Se lee con {titulo}</small></label>
@@ -1145,6 +1188,7 @@ async function seccionForm(s) {
     const fd = new FormData();
     fd.append("nombre", f.nombre.value);
     fd.append("tipo", tipo);
+    fd.append("renovar", f.renovar.checked ? "1" : "0");
     if (tipo === "TTS") {
       ["titulo", "descripcion", "texto_tts"].forEach((k) => fd.append(k, f[k].value));
       fd.append("regenerar_antes", f.regenerar_antes.checked ? "1" : "0");

@@ -237,7 +237,7 @@ main > .view { max-width: 1180px; margin: 0 auto; }
 /* Tabla de secciones */
 .table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden; box-shadow: var(--shadow); }
-.trow { display: grid; grid-template-columns: 70px 1fr 70px 60px auto; gap: 12px; align-items: center;
+.trow { display: grid; grid-template-columns: 70px 1fr 70px 90px auto; gap: 12px; align-items: center;
   padding: 11px 18px; border-bottom: 1px solid var(--border); }
 .trow:not(.head):hover { background: var(--surface2); }
 .trow:last-child { border-bottom: 0; }
@@ -757,3 +757,20 @@ a.btn { text-decoration: none; }
 .rec-card audio { width: 100%; margin-bottom: 6px; }
 #view-grab .upd-box { margin-bottom: 14px; }
 .rec-prev { color: var(--accent) !important; font-weight: 600; }
+/* Secciones por evento */
+.sec-grupo { margin-bottom: 18px; }
+.sec-ghead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 2px 8px; }
+.sec-ghead > div { display: flex; flex-direction: column; gap: 2px; }
+.sec-ghead small { font-size: .82rem; }
+.sec-lista { font-size: .82rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.sec-lista.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.sec-lista.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.sec-lista.nada { background: var(--surface2); color: var(--text3); font-weight: 500; }
+.sec-n { color: var(--text3); font-weight: 600; }
+.sec-ren { font-size: .8rem; }
+.sec-ok { color: var(--ok); white-space: nowrap; }
+.sec-vieja { color: var(--warn); font-weight: 700; white-space: nowrap; }
+.trow.vieja { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.sec-sin summary { cursor: pointer; margin: 0 2px 8px; list-style-position: inside; }
+.sec-compartida { font-size: .86rem; background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 12px; margin: -4px 0 12px; }
+#secList:not(.table) { background: none; border: 0; box-shadow: none; }

@@ -412,7 +412,7 @@ def _reemplazar_audio(sid, up):
             paths.rm(d / s["anterior_archivo"])
         shutil.move(str(oldp), str(d / old))       # antes de guardar: el nuevo puede llamarse igual
         prev = {"anterior_archivo": old, "anterior_duracion": float(s.get("duracion") or 0),
-                "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M")}
+                "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M"), "anterior_ts": s.get("audio_ts")}
     try:
         dest = save_upload(up, paths.audios_dir(), str(sid))
     except Exception:
@@ -422,7 +422,7 @@ def _reemplazar_audio(sid, up):
         raise
     if not prev and old and old != dest.name:
         paths.rm(oldp)
-    f = {"ruta_archivo": dest.name, "duracion": audio.duration(dest)}
+    f = {"ruta_archivo": dest.name, "duracion": audio.duration(dest), "audio_ts": time.time()}
     f.update(prev or {})
     return f
 
@@ -440,7 +440,7 @@ def _restaurar_anterior(sid):
     shutil.move(str(ap), str(tmp))
     cur = s.get("ruta_archivo") or ""
     cp = paths.audios_dir() / cur if cur else None
-    campos = {"anterior_archivo": "", "anterior_duracion": 0, "anterior_fecha": ""}
+    campos = {"anterior_archivo": "", "anterior_duracion": 0, "anterior_fecha": "", "anterior_ts": None}
     target = paths.audios_dir() / s["anterior_archivo"]
     movido = False
     try:
@@ -448,7 +448,7 @@ def _restaurar_anterior(sid):
             shutil.move(str(cp), str(d / cur))
             movido = True
             campos = {"anterior_archivo": cur, "anterior_duracion": float(s.get("duracion") or 0),
-                      "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M")}
+                      "anterior_fecha": dt.datetime.now().strftime("%Y-%m-%d %H:%M"), "anterior_ts": s.get("audio_ts")}
         shutil.move(str(tmp), str(target))
     except Exception:
         log.exception("No se pudo regresar la versión anterior de la sección #%s", sid)
@@ -458,7 +458,8 @@ def _restaurar_anterior(sid):
         if tmp.exists():
             shutil.move(str(tmp), str(ap))
         raise ValueError("No se pudo cambiar el audio (¿se está usando en este momento?). Intenta de nuevo en un momento.")
-    campos.update(ruta_archivo=target.name, duracion=audio.duration(target))
+    campos.update(ruta_archivo=target.name, duracion=audio.duration(target),
+                  audio_ts=s.get("anterior_ts") or target.stat().st_mtime)
     db.update_seccion(sid, **campos)
     threading.Thread(target=_prep_eventos_de, args=(sid,), daemon=True).start()
 
@@ -471,7 +472,55 @@ def _audio_anterior(s):
 
 @app.route("/api/secciones")
 def secciones(req):
-    return jsonr([_sec_out(s) for s in db.get_secciones()])
+    usos = {}
+    for r in db.rows("""SELECT es.seccion_id, e.nombre FROM evento_secciones es JOIN eventos e ON e.id=es.evento_id
+                        ORDER BY e.nombre COLLATE NOCASE"""):
+        usos.setdefault(r["seccion_id"], []).append(r["nombre"])
+    out = []
+    for s in db.get_secciones():
+        s = _sec_out(s)
+        s["eventos"] = usos.get(s["id"], [])
+        s["actualizado"] = dt.datetime.fromtimestamp(s["audio_ts"]).strftime("%Y-%m-%d %H:%M") if s.get("audio_ts") else None
+        out.append(s)
+    return jsonr(out)
+
+
+@app.route("/api/secciones/grupos")
+def secciones_grupos(req):
+    """Vista por evento: sus secciones en orden y si las que «se renuevan»
+    ya se cambiaron desde la última vez que ese evento salió al aire."""
+    now = dt.datetime.now()
+    progs = db.get_programacion(solo_activos=True)
+    grupos, usadas = [], set()
+    for e in db.get_eventos():
+        ev = numeracion.aplicar(e)
+        nxt = []
+        for r in progs:
+            if r["evento_id"] == e["id"]:
+                try:
+                    t = engine.next_run(r, now)
+                except Exception:
+                    t = None
+                if t:
+                    nxt.append(t)
+        ult = db.row("SELECT MAX(inicio) AS i FROM historial WHERE evento_id=? AND inicio < ?",
+                     (e["id"], now.strftime("%Y-%m-%d %H:%M:%S")))
+        ult_dt = dt.datetime.strptime(ult["i"], "%Y-%m-%d %H:%M:%S") if ult and ult.get("i") else None
+        ult_ts = time.mktime(ult_dt.timetuple()) if ult_dt else None
+        items = []
+        for s in db.get_secciones_by_evento(e["id"]):
+            usadas.add(s["id"])
+            fresca = None
+            if s.get("renovar"):
+                fresca = bool(s.get("audio_ts")) and (ult_ts is None or s["audio_ts"] > ult_ts)
+            items.append({"id": s["id"], "fresca": fresca})
+        grupos.append({"id": e["id"], "nombre": e["nombre"],
+                       "etiqueta": numeracion.etiqueta(ev) if (ev.get("num") or ev.get("numero")) else "",
+                       "proxima": min(nxt).strftime("%Y-%m-%d %H:%M") if nxt else None,
+                       "ultima": ult_dt.strftime("%Y-%m-%d %H:%M") if ult_dt else None, "secciones": items})
+    grupos.sort(key=lambda g: (g["proxima"] is None, g["proxima"] or "", g["nombre"].lower()))
+    sin = [s["id"] for s in db.get_secciones() if s["id"] not in usadas]
+    return jsonr({"grupos": grupos, "sin_usar": sin})
 
 
 def _air_target(cfg):
@@ -504,7 +553,7 @@ def _generate_tts(sid):
     shutil.move(str(src), str(dest))
     if s.get("ruta_archivo") and s["ruta_archivo"] != dest.name:
         paths.rm(paths.audios_dir() / s["ruta_archivo"])
-    db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest))
+    db.update_seccion(sid, ruta_archivo=dest.name, duracion=audio.duration(dest), audio_ts=time.time())
     if not settings.load().get("keep_originals", True):
         _compact_section(sid)
 
@@ -517,6 +566,8 @@ def _apply_section(req, sid, tipo, is_new):
             fields[k] = form[k].strip()
     if "regenerar_antes" in form:
         fields["regenerar_antes"] = truthy(form["regenerar_antes"])
+    if "renovar" in form:
+        fields["renovar"] = 1 if truthy(form["renovar"]) else 0
     if "nombre" in fields and not fields["nombre"]:
         raise ValueError("La sección necesita un nombre")
     up = req.files.get("archivo")

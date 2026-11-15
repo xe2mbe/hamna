@@ -763,6 +763,13 @@ class Engine:
                     problemas.append("El nodo no responde: " + str(msg))
             except Exception as e:
                 problemas.append("No pude revisar el nodo: {}".format(e))
+            ult = db.row("SELECT MAX(inicio) AS i FROM historial WHERE evento_id=? AND inicio < ?",
+                         (row["evento_id"], dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            if ult and ult.get("i"):
+                ult_ts = time.mktime(dt.datetime.strptime(ult["i"], "%Y-%m-%d %H:%M:%S").timetuple())
+                viejas = [s["nombre"] for s in secs if s.get("renovar") and (s.get("audio_ts") or 0) <= ult_ts]
+                if viejas:
+                    problemas.append("Siguen con el audio de la emisión anterior: " + ", ".join(viejas))
             libre = shutil.disk_usage(str(paths.data_dir())).free
             if libre < 200 * 2**20:
                 problemas.append("Queda poco disco: {} MB".format(libre // 2**20))

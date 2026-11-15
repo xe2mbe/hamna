@@ -61,6 +61,15 @@
     "Variables: {evento} · {numero} (#47 · 2026 #47) · {emision} · {emision_anio} · {anio} · {fecha} · {hora}. Así se llama también al descargarla o recibirla por Telegram.":
       "Variables: {evento} · {numero} (#47 · 2026 #47) · {emision} · {emision_anio} · {anio} · {fecha} · {hora}. That is also the file name when downloading it or receiving it on Telegram.",
     "El título de la grabación es muy largo (máximo 120 caracteres)": "The recording title is too long (120 characters max)",
+    "Por evento": "By event", "Todas": "All", "Cómo ver las secciones": "How to view the sections",
+    "Actualizada": "Updated", "Sin usar en ningún evento": "Not used in any event", "Sin programar": "Not scheduled",
+    "Marca las secciones que cambian en cada emisión": "Mark the sections that change every broadcast",
+    "Marca en cada sección si se renueva en cada emisión": "Mark in each section whether it's renewed every broadcast",
+    "Este evento no tiene secciones.": "This event has no sections.",
+    "Cambiada después de la última emisión": "Changed after the last broadcast", "Sigue la de la emisión anterior": "Still the one from the previous broadcast",
+    "Se renueva en cada emisión": "Renewed every broadcast",
+    "🔁 Se renueva en cada emisión (por ejemplo, el editorial o las noticias de la semana). Te aviso si sigue la de la emisión anterior.":
+      "🔁 Renewed every broadcast (for example the editorial or the week's news). I'll warn you if it's still the previous one.",
     "Grabaciones": "Recordings", "Grabación": "Recording", "⏺ Grabar ahora": "⏺ Record now", "⏹ Detener": "⏹ Stop",
     "Lo que se escucha en el nodo: la toma de reportes, las redes…": "What is heard on the node: check-ins, nets…",
     "Grabar ahora": "Record now", "Título": "Title", "⏺ Grabar": "⏺ Record", "Grabando": "Recording",
@@ -623,6 +632,13 @@
   const M = (re, fn) => [re, fn];
   const P = [
     M(/^se detiene en (\S+)$/, (m, f) => "stops in " + f),
+    M(/^✅ Lista: (\d+) de (\d+) actualizadas$/, (m, a, b) => `✅ Ready: ${a} of ${b} updated`),
+    M(/^⚠ Faltan (\d+): (\d+) de (\d+) actualizadas$/, (m, f, a, b) => `⚠ ${f} missing: ${a} of ${b} updated`),
+    M(/^(\d+) secciones en la biblioteca$/, (m, n) => `${n} sections in the library`),
+    M(/^(\d+) secciones · (\d+) eventos?( · (\d+) sin usar)?$/, (m, n, e, x, s) => `${n} sections · ${e} event${e === "1" ? "" : "s"}` + (x ? ` · ${s} unused` : "")),
+    M(/^Sale (.+?)( · última emisión (.+))?$/, (m, a, x, b) => "Airs " + a + (x ? " · last broadcast " + b : "")),
+    M(/^También en: (.+)$/, (m, a) => "Also in: " + a),
+    M(/^ℹ Esta sección se usa en (\d+) eventos: (.+)\. Lo que cambies aquí cambia en todos\.$/, (m, n, e) => `ℹ This section is used in ${n} events: ${e}. What you change here changes in all of them.`),
     M(/^Quedaría: (.+)$/, (m, t) => "It would be: " + t),
     M(/^Así apareces para el administrador y en los avisos\. Para entrar sigues usando «(.+)»\.$/,
       (m, u) => `This is how the administrator and alerts see you. You still sign in with «${u}».`),
