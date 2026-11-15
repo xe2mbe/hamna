@@ -84,6 +84,9 @@ function confirmBox(msg, okLabel = "Sí, continuar", danger = true) {
 /* ── Sesión ──────────────────────────────────────────────────────────────── */
 function showLogin() {
   $("#app").classList.add("hidden"); $("#collab").classList.add("hidden"); $("#login").classList.remove("hidden");
+  // el panel «Mi perfil» y las ventanas están fuera de la página: también se cierran
+  $("#perfil").classList.add("hidden"); $("#pwOld").value = $("#pwNew").value = "";
+  if (!$("#modal").classList.contains("hidden")) closeModal();
   S.polling = false; clearTimeout(S.pollTimer);
   clearInterval(S.clockTimer); S.clockTimer = null;
   let last = ""; try { last = localStorage.getItem("hamna.user") || ""; } catch {}
