@@ -81,7 +81,20 @@ def _rpt_stanza(node):
 
 def _envivo(cfg, kind, sabor):
     if kind == "irlp":
-        return [_r("Nodo", "Audio en vivo", "nd", "Escuchar en vivo todavía no funciona en nodos IRLP")]
+        from .live import live, irlp_activado
+        cmd = "sudo /opt/hamna-web/bin/hamna-irlp-envivo on"
+        if not irlp_activado():
+            return [_r("Nodo", "Audio en vivo", "aviso",
+                       "Escuchar en vivo está apagado: sin eso no aparece el botón 🔊 En vivo ni se pueden grabar los reportes",
+                       "Enciéndelo en Ajustes → Sistema → Audio en vivo: HAMNA lo prueba y, si algo falla, lo deja como estaba. "
+                       "También se puede con este comando:", cmd)]
+        s = live.status()
+        if s["recibiendo"]:
+            return [_r("Nodo", "Audio en vivo", "ok", "HAMNA está escuchando el receptor y lo que IRLP reproduce; el botón 🔊 En vivo está disponible")]
+        return [_r("Nodo", "Audio en vivo", "aviso", "Está activado, pero no llega audio del receptor" +
+                   (": " + s["error"] if s["error"] else ""),
+                   "Revisa que la tarjeta de sonido tenga entrada (arecord -l) y que el servicio esté en el grupo audio.",
+                   "arecord -l\nsystemctl restart hamna-web")]
     if kind != "asl":
         return []
     from .live import live

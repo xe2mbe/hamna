@@ -317,6 +317,25 @@ const MULAW = (() => {
   }
   return t;
 })();
+function irlpBtn(lv) {
+  if (!S.me || S.me.rol !== "admin") return "";
+  return lv.irlp_activado
+    ? `<div class="actions" style="margin-top:8px"><button type="button" class="btn sm ghost" data-irlplive="0">Apagar escuchar en vivo</button></div>`
+    : `<div class="actions"><button type="button" class="btn sm primary" data-irlplive="1">🔊 Encender escuchar en vivo</button></div>`;
+}
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-irlplive]");
+  if (!b) return;
+  const on = b.dataset.irlplive === "1";
+  if (!on && !(await confirmBox("Ya no se podrá escuchar ni grabar este nodo desde la página. ¿Apagar?", "Apagar"))) return;
+  busy(b, true, on ? "Probando…" : "Apagando…");
+  try {
+    await api("api/en-vivo/irlp", { method: "POST", json: { on } });
+    toast(on ? "Listo: escuchar en vivo encendido" : "Escuchar en vivo apagado");
+  } catch (err) { toast(err.message); }
+  busy(b, false);
+  try { renderLive((await api("api/status")).envivo); } catch {}
+});
 function renderLive(lv) {
   if (!lv) return;
   $$(".live-btn").forEach((b) => b.classList.toggle("hidden", !lv.configurado && !LIVE.on));
@@ -326,7 +345,10 @@ function renderLive(lv) {
   const html = lv.configurado
     ? `<div class="live-box"><h4>🔊 Audio en vivo</h4>
         <div class="muted" style="font-size:.84rem">${lv.recibiendo ? "Recibiendo audio del nodo" : "Sin audio del nodo en los últimos segundos"} · ${n} ${n === 1 ? "persona escuchando" : "personas escuchando"}</div>
-        ${n ? `<ul class="upd-list">${lv.oyentes.map((o) => `<li><span class="d">${esc(o.usuario)}</span><span>${esc(o.ip)} · ${fmt(o.desde)}</span></li>`).join("")}</ul>` : ""}</div>`
+        ${n ? `<ul class="upd-list">${lv.oyentes.map((o) => `<li><span class="d">${esc(o.usuario)}</span><span>${esc(o.ip)} · ${fmt(o.desde)}</span></li>`).join("")}</ul>` : ""}${lv.tipo === "irlp" ? irlpBtn(lv) : ""}</div>`
+    : lv.tipo === "irlp" ? `<div class="live-box"><h4>🔊 Audio en vivo</h4>
+        <p class="muted" style="margin:0 0 8px">Escuchar este nodo IRLP desde la página (reflector, estaciones locales y HAMNA al aire) y grabar los reportes. Está apagado. Al encenderlo, HAMNA agrega un bloque en <code>/home/irlp/.asoundrc</code> y lo prueba; si algo falla, lo deja como estaba.</p>
+        ${irlpBtn(lv)}${lv.error ? `<p class="muted">${esc(lv.error)}</p>` : ""}</div>`
     : `<div class="live-box"><h4>🔊 Audio en vivo</h4>
         <p class="muted" style="margin:0 0 6px">Para escuchar el nodo desde esta página, agrega esta línea en la sección de tu nodo en <code>/etc/asterisk/rpt.conf</code> y reinicia Asterisk cuando no haya emisión:</p>
         <pre translate="no">outstreamcmd = /opt/hamna-web/bin/hamna-live</pre>${lv.error ? `<p class="muted">${esc(lv.error)}</p>` : ""}</div>`;
@@ -1549,7 +1571,9 @@ async function loadGrab() {
   const ev = d.envivo || {};
   $("#recEstado").className = "upd-box" + (S.rec.grabando ? " rec-box" : "");
   $("#recEstado").innerHTML = S.rec.grabando ? `<div class="rec-vivo">${recTexto(recAhora())}</div>`
-    : !ev.configurado ? `⚠ Para grabar, este nodo necesita el audio en vivo (la línea <code>outstreamcmd</code> en rpt.conf). Revísalo en Ajustes → Sistema → «Revisar este nodo».`
+    : !ev.configurado ? (ev.tipo === "irlp"
+        ? `⚠ Para grabar, este nodo IRLP necesita «escuchar en vivo». Enciéndelo en Ajustes → Sistema → Audio en vivo.`
+        : `⚠ Para grabar, este nodo necesita el audio en vivo (la línea <code>outstreamcmd</code> en rpt.conf). Revísalo en Ajustes → Sistema → «Revisar este nodo».`)
     : `Se graba solo según Ajustes → Grabación (por omisión, al terminar cada evento). También puedes grabar a mano.${d.mp3 ? "" : " Este nodo no puede crear MP3: se guardan en WAV."}`;
   const g = d.grabaciones || [];
   $("#recList").innerHTML = g.length ? g.map((x) => `<div class="card rec-card">

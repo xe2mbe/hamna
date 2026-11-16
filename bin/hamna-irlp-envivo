@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# HAMNA Web — escuchar en vivo un nodo IRLP.
+#
+#   hamna-irlp-envivo on       agrega el bloque de HAMNA en /home/irlp/.asoundrc
+#   hamna-irlp-envivo off      lo quita (deja el resto del archivo como estaba)
+#   hamna-irlp-envivo status   dice "on" u "off"
+#
+# Puede correrlo root o el usuario repeater. IRLP (ispeaker, imike, play) sigue
+# usando la misma tarjeta; HAMNA solo escucha:
+#   · lo que IRLP reproduce (reflector, mensajes, HAMNA al aire) pasa por un
+#     derivador de ALSA hacia bin/hamna-live-irlp;
+#   · lo que entra del radio lo lee HAMNA con arecord (dsnoop, compartido).
+# Los programas de IRLP toman el cambio la próxima vez que abren el audio.
+set -eu
+F=${HAMNA_ASOUNDRC:-/home/irlp/.asoundrc}
+BEGIN="# >>> HAMNA Web: escuchar en vivo (no edites este bloque; quítalo con hamna-irlp-envivo off) >>>"
+END="# <<< HAMNA Web <<<"
+TAP=${HAMNA_TAP:-/opt/hamna-web/bin/hamna-live-irlp}   # HAMNA_TAP solo para pruebas
+
+has_block() { [ -f "$F" ] && grep -qF ">>> HAMNA Web: escuchar en vivo" "$F"; }
+
+fix_owner() { [ "$(id -u)" = 0 ] && id repeater >/dev/null 2>&1 && chown repeater:repeater "$F" || true; }
+
+case "${1:-status}" in
+  on)
+    if has_block; then echo "Ya estaba activado ($F)"; exit 0; fi
+    if [ -f "$F" ] && grep -Eq '^[[:space:]]*pcm\.!?default' "$F"; then
+      echo "$F ya define su propio pcm.default; no lo toco." >&2
+      echo "Revísalo a mano o quita esa definición y vuelve a intentar." >&2
+      exit 2
+    fi
+    [ -f "$F" ] && cp -p "$F" "$F.antes-de-hamna"
+    {
+      [ -s "$F" ] && echo
+      echo "$BEGIN"
+      cat <<EOF
+pcm.!default {
+	type asym
+	playback.pcm "hamna_envivo"
+	capture.pcm "plug:dsnoop"
+}
+pcm.hamna_envivo {
+	type plug
+	slave { pcm "hamna_envivo_f" format S16_LE channels 1 }
+}
+pcm.hamna_envivo_f {
+	type file
+	slave.pcm "plug:dmix"
+	file "|$TAP 2>/dev/null || cat >/dev/null"
+	format wav
+}
+EOF
+      echo "$END"
+    } >> "$F"
+    fix_owner
+    echo "Activado: HAMNA puede escuchar el nodo ($F)"
+    ;;
+  off)
+    if ! has_block; then echo "No estaba activado"; exit 0; fi
+    sed -i '/^# >>> HAMNA Web: escuchar en vivo/,/^# <<< HAMNA Web <<</d' "$F"
+    if ! grep -q '[^[:space:]]' "$F"; then rm -f "$F"; else fix_owner; fi
+    echo "Desactivado: se quitó el bloque de HAMNA de $F"
+    ;;
+  status)
+    if has_block; then echo on; else echo off; fi
+    ;;
+  *)
+    echo "Uso: $0 on|off|status" >&2; exit 1 ;;
+esac

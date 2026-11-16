@@ -353,6 +353,19 @@ def salud_revisar(req):
 
 
 # ── Escuchar en vivo ─────────────────────────────────────────────────────────
+@app.route("/api/en-vivo/irlp", ("POST",), rol="admin")
+def en_vivo_irlp(req):
+    on = bool((req.json() or {}).get("on"))
+    if engine.st.get("on_air"):
+        raise HTTPError(409, "Espera a que termine lo que está al aire")
+    try:
+        r = live.irlp_cambiar(on)
+    except RuntimeError as e:
+        raise HTTPError(400, str(e))
+    log.info("%s %s escuchar en vivo (IRLP)", req.user["usuario"], "encendió" if on else "apagó")
+    return jsonr(r)
+
+
 @app.route("/api/en-vivo")
 def en_vivo(req):
     if not live.started:

@@ -19,6 +19,9 @@ if [ -f /etc/httpd/conf/extra/hamna-web.conf ]; then
   systemctl reload httpd 2>/dev/null || true
 fi
 
+# IRLP: quitar el bloque de "escuchar en vivo" de /home/irlp/.asoundrc
+[ -x /opt/hamna-web/bin/hamna-irlp-envivo ] && /opt/hamna-web/bin/hamna-irlp-envivo off >/dev/null 2>&1 || true
+
 rm -rf /opt/hamna-web
 
 case "${1:-}" in

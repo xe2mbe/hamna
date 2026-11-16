@@ -1,0 +1,125 @@
+#!/usr/bin/python3 -I
+"""
+HAMNA Web — audio en vivo en nodos IRLP (lo que el nodo reproduce).
+
+ALSA lo arranca cada vez que un programa abre la salida de audio por omisión
+(ispeaker con el audio del reflector, los mensajes de IRLP, HAMNA al aire),
+gracias al bloque que `hamna-irlp-envivo on` agrega en /home/irlp/.asoundrc:
+
+    pcm.hamna_envivo_f { type file ... file "|/opt/hamna-web/bin/hamna-live-irlp" format wav }
+
+Recibe un WAV (16 bits, mono, a la frecuencia que use el programa), lo pasa
+a 8 kHz y lo manda en paquetes UDP a HAMNA Web (127.0.0.1:8091), igual que
+hamna-live en los nodos AllStar.
+
+Regla de oro: NUNCA dejar de leer la entrada. Si este programa terminara antes
+de tiempo, ALSA recibiría SIGPIPE y tumbaría a ispeaker. Ante cualquier error
+se queda leyendo y tirando el audio hasta que ALSA cierre la tubería.
+"""
+import array
+import os
+import select
+import socket
+import struct
+import sys
+
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8091
+OUT_RATE = 8000
+CHUNK = 1600                     # 100 ms de audio a 8 kHz
+
+
+def drain():
+    try:
+        while os.read(0, 65536):
+            pass
+    except Exception:
+        pass
+    os._exit(0)
+
+
+def read_exact(n):
+    out = b""
+    while len(out) < n:
+        d = os.read(0, n - len(out))
+        if not d:
+            return b""
+        out += d
+    return out
+
+
+def header():
+    """Lee el encabezado WAV que escribe ALSA. Devuelve (frecuencia, canales, bits)."""
+    riff = read_exact(12)
+    if len(riff) < 12 or riff[:4] != b"RIFF" or riff[8:12] != b"WAVE":
+        drain()
+    rate, ch, bits = OUT_RATE, 1, 16
+    while True:
+        h = read_exact(8)
+        if len(h) < 8:
+            drain()
+        cid, size = h[:4], struct.unpack("<I", h[4:])[0]
+        if cid == b"data":
+            return rate, ch, bits
+        body = read_exact(size + (size & 1))
+        if cid == b"fmt " and len(body) >= 16:
+            _tag, ch, rate, _br, _ba, bits = struct.unpack("<HHIIHH", body[:16])
+
+
+def main():
+    rate, ch, bits = header()
+    if bits != 16 or ch < 1 or rate < 1000:
+        drain()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    step = rate / float(OUT_RATE)
+    frame = 2 * ch
+    raw = b""                    # bytes que aún no forman un cuadro completo
+    pend = array.array("h")      # muestras de entrada aún sin convertir
+    pos = 0.0
+    out = b""
+
+    def send(data):
+        try:
+            sock.sendto(data, ("127.0.0.1", PORT))
+        except OSError:
+            pass
+
+    while True:
+        r, _, _ = select.select([0], [], [], 0.25)
+        if not r:
+            if out:                          # el audio paró: mandar lo que quedó
+                send(out)
+                out = b""
+            continue
+        data = os.read(0, 8192)
+        if not data:
+            break
+        raw += data
+        n = len(raw) - len(raw) % frame
+        if not n:
+            continue
+        a = array.array("h", raw[:n])
+        raw = raw[n:]
+        if ch > 1:
+            a = a[0::ch]
+        if rate == OUT_RATE:
+            out += a.tobytes()
+        else:
+            pend.extend(a)
+            m = int((len(pend) - 1 - pos) / step) + 1 if len(pend) > pos else 0
+            if m > 0:
+                out += array.array("h", [pend[int(pos + i * step)] for i in range(m)]).tobytes()
+                used = pos + m * step
+                k = min(int(used), len(pend))
+                del pend[:k]
+                pos = used - k
+        while len(out) >= CHUNK:
+            send(out[:CHUNK])
+            out = out[CHUNK:]
+    if out:
+        send(out)
+
+
+try:
+    main()
+except Exception:
+    drain()
