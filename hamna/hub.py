@@ -37,6 +37,42 @@ def init():
                          datos     TEXT DEFAULT '{}',
                          ultimo    REAL DEFAULT 0,
                          alertado  INTEGER DEFAULT 0)""")
+        # Direcciones del dashboard de cada nodo (las escribe el admin del hub; no se
+        # borran al quitar el nodo del panel)
+        c.execute("""CREATE TABLE IF NOT EXISTS nodos_urls (
+                         nodo     TEXT PRIMARY KEY,
+                         url_int  TEXT DEFAULT '',
+                         url_ext  TEXT DEFAULT '')""")
+
+
+URL_RX = re.compile(r"^https?://[^\s\"'<>]{1,300}$", re.I)
+
+
+def urls():
+    try:
+        return {r["nodo"]: {"url_int": r["url_int"] or "", "url_ext": r["url_ext"] or ""}
+                for r in db.rows("SELECT * FROM nodos_urls")}
+    except Exception:
+        return {}
+
+
+def guardar_urls(nodo, url_int, url_ext):
+    nodo = str(nodo or "").strip()
+    if not (NODO_RX.match(nodo) or nodo == "_este"):
+        raise ValueError("Nodo inválido")
+    limpio = []
+    for nombre, u in (("interna", url_int), ("de internet", url_ext)):
+        u = (u or "").strip()
+        if u and "://" not in u:
+            u = "http://" + u
+        if u and not URL_RX.match(u):
+            raise ValueError("La dirección {} no es válida: debe empezar con http:// o https:// y no llevar espacios ni comillas".format(nombre))
+        limpio.append(u)
+    if db.row("SELECT nodo FROM nodos_urls WHERE nodo=?", (nodo,)):
+        db.execute("UPDATE nodos_urls SET url_int=?, url_ext=? WHERE nodo=?", (limpio[0], limpio[1], nodo))
+    else:
+        db.execute("INSERT INTO nodos_urls (nodo, url_int, url_ext) VALUES (?,?,?)", (nodo, limpio[0], limpio[1]))
+    return {"url_int": limpio[0], "url_ext": limpio[1]}
 
 
 # ── Lo que reporta un nodo ──────────────────────────────────────────────────
@@ -210,16 +246,18 @@ def panel():
     except Exception:
         pass
     nodos = []
+    dirs = urls()
     for r in db.rows("SELECT * FROM nodos_latido ORDER BY nodo"):
         try:
             d = json.loads(r["datos"] or "{}")
         except ValueError:
             d = {}
         d.update(nodo=r["nodo"], ip=r["ip"], edad=int(now - r["ultimo"]), ultimo=r["ultimo"],
-                 recibido=recibidos.get(r["nodo"]))
+                 recibido=recibidos.get(r["nodo"]), **dirs.get(r["nodo"], {}))
         nodos.append(d)
     este = datos_locales()
-    este.update(edad=0, propio=True, recibido=None)
+    este.update(edad=0, propio=True, recibido=None, clave=este.get("nodo") or "_este")
+    este.update(dirs.get(este["clave"], {}))
     ultima = None
     try:
         from . import updates

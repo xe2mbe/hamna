@@ -1696,6 +1696,10 @@ function nodoCard(d, p) {
   const sis = (d.sistemas || []).length ? d.sistemas : d.tipo && d.tipo !== "auto" ? [["", d.tipo.toUpperCase()]] : [];
   const r = d.respaldo || {};
   const titulo = d.estacion || LG("Nodo ", "Node ") + d.nodo;
+  const clave = d.clave || d.nodo;
+  const url = dashUrl(d);
+  const ligas = [d.url_int ? `<a href="${esc(d.url_int)}" target="_blank" rel="noopener" title="${esc(d.url_int)}">🏠 ${LG("red local", "local network")}</a>` : "",
+    d.url_ext ? `<a href="${esc(d.url_ext)}" target="_blank" rel="noopener" title="${esc(d.url_ext)}">🌐 internet</a>` : ""].filter(Boolean).join(" · ");
   const edad = d.propio ? LG("ahora", "now") : est === "caido" ? "⚠ " + LG("sin reportar " + haceTxt(d.edad), "no report for " + lapso(d.edad)) : haceTxt(d.edad);
   const verTit = viejo ? LG("Hay una versión más nueva: v", "A newer version is available: v") + p.ultima_version : LG("Al día", "Up to date");
   const salud = sal === "ok" ? LG("Salud bien", "Health OK") : sal === "grave" || sal === "aviso"
@@ -1705,8 +1709,10 @@ function nodoCard(d, p) {
     + (r.ok === false && r.fecha ? ` · <span style="color:var(--warn)">${LG("el último falló", "the last one failed")} (${esc(fechaCortaLG(r.fecha))})</span>` : "")
     + (d.recibido ? ` · ${LG("en este hub", "on this hub")}: ${esc(fechaCortaLG(d.recibido.fecha))} (${mb(d.recibido.tam)})` : "");
   return `<div class="card nodo-card ${est}" translate="no">
-    <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit"><b>${esc(titulo)}</b>
-      <small>${d.propio ? LG("este hub", "this hub") : esc(d.ip || "")}</small></div>
+    <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit">${url
+        ? `<a class="nodo-link" href="${esc(url)}" target="_blank" rel="noopener" title="${LG("Abrir el dashboard del nodo", "Open the node's dashboard")}: ${esc(url)}"><b>${esc(titulo)}</b> ↗</a>`
+        : `<b>${esc(titulo)}</b>`}
+      <small>${[d.propio ? LG("este hub", "this hub") : esc(d.ip || ""), ligas].filter(Boolean).join(" · ")}</small></div>
       <span class="muted nodo-edad">${esc(edad)}</span></div>
     <div class="nodo-ver">${d.nodo ? `<span class="sys-chip num" title="${LG("Número de nodo", "Node number")}">#${esc(d.nodo)}</span>` : ""}${sysChips(sis)}<span class="sys-chip ${viejo ? "old" : "aldia"}" title="${esc(verTit)}">v${esc(d.version || "?")}${viejo ? LG(" · actualizar", " · update") : ""}</span>${d.bot ? '<span class="sys-chip">🤖 bot</span>' : ""}</div>
     ${d.al_aire ? `<div class="nodo-aire">🔴 <b>${LG("Al aire", "On air")}:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · ${LG("faltan", "remaining")} ${fmt(d.al_aire.falta)}</div>`
@@ -1715,9 +1721,36 @@ function nodoCard(d, p) {
     ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
     <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} ${salud}</div>
     <div class="meta">💾 ${resp}</div>
-    ${!d.propio && isAdmin() ? `<div class="actions"><button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button></div>` : ""}
+    ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm ghost" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
   </div>`;
 }
+// Desde la red de la casa conviene la dirección interna; desde fuera, la de internet
+function dashUrl(d) {
+  const h = location.hostname;
+  const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$/.test(h);
+  return local ? d.url_int || d.url_ext || "" : d.url_ext || d.url_int || "";
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-editurl]");
+  if (!b) return;
+  openModal(LG("Dashboard de ", "Dashboard of ") + b.dataset.nombre, `<form id="urlForm" autocomplete="off" translate="no">
+    <label>${LG("Dirección en la red local", "Local network address")}<input name="url_int" value="${esc(b.dataset.int)}" placeholder="http://192.168.1.5/supermon/">
+      <small>${LG("Se usa cuando abres HAMNA desde tu red (192.168…, 10…).", "Used when you open HAMNA from your own network (192.168…, 10…).")}</small></label>
+    <label>${LG("Dirección de internet", "Internet address")}<input name="url_ext" value="${esc(b.dataset.ext)}" placeholder="https://minodo.ddns.net/supermon/">
+      <small>${LG("Se usa cuando abres HAMNA desde fuera. Déjala vacía si no tiene.", "Used when you open HAMNA from outside. Leave it empty if there is none.")}</small></label>
+    <p class="muted" style="font-size:.84rem">${LG("Al hacer clic en el nombre del nodo se abre su dashboard en otra pestaña.", "Clicking the node's name opens its dashboard in a new tab.")}</p>
+    <div class="modal-actions"><button type="button" class="btn" id="urlNo">${LG("Cancelar", "Cancel")}</button>
+      <button type="submit" class="btn primary">${LG("Guardar", "Save")}</button></div></form>`);
+  $("#urlNo").onclick = closeModal;
+  $("#urlForm").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    try {
+      await api("api/nodos/" + encodeURIComponent(b.dataset.editurl) + "/urls", { method: "PUT", json: { url_int: f.url_int.value, url_ext: f.url_ext.value } });
+      closeModal(); toast(LG("Direcciones guardadas", "Addresses saved")); loadNodos();
+    } catch (err) { toast(err.message, true); }
+  };
+});
 async function loadNodos() {
   clearTimeout(S.nodosT);
   let p;

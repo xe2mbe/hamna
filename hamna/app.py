@@ -1676,6 +1676,15 @@ def nodos_quitar(req, nodo):
     return ok()
 
 
+@app.route("/api/nodos/<nodo>/urls", ("PUT",), rol="admin")
+def nodos_urls(req, nodo):
+    from . import hub
+    b = req.json()
+    r = hub.guardar_urls(nodo, b.get("url_int"), b.get("url_ext"))
+    log.info("%s cambió las direcciones del dashboard del nodo %s", req.user["usuario"], nodo)
+    return ok(**r)
+
+
 @app.route("/api/hub", rol="admin")
 def hub_estado(req):
     from . import hub
