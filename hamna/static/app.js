@@ -1077,6 +1077,7 @@ function secFila(s, opt = {}) {
       <span class="num sec-act">${act}</span>
       <span class="mini">
         <button class="btn ro" data-act="play" title="Escuchar aquí" ${s.tiene_audio ? "" : "disabled"}>▶</button>
+        ${s.tiene_audio ? `<a class="btn ro" href="api/secciones/${s.id}/descargar" download title="Descargar el audio">⬇</a>` : `<button class="btn ro" title="Descargar el audio" disabled>⬇</button>`}
         <button class="btn" data-act="air" title="Transmitir por el nodo" ${s.tiene_audio ? "" : "disabled"}>📡</button>
         <button class="btn" data-act="edit" title="Editar">✎</button>
         <button class="btn" data-act="del" title="Borrar">🗑</button>

@@ -216,6 +216,7 @@
     "Piper — voz neuronal local (asl3-tts)": "Piper — local neural voice (asl3-tts)", "eSpeak NG — local, voz sintética": "eSpeak NG — local, synthetic voice",
     "Clave de Azure": "Azure key", "(sin cambios)": "(unchanged)", "Región": "Region", "Voz": "Voice", "Cargar": "Load",
     "Estilo": "Style", "Velocidad (%)": "Speed (%)", "Tono (Hz)": "Pitch (Hz)", "Velocidad (ppm)": "Speed (wpm)", "Tono (0-99)": "Pitch (0-99)",
+    "Descargar el audio": "Download the audio",
     "Probar voz": "Try the voice", "▶ Escuchar": "▶ Listen", "Pega aquí tu clave": "Paste your key here",
     "Google Cloud — voces neuronales (requiere internet y clave)": "Google Cloud — neural voices (needs internet and a key)",
     "ElevenLabs — voces muy naturales (requiere internet y clave)": "ElevenLabs — very natural voices (needs internet and a key)",

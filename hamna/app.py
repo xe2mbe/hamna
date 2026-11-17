@@ -816,6 +816,30 @@ def seccion_audio(req, sid):
     return _browser_file(paths.audios_dir() / s["ruta_archivo"])
 
 
+@app.route("/api/secciones/<int:sid>/descargar", rol="lectura")
+def seccion_descargar(req, sid):
+    """El audio de una sección con su nombre: el archivo tal cual si es un formato común
+    (MP3, WAV…); si no (µ-law, GSM…), convertido a WAV."""
+    s = db.get_seccion(sid)
+    if not s or not s.get("ruta_archivo"):
+        raise HTTPError(404, "La sección no tiene audio")
+    p = paths.audios_dir() / s["ruta_archivo"]
+    if not p.is_file():
+        raise HTTPError(404, "No encontré el audio de la sección")
+    if audio.can_play_in_browser(p):
+        src, ext = p, p.suffix.lower()
+    else:
+        src, ext = audio.prepare(p, None), ".wav"
+    nombre = (re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", s.get("nombre") or "").strip(" .") or "seccion")[:120]
+    nombre = re.sub(r"\s{2,}", " ", nombre) + ext
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "_", nombre)
+    r = send_file(src, "audio/mpeg" if ext == ".mp3" else None)
+    r.headers["Content-Disposition"] = "attachment; filename=\"{}\"; filename*=UTF-8''{}".format(
+        ascii_name, urllib.parse.quote(nombre))
+    log.info("%s descargó la sección «%s»", req.user["usuario"], s.get("nombre"))
+    return r
+
+
 @app.route("/api/secciones/<int:sid>/aire", ("POST",))
 def seccion_aire(req, sid):
     s = db.get_seccion(sid)
