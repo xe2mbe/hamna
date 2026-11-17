@@ -221,8 +221,59 @@ def find_azure_region(key):
 
 
 def _voz(cfg):
+    out = _voz_motor(cfg)
+    if cfg.get("tts_fallback"):
+        resp = tts.cadena(cfg)[1:]
+        if resp:
+            out.append(_r("Voz", "Voz de respaldo", "ok", "Si {} falla se usa, en orden: {}".format(
+                tts.NOMBRES.get(cfg.get("tts_engine") or "azure"), ", ".join(tts.NOMBRES.get(e, e) for e in resp))))
+        else:
+            out.append(_r("Voz", "Voz de respaldo", "aviso", "Está activado, pero no hay otro motor de voz configurado",
+                          "Pon la clave de otro motor (Google, ElevenLabs o Azure) en Ajustes → Voz, o instala Piper o eSpeak."))
+    return out
+
+
+def _voz_nube(cfg, eng):
+    nombre = tts.NOMBRES[eng]
+    key = (cfg.get("google_key" if eng == "google" else "eleven_key") or "").strip()
+    if not key:
+        return [_r("Voz", nombre, "grave", "Falta la clave de {}: no se pueden generar secciones de voz".format(nombre),
+                   "Pégala en Ajustes → Voz.")]
+    try:
+        voces = tts.google_voices(key) if eng == "google" else tts.eleven_voices(key)
+    except Exception as e:
+        return [_r("Voz", nombre, "grave", str(e)[:300],
+                   "Revisa la clave en Ajustes → Voz y que el nodo tenga internet.")]
+    if eng == "google":
+        v = cfg.get("google_voice") or ""
+        if v and v not in [x["name"] for x in voces]:
+            return [_r("Voz", nombre, "aviso", "La clave funciona, pero la voz «{}» no existe".format(v),
+                       "Elige otra con Ajustes → Voz → Cargar.")]
+        return [_r("Voz", nombre, "ok", "La clave funciona ({} voces en español)".format(len(voces)))]
+    v = cfg.get("eleven_voice") or ""
+    if not v:
+        return [_r("Voz", nombre, "grave", "La clave funciona, pero falta elegir la voz", "Ajustes → Voz → Cargar.")]
+    if v not in [x["name"] for x in voces]:
+        return [_r("Voz", nombre, "grave", "La voz elegida ya no está en tu cuenta de ElevenLabs",
+                   "Elige otra con Ajustes → Voz → Cargar.")]
+    extra = ""
+    try:
+        q = tts.eleven_cuota(key)
+        if q:
+            extra = " · este mes van {:,} de {:,} caracteres".format(q[0], q[1])
+            if q[1] and q[0] >= q[1] * 0.9:
+                return [_r("Voz", nombre, "aviso", "Casi se acaba la cuota de ElevenLabs" + extra,
+                           "Cuando se acabe, la voz fallará (con respaldo automático se usará otro motor).")]
+    except Exception:
+        pass
+    return [_r("Voz", nombre, "ok", "La clave y la voz funcionan" + extra)]
+
+
+def _voz_motor(cfg):
     eng = cfg.get("tts_engine") or "azure"
     disp = tts.engines()
+    if eng in ("google", "elevenlabs"):
+        return _voz_nube(cfg, eng)
     if eng != "azure":
         if eng in disp:
             return [_r("Voz", "Motor de voz", "ok", "{} instalado en este nodo".format(eng))]

@@ -22,7 +22,19 @@ DEFAULTS = {
     "logo_file": "",            # logo de la estación (en la carpeta de datos)
 
     # TTS
-    "tts_engine": "azure",      # azure | piper | espeak
+    "tts_engine": "azure",      # azure | google | elevenlabs | piper | espeak
+    "tts_fallback": False,      # si el motor falla, usar otro configurado (tts.RESPALDO)
+    "google_key": "",
+    "google_voice": "es-US-Neural2-A",
+    "google_rate": 100,         # % (25–400)
+    "google_pitch": 0,          # semitonos (−20 a 20); las voces Chirp HD no lo usan
+    "eleven_key": "",
+    "eleven_voice": "",         # voice_id
+    "eleven_voice_name": "",    # solo para mostrarla en Ajustes
+    "eleven_model": "eleven_multilingual_v2",
+    "eleven_stability": 50,     # %
+    "eleven_similarity": 75,    # %
+    "eleven_speed": 100,        # % (70–120)
     "azure_key": "",
     "azure_region": "eastus",
     "azure_voice": "es-MX-DaliaNeural",
@@ -104,7 +116,7 @@ DEFAULTS = {
 }
 
 # Claves que nunca se mandan al navegador
-SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "tg_token", "ab_node_token", "hub_token"}
+SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "google_key", "eleven_key", "tg_token", "ab_node_token", "hub_token"}
 
 _lock = threading.Lock()
 _cache = None
@@ -163,6 +175,8 @@ def public():
     cfg = load()
     out = {k: v for k, v in cfg.items() if k not in SECRET_KEYS}
     out["azure_key_set"] = bool(cfg.get("azure_key"))
+    out["google_key_set"] = bool(cfg.get("google_key"))
+    out["eleven_key_set"] = bool(cfg.get("eleven_key"))
     out["tg_token_set"] = bool(cfg.get("tg_token"))
     out["ab_node_token_set"] = bool(cfg.get("ab_node_token"))
     out["hub_token_set"] = bool(cfg.get("hub_token"))

@@ -854,7 +854,9 @@ def tts_preview(req):
     cfg = settings.load()
     ctx = {"titulo": b.get("titulo") or "", "descripcion": b.get("descripcion") or "",
            "evento": "Evento de prueba", "numero": "92", "emision": "92", "emision_anio": "46"}
-    src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx)
+    # La prueba de Ajustes → Voz oye exactamente el motor elegido (sin respaldo)
+    src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx,
+                         respaldo=not b.get("sin_respaldo"))
     if not audio.can_play_in_browser(src):
         src = audio.prepare(src, None)
     return ok(url="api/archivo/" + src.parent.name + "/" + src.name,
@@ -1427,6 +1429,8 @@ def sesiones_accion(req, accion):
 
 # ── Ajustes ──────────────────────────────────────────────────────────────────
 NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_pitch": int,
+            "google_rate": int, "google_pitch": float, "eleven_stability": int, "eleven_similarity": int,
+            "eleven_speed": int,
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
             "ptt_on_delay": float, "retroceso_secs": float, "section_gap": float,
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int,
@@ -1434,10 +1438,11 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "rec_dias": int}
 BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "tg_on_rec", "ab_enabled", "ab_node_on", "ab_cloud_on"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "tg_on_rec", "ab_enabled", "ab_node_on", "ab_cloud_on", "tts_fallback"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
+            "google_voice", "eleven_voice", "eleven_voice_name", "eleven_model",
             "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder", "hub_url", "hub_pin", "rec_auto", "rec_titulo"}
 
 
@@ -1459,7 +1464,7 @@ def ajustes_save(req):
             upd[k] = v if isinstance(v, bool) else truthy(v)
         elif k in STR_KEYS:
             upd[k] = str(v).strip()
-        elif k in ("azure_key", "tg_token", "ab_node_token", "hub_token") and str(v).strip():
+        elif k in ("azure_key", "google_key", "eleven_key", "tg_token", "ab_node_token", "hub_token") and str(v).strip():
             upd[k] = str(v).strip()
     if "tg_upcoming_mins" in upd:
         bad = [x for x in re.split(r"[,;\s]+", upd["tg_upcoming_mins"])
@@ -1775,6 +1780,28 @@ def azure_voces(req):
         return ok(voces=tts.azure_voices(key, region))
     except Exception as e:
         raise RuntimeError("Azure no respondió: {}".format(e))
+
+
+@app.route("/api/google/voces", ("POST",), rol="admin")
+def google_voces(req):
+    key = (req.json().get("google_key") or settings.load().get("google_key") or "").strip()
+    if not key:
+        raise ValueError("Escribe la clave de Google")
+    try:
+        return ok(voces=tts.google_voices(key))
+    except Exception as e:
+        raise RuntimeError("Google no respondió: {}".format(e))
+
+
+@app.route("/api/elevenlabs/voces", ("POST",), rol="admin")
+def eleven_voces(req):
+    key = (req.json().get("eleven_key") or settings.load().get("eleven_key") or "").strip()
+    if not key:
+        raise ValueError("Escribe la clave de ElevenLabs")
+    try:
+        return ok(voces=tts.eleven_voices(key))
+    except Exception as e:
+        raise RuntimeError("ElevenLabs no respondió: {}".format(e))
 
 
 @app.route("/api/prueba/nodo", ("POST",))

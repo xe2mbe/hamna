@@ -1299,8 +1299,12 @@ async function loadAjustes() {
   f.ab_node_token.value = "";
   f.ab_node_token.placeholder = S.cfg.ab_node_token_set ? "•••••• (guardado; escribe para cambiarlo)" : "hb_…";
   f.azure_key.value = "";
+  for (const [k, set] of [["google_key", "google_key_set"], ["eleven_key", "eleven_key_set"]]) {
+    f[k].value = ""; f[k].placeholder = S.cfg[set] ? "•••••• (guardada; escribe para cambiarla)" : "Pega aquí tu clave";
+  }
+  elevenOption(S.cfg.eleven_voice, S.cfg.eleven_voice_name);
   $("#detectHint").textContent = `Detectado en este equipo: ${info.detectado.toUpperCase()}${info.nodo_detectado ? " · nodo " + info.nodo_detectado : ""}`;
-  const names = { azure: "Azure", piper: "Piper", espeak: "eSpeak" };
+  const names = TTS_NOMBRES;
   $("#ttsHint").textContent = "Disponibles en este nodo: " + info.motores_tts.map((m) => names[m]).join(", ");
   $$("#setForm [name=tts_engine] option").forEach((o) => (o.disabled = !info.motores_tts.includes(o.value)));
   syncSetVis();
@@ -1315,7 +1319,53 @@ function syncSetVis() {
   $$(".only-irlp", f).forEach((x) => x.classList.toggle("hidden", be !== "irlp"));
   $$(".only-azure", f).forEach((x) => x.classList.toggle("hidden", f.tts_engine.value !== "azure"));
   $$(".only-espeak", f).forEach((x) => x.classList.toggle("hidden", f.tts_engine.value !== "espeak"));
+  $$(".only-google", f).forEach((x) => x.classList.toggle("hidden", f.tts_engine.value !== "google"));
+  $$(".only-elevenlabs", f).forEach((x) => x.classList.toggle("hidden", f.tts_engine.value !== "elevenlabs"));
+  ttsFallbackHint();
 }
+const TTS_NOMBRES = { azure: "Azure", google: "Google", elevenlabs: "ElevenLabs", piper: "Piper", espeak: "eSpeak" };
+// Mismo orden y reglas que tts.cadena() en el nodo
+function ttsFallbackHint() {
+  const f = $("#setForm"), c = S.cfg || {}, motores = (S.info && S.info.motores_tts) || [];
+  const listo = {
+    azure: (c.azure_key_set || f.azure_key.value.trim()) && f.azure_region.value.trim(),
+    google: c.google_key_set || f.google_key.value.trim(),
+    elevenlabs: (c.eleven_key_set || f.eleven_key.value.trim()) && f.eleven_voice.value,
+    piper: motores.includes("piper"), espeak: motores.includes("espeak"),
+  };
+  const resp = ["azure", "google", "elevenlabs", "piper", "espeak"].filter((e) => e !== f.tts_engine.value && listo[e]);
+  $("#ttsFallbackHint").textContent = !f.tts_fallback.checked
+    ? "Apagado: si el motor falla, la sección no se genera (se avisa por Telegram)."
+    : resp.length ? `Si ${TTS_NOMBRES[f.tts_engine.value]} falla, se usará en orden: ${resp.map((e) => TTS_NOMBRES[e]).join(" → ")}. Se avisa por Telegram.`
+    : "⚠ No hay otro motor configurado: pon la clave de otro (Azure, Google o ElevenLabs).";
+}
+function elevenOption(id, name) {
+  const sel = $("#elevenVoice");
+  if (id && ![...sel.options].some((o) => o.value === id)) sel.insertAdjacentHTML("beforeend", `<option value="${esc(id)}">${esc(name || id)}</option>`);
+  sel.value = id || "";
+}
+$("#elevenVoice").addEventListener("change", (e) => {
+  const o = e.target.selectedOptions[0];
+  $("#setForm").eleven_voice_name.value = o && o.value ? o.dataset.nombre || o.textContent : "";
+});
+$("#btnGoogleVoices").onclick = async () => {
+  const f = $("#setForm"), b = $("#btnGoogleVoices"); busy(b, true, "…");
+  try {
+    const r = await api("api/google/voces", { method: "POST", json: { google_key: f.google_key.value } });
+    $("#googleVoices").innerHTML = r.voces.map((v) => `<option value="${esc(v.name)}">${esc(v.display)} · ${esc(v.locale)} · ${esc(v.gender)}</option>`).join("");
+    toast(`${r.voces.length} voces en español`);
+  } catch (e) { toast(e.message, true); } finally { busy(b, false); }
+};
+$("#btnElevenVoices").onclick = async () => {
+  const f = $("#setForm"), b = $("#btnElevenVoices"), sel = $("#elevenVoice"), antes = sel.value; busy(b, true, "…");
+  try {
+    const r = await api("api/elevenlabs/voces", { method: "POST", json: { eleven_key: f.eleven_key.value } });
+    sel.innerHTML = `<option value="">— Elige una voz —</option>` + r.voces.map((v) => `<option value="${esc(v.name)}" data-nombre="${esc(v.display)}">${esc(v.display)}${v.gender ? " · " + esc(v.gender) : ""}${v.locale ? " · " + esc(v.locale) : ""}</option>`).join("");
+    if (antes) elevenOption(antes, S.cfg.eleven_voice_name);
+    toast(`${r.voces.length} voces en tu cuenta`); ttsFallbackHint();
+  } catch (e) { toast(e.message, true); } finally { busy(b, false); }
+};
+$("#setForm").addEventListener("input", (e) => { if (/_key$|azure_region/.test(e.target.name || "")) ttsFallbackHint(); });
 $("#setForm").addEventListener("change", syncSetVis);
 $("#setForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -1381,15 +1431,17 @@ $("#btnTtsTest").onclick = async () => {
   const b = $("#btnTtsTest"); busy(b, true, "Generando…");
   try {
     await api("api/ajustes", { method: "PUT", json: collectVoice() });
-    const r = await api("api/tts/preview", { method: "POST", json: { texto: $("#ttsTestText").value } });
+    const r = await api("api/tts/preview", { method: "POST", json: { texto: $("#ttsTestText").value, sin_respaldo: true } });
     const a = $("#ttsTestAudio"); a.src = r.url; a.classList.remove("hidden"); a.play();
   } catch (e) { toast(e.message, true); } finally { busy(b, false); }
 };
 function collectVoice() {
   const f = $("#setForm"), d = {};
-  ["tts_engine", "azure_region", "azure_voice", "azure_style", "azure_rate", "azure_pitch", "espeak_voice", "espeak_speed", "espeak_pitch"]
+  ["tts_engine", "azure_region", "azure_voice", "azure_style", "azure_rate", "azure_pitch", "espeak_voice", "espeak_speed", "espeak_pitch",
+    "google_voice", "google_rate", "google_pitch", "eleven_voice", "eleven_voice_name", "eleven_model", "eleven_stability", "eleven_similarity", "eleven_speed"]
     .forEach((k) => (d[k] = f[k].value));
-  if (f.azure_key.value.trim()) d.azure_key = f.azure_key.value.trim();
+  d.tts_fallback = f.tts_fallback.checked;
+  for (const k of ["azure_key", "google_key", "eleven_key"]) if (f[k].value.trim()) d[k] = f[k].value.trim();
   return d;
 }
 $("#btnVoices").onclick = async () => {
