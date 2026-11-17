@@ -275,9 +275,17 @@ function showTab(t) {
 function updateNodeLabel() {
   const c = S.cfg || {};
   $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
-  const be = c.backend === "auto" ? "" : (c.backend || "").toUpperCase();
   $("#nodeLabel").innerHTML = (c.station_name ? `<b>${esc(c.station_name)}</b>` : "") +
-    esc([c.node ? `Nodo ${c.node}` : "", be].filter(Boolean).join(" · "));
+    `<span class="node-line">${c.node ? `<span>Nodo ${esc(c.node)}</span>` : ""}<span id="sysChips" class="node-line"></span></span>`;
+  // Etiqueta de color con el tipo de nodo detectado (ASL3 / ASL / HamVOIP / IRLP; puede haber dos)
+  getInfo().then((i) => {
+    const s = i.sistemas || {}, out = [];
+    if (s.asl) out.push(i.sabor === "hamvoip" ? ["hamvoip", "HamVOIP"] : ["asl", i.sabor === "asl3" ? "ASL3" : "ASL"]);
+    if (s.irlp) out.push(["irlp", "IRLP"]);
+    if (!out.length && c.backend && c.backend !== "auto") out.push(["", c.backend.toUpperCase()]);
+    const box = $("#sysChips");
+    if (box) box.innerHTML = out.map(([k, t]) => `<span class="sys-chip ${k}" translate="no" title="Tipo de nodo detectado">${esc(t)}</span>`).join("");
+  }).catch(() => {});
 }
 
 /* ── Estado al aire ──────────────────────────────────────────────────────────
