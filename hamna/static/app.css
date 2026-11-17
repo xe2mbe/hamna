@@ -148,6 +148,7 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
 .sys-chip { --c: var(--text2); display: inline-block; font-size: .66rem; font-weight: 700; letter-spacing: .05em; line-height: 1.3;
   padding: 2px 7px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.sys-chip.num { --c: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .03em; }
 .sys-chip.asl { --c: var(--sys-asl); } .sys-chip.hamvoip { --c: var(--sys-hv); } .sys-chip.irlp { --c: var(--sys-irlp); }
 .tabs { display: flex; flex-direction: column; gap: 2px; }
 .tabs button { display: flex; align-items: center; gap: 12px; background: none; border: 0; color: var(--text2);

@@ -276,7 +276,7 @@ function updateNodeLabel() {
   const c = S.cfg || {};
   $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
   $("#nodeLabel").innerHTML = (c.station_name ? `<b>${esc(c.station_name)}</b>` : "") +
-    `<span class="node-line">${c.node ? `<span>Nodo ${esc(c.node)}</span>` : ""}<span id="sysChips" class="node-line"></span></span>`;
+    `<span class="node-line">${c.node ? `<span class="sys-chip num" translate="no" title="Número de nodo">#${esc(c.node)}</span>` : ""}<span id="sysChips" class="node-line"></span></span>`;
   // Etiqueta de color con el tipo de nodo detectado (ASL3 / ASL / HamVOIP / IRLP; puede haber dos)
   getInfo().then((i) => {
     const s = i.sistemas || {}, out = [];
