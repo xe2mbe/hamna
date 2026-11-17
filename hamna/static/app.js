@@ -1721,7 +1721,7 @@ function nodoCard(d, p) {
     ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
     <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} ${salud}</div>
     <div class="meta">💾 ${resp}</div>
-    ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm ghost" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
+    ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm accent-soft" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
   </div>`;
 }
 // Desde la red de la casa conviene la dirección interna; desde fuera, la de internet

@@ -75,6 +75,9 @@ code { font: .85em ui-monospace, SFMono-Regular, Consolas, monospace; }
 .btn.danger-soft { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent);
   background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .btn.danger-soft:hover { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.btn.accent-soft { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.btn.accent-soft:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .btn.ok { background: var(--ok); border-color: transparent; color: #fff; }
 .btn.ok-soft { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent);
   background: color-mix(in srgb, var(--ok) 9%, transparent); }
