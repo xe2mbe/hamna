@@ -2407,8 +2407,15 @@ function linkAct(a) {
 function progTimeline(p) {
   const dur = durMin(p), cx = p.conexiones || [];
   // En la tarjeta del evento solo cuentan las tareas de usuarios (root, asterisk,
-  // IRLP); las del sistema (/etc/crontab, /etc/cron.d) se ven solo en la pestaña Cron
-  const rel = progCrons(p, (S.cronEntries || []).filter((e) => !e.key.startsWith("file:")));
+  // IRLP); las del sistema se ven solo en la pestaña Cron:
+  //  · /etc/crontab y /etc/cron.d;
+  //  · en IRLP, el crontab de repeater (irlp.crons de fábrica + una copia de custom.crons,
+  //    que ya viene en su propia tabla);
+  //  · las que corren muchas veces al día sin conectar ni reproducir nada (process_check,
+  //    ipupdate_cron, …): solo se avisa de las periódicas que hacen algo al aire.
+  const irlp = (S.cron || []).some((t) => t.id === "irlp");
+  const rel = progCrons(p, (S.cronEntries || []).filter((e) => !e.key.startsWith("file:")
+    && !(irlp && e.key.startsWith("user:repeater:")) && !(e.periodic && !e.what.act)));
   if (!cx.length && !rel.spec.length && !rel.periodic.length) return "";
   // rango para ordenar empates: antes → cron → inicio → fin → después
   const items = [{ off: 0, r: 2, ico: "▶", cls: "ev", html: `Inicia «${esc(p.evento_nombre)}»` },
