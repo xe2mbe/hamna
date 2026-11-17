@@ -149,6 +149,7 @@ label.check { display: flex; align-items: center; gap: 10px; color: var(--text);
   padding: 2px 7px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
 .sys-chip.num { --c: var(--text); font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.sys-chip.aldia { --c: var(--ok); } .sys-chip.old { --c: var(--warn); }
 .sys-chip.asl { --c: var(--sys-asl); } .sys-chip.hamvoip { --c: var(--sys-hv); } .sys-chip.irlp { --c: var(--sys-irlp); }
 .tabs { display: flex; flex-direction: column; gap: 2px; }
 .tabs button { display: flex; align-items: center; gap: 12px; background: none; border: 0; color: var(--text2);
@@ -743,7 +744,7 @@ a.btn { text-decoration: none; }
 .nodo-card .dot.caido { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 18%, transparent); }
 .nodo-card.caido { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
 .nodo-card.caido .nodo-edad { color: var(--danger); }
-.nodo-card .nodo-ver { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.nodo-card .nodo-ver { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
 .nodo-card .nodo-aire { color: var(--danger); font-size: .92rem; margin: 4px 0; }
 .nodo-card .nodo-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; font-size: .82rem; }
 .nodo-card .nodo-chips span { background: var(--surface2); border-radius: 8px; padding: 3px 8px; }

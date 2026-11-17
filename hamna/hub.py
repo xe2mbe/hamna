@@ -40,6 +40,14 @@ def init():
 
 
 # ── Lo que reporta un nodo ──────────────────────────────────────────────────
+def _sistemas():
+    try:
+        from . import backends
+        return backends.etiquetas()
+    except Exception:
+        return []
+
+
 def datos_locales():
     from .engine import engine
     from . import bot
@@ -67,7 +75,7 @@ def datos_locales():
     st = autobackup.load_state()
     return {
         "nodo": str(cfg.get("node") or ""), "estacion": cfg.get("station_name") or "", "version": VERSION,
-        "tipo": cfg.get("backend") or "", "hora": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tipo": cfg.get("backend") or "", "sistemas": _sistemas(), "hora": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "al_aire": al_aire, "proximo": prox,
         "salud": {"peor": h.get("peor"), "checks": [{"id": c.get("id"), "nombre": c["nombre"], "nivel": c["nivel"],
                                                       "detalle": c["detalle"]} for c in h.get("checks") or []]},

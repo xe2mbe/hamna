@@ -272,6 +272,7 @@ function showTab(t) {
   window.scrollTo(0, 0);
 }
 
+const sysChips = (list) => (list || []).map(([k, t]) => `<span class="sys-chip ${esc(k)}" translate="no" title="Tipo de nodo detectado">${esc(t)}</span>`).join("");
 function updateNodeLabel() {
   const c = S.cfg || {};
   $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
@@ -284,7 +285,7 @@ function updateNodeLabel() {
     if (s.irlp) out.push(["irlp", "IRLP"]);
     if (!out.length && c.backend && c.backend !== "auto") out.push(["", c.backend.toUpperCase()]);
     const box = $("#sysChips");
-    if (box) box.innerHTML = out.map(([k, t]) => `<span class="sys-chip ${k}" translate="no" title="Tipo de nodo detectado">${esc(t)}</span>`).join("");
+    if (box) box.innerHTML = sysChips(out);
   }).catch(() => {});
 }
 
@@ -1684,13 +1685,14 @@ function nodoCard(d, p) {
   if (eq.cpu != null) chips.push(`CPU ${Math.round(eq.cpu)}%`);
   const malos = ((d.salud || {}).checks || []).filter((c) => c.nivel === "aviso" || c.nivel === "grave");
   const viejo = d.version && vMenor(d.version, p.ultima_version);
+  // Nodos con versión vieja no mandan «sistemas»: entonces el tipo de Ajustes, en gris
+  const sis = (d.sistemas || []).length ? d.sistemas : d.tipo && d.tipo !== "auto" ? [["", d.tipo.toUpperCase()]] : [];
   const r = d.respaldo || {};
   return `<div class="card nodo-card ${est}">
     <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit"><b>${esc(d.estacion || "Nodo " + d.nodo)}</b>
-      <small>nodo ${esc(d.nodo || "—")}${d.propio ? " · este hub" : ""}${d.ip && !d.propio ? " · " + esc(d.ip) : ""}</small></div>
+      <small>${d.propio ? "este hub" : esc(d.ip || "")}</small></div>
       <span class="muted nodo-edad">${d.propio ? "ahora" : est === "caido" ? "⚠ sin reportar " + haceTxt(d.edad) : haceTxt(d.edad)}</span></div>
-    <div class="nodo-ver"><span class="chip ${viejo ? "warn" : ""}" title="${viejo ? "Hay una versión más nueva: v" + esc(p.ultima_version) : "Al día"}">v${esc(d.version || "?")}${viejo ? " · actualizar" : ""}</span>
-      ${d.tipo && d.tipo !== "auto" ? `<span class="chip">${esc(d.tipo.toUpperCase())}</span>` : ""}${d.bot ? '<span class="chip">🤖 bot</span>' : ""}</div>
+    <div class="nodo-ver">${d.nodo ? `<span class="sys-chip num" translate="no" title="Número de nodo">#${esc(d.nodo)}</span>` : ""}${sysChips(sis)}<span class="sys-chip ${viejo ? "old" : "aldia"}" translate="no" title="${viejo ? "Hay una versión más nueva: v" + esc(p.ultima_version) : "Al día"}">v${esc(d.version || "?")}${viejo ? " · actualizar" : ""}</span>${d.bot ? '<span class="sys-chip">🤖 bot</span>' : ""}</div>
     ${d.al_aire ? `<div class="nodo-aire">🔴 <b>Al aire:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · faltan ${fmt(d.al_aire.falta)}</div>`
       : d.proximo ? `<div class="meta">📅 ${esc(d.proximo.evento)}${d.proximo.num ? " " + esc(d.proximo.num) : ""} · ${esc(fechaCorta(d.proximo.fecha))}</div>` : `<div class="meta muted">Sin eventos programados</div>`}
     ${d.grabando ? `<div class="meta" style="color:var(--danger)">⏺ Grabando «${esc(d.grabando.titulo)}» · ${fmt(d.grabando.dur)}</div>` : ""}

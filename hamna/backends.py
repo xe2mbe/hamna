@@ -291,6 +291,25 @@ def detect():
     return "simulado"
 
 
+_etiquetas = None
+
+
+def etiquetas():
+    """Tipo de nodo detectado para las etiquetas de color: [[clase, texto], …] (puede haber dos)."""
+    global _etiquetas
+    if _etiquetas is None:
+        from . import links
+        s = links.detect_systems()
+        out = []
+        if s.get("asl"):
+            sabor = detect_flavor()
+            out.append(["hamvoip", "HamVOIP"] if sabor == "hamvoip" else ["asl", "ASL3" if sabor == "asl3" else "ASL"])
+        if s.get("irlp"):
+            out.append(["irlp", "IRLP"])
+        _etiquetas = out
+    return _etiquetas
+
+
 def detect_flavor():
     """asl3, hamvoip o asl (ASL2/otros)."""
     if os.path.exists("/usr/local/etc/allstar.env") or os.path.exists("/usr/local/hamvoip-sbin"):

@@ -91,7 +91,7 @@
     " · terminó sin actividad": " · ended with no activity", " · llegó al tope de duración": " · reached the maximum length", " · detenida a mano": " · stopped by hand",
     "Ya se está grabando": "Already recording", "No se está grabando": "Not recording",
     "Opción de grabación inválida": "Invalid recording option",
-    "Nodos": "Nodes", "Estado de los nodos que reportan a este hub": "Status of the nodes that report to this hub",
+    "Nodos": "Nodes", "este hub": "this hub", "Número de nodo": "Node number", "Tipo de nodo detectado": "Detected node type", "Al día": "Up to date", "Estado de los nodos que reportan a este hub": "Status of the nodes that report to this hub",
     "Panel de nodos": "Nodes panel", "Quitar del panel": "Remove from panel", "Quitado del panel": "Removed from panel",
     "🗺 Reportar el estado de este nodo a un hub cada minuto (al aire, próximo evento, salud, versión, respaldo)":
       "🗺 Report this node's status to a hub every minute (on air, next event, health, version, backup)",
