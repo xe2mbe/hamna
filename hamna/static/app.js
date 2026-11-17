@@ -272,7 +272,7 @@ function showTab(t) {
   window.scrollTo(0, 0);
 }
 
-const sysChips = (list) => (list || []).map(([k, t]) => `<span class="sys-chip ${esc(k)}" translate="no" title="Tipo de nodo detectado">${esc(t)}</span>`).join("");
+const sysChips = (list) => (list || []).map(([k, t]) => `<span class="sys-chip ${esc(k)}" translate="no" title="${window.HAMNA_LANG === "es" ? "Tipo de nodo detectado" : "Detected node type"}">${esc(t)}</span>`).join("");
 function updateNodeLabel() {
   const c = S.cfg || {};
   $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
@@ -1667,12 +1667,19 @@ $("#recList").onclick = async (e) => {
 /* ── Panel de nodos ───────────────────────────────────────────────────────── */
 const vNum = (v) => String(v || "0").split(".").map((x) => parseInt(x, 10) || 0);
 const vMenor = (a, b) => { const x = vNum(a), y = vNum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
-function haceTxt(s) {
-  if (s < 90) return "hace " + Math.max(1, Math.round(s)) + " s";
-  if (s < 5400) return "hace " + Math.round(s / 60) + " min";
-  if (s < 172800) return "hace " + Math.round(s / 3600) + " h";
-  return "hace " + Math.round(s / 86400) + " d";
-}
+// Textos de la tarjeta en el idioma de quien la ve (se arman aquí: el traductor
+// de la página solo cambia textos fijos y estos llevan fechas y números)
+const LG = (es, en) => (window.HAMNA_LANG === "es" ? es : en);
+const trTxt = (t) => (window.HAMNA_LANG !== "es" && window.hamnaT ? window.hamnaT(t || "") : t || "");
+const DIAS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const fechaCortaLG = (s) => {
+  const d = new Date(String(s || "").replace(" ", "T"));
+  if (isNaN(d)) return s || "";
+  return `${LG(DIAS[d.getDay()], DIAS_EN[d.getDay()])} ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+const lapso = (s) => (s < 90 ? Math.max(1, Math.round(s)) + " s" : s < 5400 ? Math.round(s / 60) + " min"
+  : s < 172800 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " d");
+function haceTxt(s) { return LG("hace " + lapso(s), lapso(s) + " ago"); }
 function nodoCard(d, p) {
   const lim = (p.alerta_min || 10) * 60;
   const est = d.propio ? "ok" : d.edad < 180 ? "ok" : d.edad < lim ? "tarde" : "caido";
@@ -1680,26 +1687,35 @@ function nodoCard(d, p) {
   const volt = ((d.salud || {}).checks || []).find((c) => c.id === "voltaje");
   const chips = [];
   if (eq.temp != null) chips.push(`🌡 ${Math.round(eq.temp)} °C`);
-  if (volt && volt.nivel !== "nd") chips.push(`${volt.nivel === "ok" ? "⚡" : "⚠️"} ${volt.nivel === "ok" ? "voltaje bien" : "bajo voltaje"}`);
-  if (eq.disco != null) chips.push(`💾 disco ${eq.disco}%`);
+  if (volt && volt.nivel !== "nd") chips.push(volt.nivel === "ok" ? "⚡ " + LG("voltaje bien", "voltage OK") : "⚠️ " + LG("bajo voltaje", "undervoltage"));
+  if (eq.disco != null) chips.push(`💾 ${LG("disco", "disk")} ${eq.disco}%`);
   if (eq.cpu != null) chips.push(`CPU ${Math.round(eq.cpu)}%`);
   const malos = ((d.salud || {}).checks || []).filter((c) => c.nivel === "aviso" || c.nivel === "grave");
   const viejo = d.version && vMenor(d.version, p.ultima_version);
   // Nodos con versión vieja no mandan «sistemas»: entonces el tipo de Ajustes, en gris
   const sis = (d.sistemas || []).length ? d.sistemas : d.tipo && d.tipo !== "auto" ? [["", d.tipo.toUpperCase()]] : [];
   const r = d.respaldo || {};
-  return `<div class="card nodo-card ${est}">
-    <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit"><b>${esc(d.estacion || "Nodo " + d.nodo)}</b>
-      <small>${d.propio ? "este hub" : esc(d.ip || "")}</small></div>
-      <span class="muted nodo-edad">${d.propio ? "ahora" : est === "caido" ? "⚠ sin reportar " + haceTxt(d.edad) : haceTxt(d.edad)}</span></div>
-    <div class="nodo-ver">${d.nodo ? `<span class="sys-chip num" translate="no" title="Número de nodo">#${esc(d.nodo)}</span>` : ""}${sysChips(sis)}<span class="sys-chip ${viejo ? "old" : "aldia"}" translate="no" title="${viejo ? "Hay una versión más nueva: v" + esc(p.ultima_version) : "Al día"}">v${esc(d.version || "?")}${viejo ? " · actualizar" : ""}</span>${d.bot ? '<span class="sys-chip">🤖 bot</span>' : ""}</div>
-    ${d.al_aire ? `<div class="nodo-aire">🔴 <b>Al aire:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · faltan ${fmt(d.al_aire.falta)}</div>`
-      : d.proximo ? `<div class="meta">📅 ${esc(d.proximo.evento)}${d.proximo.num ? " " + esc(d.proximo.num) : ""} · ${esc(fechaCorta(d.proximo.fecha))}</div>` : `<div class="meta muted">Sin eventos programados</div>`}
-    ${d.grabando ? `<div class="meta" style="color:var(--danger)">⏺ Grabando «${esc(d.grabando.titulo)}» · ${fmt(d.grabando.dur)}</div>` : ""}
+  const titulo = d.estacion || LG("Nodo ", "Node ") + d.nodo;
+  const edad = d.propio ? LG("ahora", "now") : est === "caido" ? "⚠ " + LG("sin reportar " + haceTxt(d.edad), "no report for " + lapso(d.edad)) : haceTxt(d.edad);
+  const verTit = viejo ? LG("Hay una versión más nueva: v", "A newer version is available: v") + p.ultima_version : LG("Al día", "Up to date");
+  const salud = sal === "ok" ? LG("Salud bien", "Health OK") : sal === "grave" || sal === "aviso"
+    ? LG("Salud", "Health") + (malos.length ? ": " + malos.map((c) => esc(trTxt(c.nombre)) + " — " + esc(trTxt(c.detalle))).join("; ") : "")
+    : LG("Salud: todavía sin revisar", "Health: not checked yet");
+  const resp = (r.ultimo_ok ? LG("Respaldo exitoso: ", "Backup successful: ") + esc(fechaCortaLG(r.ultimo_ok)) : LG("Sin respaldos exitosos", "No successful backups"))
+    + (r.ok === false && r.fecha ? ` · <span style="color:var(--warn)">${LG("el último falló", "the last one failed")} (${esc(fechaCortaLG(r.fecha))})</span>` : "")
+    + (d.recibido ? ` · ${LG("en este hub", "on this hub")}: ${esc(fechaCortaLG(d.recibido.fecha))} (${mb(d.recibido.tam)})` : "");
+  return `<div class="card nodo-card ${est}" translate="no">
+    <div class="nodo-head"><span class="dot ${est}"></span><div class="nodo-tit"><b>${esc(titulo)}</b>
+      <small>${d.propio ? LG("este hub", "this hub") : esc(d.ip || "")}</small></div>
+      <span class="muted nodo-edad">${esc(edad)}</span></div>
+    <div class="nodo-ver">${d.nodo ? `<span class="sys-chip num" title="${LG("Número de nodo", "Node number")}">#${esc(d.nodo)}</span>` : ""}${sysChips(sis)}<span class="sys-chip ${viejo ? "old" : "aldia"}" title="${esc(verTit)}">v${esc(d.version || "?")}${viejo ? LG(" · actualizar", " · update") : ""}</span>${d.bot ? '<span class="sys-chip">🤖 bot</span>' : ""}</div>
+    ${d.al_aire ? `<div class="nodo-aire">🔴 <b>${LG("Al aire", "On air")}:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · ${LG("faltan", "remaining")} ${fmt(d.al_aire.falta)}</div>`
+      : d.proximo ? `<div class="meta">📅 ${esc(d.proximo.evento)}${d.proximo.num ? " " + esc(d.proximo.num) : ""} · ${esc(fechaCortaLG(d.proximo.fecha))}</div>` : `<div class="meta muted">${LG("Sin eventos programados", "No scheduled events")}</div>`}
+    ${d.grabando ? `<div class="meta" style="color:var(--danger)">⏺ ${LG("Grabando", "Recording")} «${esc(d.grabando.titulo)}» · ${fmt(d.grabando.dur)}</div>` : ""}
     ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
-    <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} Salud${malos.length ? ": " + malos.map((c) => esc(c.nombre) + " — " + esc(c.detalle)).join("; ") : sal === "ok" ? " bien" : ": todavía sin revisar"}</div>
-    <div class="meta">💾 Respaldo: ${r.ultimo_ok ? "último bueno " + esc(fechaCorta(r.ultimo_ok)) : "sin respaldos buenos"}${r.ok === false && r.fecha ? ` · <span style="color:var(--warn)">el último falló (${esc(fechaCorta(r.fecha))})</span>` : ""}${d.recibido ? ` · en este hub: ${esc(fechaCorta(d.recibido.fecha))} (${mb(d.recibido.tam)})` : ""}</div>
-    ${!d.propio && isAdmin() ? `<div class="actions"><button type="button" class="btn sm ghost" data-quitar="${esc(d.nodo)}">Quitar del panel</button></div>` : ""}
+    <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} ${salud}</div>
+    <div class="meta">💾 ${resp}</div>
+    ${!d.propio && isAdmin() ? `<div class="actions"><button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button></div>` : ""}
   </div>`;
 }
 async function loadNodos() {
@@ -1710,15 +1726,22 @@ async function loadNodos() {
   const todos = [p.este].concat(p.nodos);
   $("#nodosList").innerHTML = todos.map((d) => nodoCard(d, p)).join("");
   const caidos = p.nodos.filter((d) => d.edad >= (p.alerta_min || 10) * 60).length;
-  $("#nodosSub").textContent = p.nodos.length ? `${p.nodos.length} ${p.nodos.length > 1 ? "nodos reportan" : "nodo reporta"} a este hub${caidos ? ` · ${caidos} sin reportar` : ""}` : "Estado de los nodos que reportan a este hub";
-  $("#nodosHelp").innerHTML = p.nodos.length ? "Se actualiza solo cada 30 s. Cada nodo manda su estado cada minuto."
-    : "Ningún otro nodo reporta todavía. En cada nodo: <b>Ajustes → Nodo → Panel de nodos</b> → «Reportar el estado de este nodo a un hub» (si ya manda su respaldo a este hub, basta con marcar la casilla).";
+  const n = p.nodos.length;
+  $("#nodosSub").textContent = !n ? LG("Estado de los nodos que reportan a este hub", "Status of the nodes that report to this hub")
+    : LG(`${n} ${n > 1 ? "nodos reportan" : "nodo reporta"} a este hub`, `${n} node${n > 1 ? "s report" : " reports"} to this hub`)
+      + (caidos ? LG(` · ${caidos} sin reportar`, ` · ${caidos} not reporting`) : "");
+  $("#nodosHelp").setAttribute("translate", "no");
+  $("#nodosHelp").innerHTML = p.nodos.length
+    ? LG("Se actualiza solo cada 30 s. Cada nodo manda su estado cada minuto.", "Refreshes by itself every 30 s. Each node sends its status every minute.")
+    : LG("Ningún otro nodo reporta todavía. En cada nodo: <b>Ajustes → Nodo → Panel de nodos</b> → «Reportar el estado de este nodo a un hub» (si ya manda su respaldo a este hub, basta con marcar la casilla).",
+      "No other node reports yet. On each node: <b>Settings → Node → Node panel</b> → “Report this node's status to a hub” (if it already sends its backup to this hub, just tick the box).");
   if (S.tab === "nodos") S.nodosT = setTimeout(() => { if (S.tab === "nodos" && !document.hidden) loadNodos(); }, 30000);
 }
 $("#btnNodosReload").onclick = loadNodos;
 $("#nodosList").onclick = async (e) => {
   const b = e.target.closest("[data-quitar]"); if (!b) return;
-  if (!(await confirmBox(`¿Quitar el nodo ${b.dataset.quitar} del panel? Si sigue reportando, vuelve a aparecer en un minuto.`, "Quitar"))) return;
+  if (!(await confirmBox(LG(`¿Quitar el nodo ${b.dataset.quitar} del panel? Si sigue reportando, vuelve a aparecer en un minuto.`,
+    `Remove node ${b.dataset.quitar} from the panel? If it keeps reporting, it comes back within a minute.`), LG("Quitar", "Remove")))) return;
   try { await run(() => api("api/nodos/" + encodeURIComponent(b.dataset.quitar), { method: "DELETE" }), "Quitado del panel"); loadNodos(); } catch {}
 };
 $("#btnHubProbe").onclick = async () => {
@@ -2647,7 +2670,7 @@ function renderSesiones() {
     // status.irlp.net: quién más está en el mismo reflector (se ve abierto)
     if (red.length && !S.sesRedOpened) { $("#sesRedWrap").open = true; S.sesRedOpened = true; }
     $("#sesRedTitle").textContent = `En ${s.activo} · ${red.length} ${red.length === 1 ? "nodo más" : "nodos más"}`;
-    $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.frecuencia, "conectado " + r.tiempo].filter(Boolean).join(" · "))}">
+    $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.frecuencia, (window.HAMNA_LANG === "es" ? "conectado " : "connected ") + r.tiempo].filter(Boolean).join(" · "))}">
       <b>${esc(r.nodo)} ${esc(r.indicativo || "")}</b><small>${esc(r.ubicacion || r.descripcion || "—")}</small></span>`).join("") +
       `<p class="muted small" style="flex-basis:100%">Según status.irlp.net (se actualiza cada pocos minutos).</p>`;
     return;
