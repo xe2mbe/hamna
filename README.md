@@ -38,17 +38,21 @@ HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y auto
 
 Tomadas del hub **299081** del Radio Club Guadiana.
 
-<p align="center"><img src="docs/img/pc-programacion.png?v=1.12.2" width="900" alt="Programación: próximos eventos con la hora del nodo y la de origen"></p>
+<p align="center"><img src="docs/img/pc-programacion.png?v=1.32.0" width="900" alt="Programación: eventos con la hora del nodo, la de origen y su número de emisión"></p>
 
-| Eventos y sus secciones | Biblioteca de secciones |
+| Eventos y sus secciones | Secciones agrupadas por evento |
 |---|---|
-| <img src="docs/img/pc-eventos.png?v=1.12.2" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png?v=1.12.2" alt="Lista de secciones de audio y voz sintética"> |
+| <img src="docs/img/pc-eventos.png?v=1.32.0" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png?v=1.32.0" alt="Secciones por evento, con las que se renuevan en cada emisión"> |
 
-<p align="center"><img src="docs/img/pc-conexiones.png?v=1.12.2" width="900" alt="Conexiones: nodos enlazados en este momento"></p>
+| Conexiones | Panel de nodos (hub) |
+|---|---|
+| <img src="docs/img/pc-conexiones.png?v=1.32.0" alt="Conexiones: nodos enlazados en este momento"> | <img src="docs/img/pc-nodos.png?v=1.32.0" alt="Tarjetas de los nodos que reportan al hub"> |
 
-**En el celular** — programación, menú y conexiones:
+<p align="center"><img src="docs/img/pc-respaldo.png?v=1.32.0" width="900" alt="Respaldo automático a otro nodo y a la nube"></p>
 
-<p align="center"><img src="docs/img/celular.png?v=1.12.2" width="900" alt="HAMNA Web en el celular"></p>
+**En el celular** — programación, menú y panel de nodos:
+
+<p align="center"><img src="docs/img/celular.png?v=1.32.0" width="900" alt="HAMNA Web en el celular"></p>
 
 ### Qué hace
 
