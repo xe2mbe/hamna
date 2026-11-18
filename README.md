@@ -32,7 +32,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos y respaldos](#archivos-y-respaldos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Capturas
 
@@ -52,14 +52,17 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 
 ### Qué hace
 
-- **Eventos armados con secciones**: audios (MP3, WAV, OGG, FLAC…), textos que se leen con voz sintética (Azure, Piper o eSpeak) y sonidos, en el orden que quieras.
-- **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona).
+- **Eventos armados con secciones**: audios (MP3, WAV, OGG, FLAC…), textos que se leen con voz sintética (Azure, Google Cloud, ElevenLabs, Piper o eSpeak, con respaldo automático entre motores) y sonidos, en el orden que quieras.
+- **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona), con **numeración automática** de las emisiones.
 - **Transmisión automática** por AllStarLink o IRLP, con nivel de audio parejo (-18 LUFS) y pausas automáticas para los repetidores.
 - **Conexiones automáticas** antes y después de cada evento, y una pestaña **Conexiones** para ver y controlar los enlaces del nodo en vivo.
-- **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos.
+- **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos, en ASL e IRLP, y **grabar** lo que se escucha (p. ej. la toma de reportes) en MP3.
 - **Sincronización entre nodos**: otro HAMNA (por ejemplo, el que retransmite en otra ciudad) se trae solo las secciones y audios de un evento, cada semana.
-- **Usuarios con roles**, idioma por usuario (inglés o español), tema claro u oscuro y logo de la estación.
-- **Monitor del equipo** (CPU, RAM, disco, temperatura, red) y **aviso de actualizaciones** desde GitHub.
+- **Panel de nodos** en el hub: una tarjeta por cada HAMNA del club con su estado, salud y último respaldo.
+- **Telegram**: avisos y un **bot** para consultar, transmitir, grabar y que los colaboradores manden su audio.
+- **Respaldos** descargables y automáticos (a otro nodo, a Google Drive / OneDrive o por Telegram), y restauración desde la página.
+- **Usuarios con roles** (incluido **Colaborador**, que solo sube el audio de sus secciones), perfil con foto, idioma por usuario (inglés o español), tema claro u oscuro y logo de la estación.
+- **Monitor y salud del equipo** (CPU, RAM, disco, temperatura, tarjeta SD, bajo voltaje), **Revisar este nodo** y **aviso de actualizaciones** desde GitHub.
 - Ligero: sin paquetes de Python, pensado para una Raspberry Pi.
 
 ### Requisitos
@@ -68,7 +71,7 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 |---|---|---|---|
 | Python | 3.5 o más nuevo (viene con el sistema) | 3.5 (viene con el sistema) | 3.5 o más nuevo |
 | Audio | `ffmpeg` (lo instala el instalador) | `sox` y `mpg123` (ya vienen; no se toca pacman) | `ffmpeg` y `alsa-utils` |
-| Voz | Azure, Piper (`asl3-tts`) o eSpeak | Azure | Azure o eSpeak |
+| Voz | Azure, Google, ElevenLabs, Piper (`asl3-tts`) o eSpeak | Azure, Google o ElevenLabs | Azure, Google, ElevenLabs o eSpeak |
 | Página en `/hamna/` | Apache (Allmon3 / AllScan) | httpd (Supermon / Allmon2) | — (puerto 8090) |
 
 ### Instalación
@@ -136,7 +139,7 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 
 1. Entra a `https://IP-DEL-NODO/hamna/` con el usuario `admin`.
 2. **Ajustes → Nodo**: revisa el número de nodo, el modo de reproducción (ver [Cómo sale al aire](#cómo-sale-al-aire)) y sube el logo de tu estación. Prueba con **"Transmitir prueba"**.
-3. **Ajustes → Voz**: elige el motor de voz (Azure necesita clave y región).
+3. **Ajustes → Voz**: elige el motor de voz (Azure necesita clave y región; Google y ElevenLabs, su clave de API).
 4. **Ajustes → Usuarios**: crea un usuario para cada colega con su rol.
 5. **Secciones**: sube audios o escribe textos.
 6. **Eventos**: crea un evento, agrégale secciones y ordénalas.
@@ -144,8 +147,9 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 
 ### La página
 
-- **Barra lateral** con las secciones, el monitor del equipo, tu usuario y el reloj del nodo. Se esconde con la flecha ‹ (y vuelve con ☰); en el celular es un menú que sale de la izquierda.
-- **Idioma por usuario**: inglés (predeterminado) o español, en **Ajustes → Mi cuenta**; la pantalla de entrada tiene su propio selector. Lo que sale al aire (voces, fechas) sigue en español.
+- **Barra lateral** con las secciones, el monitor del equipo, tu usuario y el reloj del nodo. Se esconde con la flecha ‹ (y vuelve con ☰); en el celular es un menú que sale de la izquierda. Junto al nombre, etiquetas de color con el número de nodo y el tipo detectado: ASL3/ASL (azul), HamVOIP (naranja) e IRLP (morado).
+- **Mi perfil** (clic en tu foto o nombre): foto, nombre, idioma, contraseña y sesiones abiertas. La foto se reduce en el navegador antes de subirla.
+- **Idioma por usuario**: inglés (predeterminado) o español, en **Mi perfil**; la pantalla de entrada tiene su propio selector. Lo que sale al aire (voces, fechas) sigue en español.
 - **Tema claro u oscuro** (botón de luna), recordado en cada navegador.
 - **Logo de la estación** (Ajustes → Nodo): aparece en la barra, en la entrada y en la pestaña del navegador. El navegador lo reduce antes de subirlo.
 - **Barra "Al aire"**: estado, sección actual, **tiempo restante / duración** de la sección y del evento, y controles (pausa, saltar espera, siguiente, detener, bitácora).
@@ -160,9 +164,21 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - La franja **Próximo evento** con la cuenta regresiva va encima de la tarjeta del evento que sigue.
 - La **línea de tiempo** de cada tarjeta muestra las conexiones del evento y las tareas del cron de los usuarios (root, asterisk, IRLP) que caen cerca; las del sistema (`/etc/cron.d`) solo se ven en la pestaña Cron.
 - Los audios de un evento se preparan (convierten y nivelan) **en cuanto** agregas secciones o guardas la programación, y otra vez 20 minutos antes de la hora.
-- Variables para los textos de voz: `{fecha}`, `{fecha_larga}`, `{hora}`, `{dia}`, `{evento}`, `{numero}`, `{num_secciones}`, `{duracion_total}`, `{dur_contabilizable}`, `{titulo}`, `{descripcion}`, `{pausa_cada}`, `{pausa_duracion}`, `{pausa_alerta}`, `{nodo}`. Las secciones de voz con "Regenerar antes de transmitir" se vuelven a generar justo antes de salir al aire.
+- Variables para los textos de voz: `{fecha}`, `{fecha_larga}`, `{hora}`, `{dia}`, `{saludo}` (buenos días / buenas tardes / buenas noches), `{despedida}` (buen día / buena tarde / buena noche), `{evento}`, `{numero}`, `{emision}`, `{emision_anio}`, `{anio}`, `{num_secciones}`, `{duracion_total}`, `{dur_contabilizable}`, `{titulo}`, `{descripcion}`, `{pausa_cada}`, `{pausa_duracion}`, `{pausa_alerta}`, `{nodo}`. Las secciones de voz con "Regenerar antes de transmitir" se vuelven a generar justo antes de salir al aire.
+- **Numeración automática** (detalle del evento): `{emision_anio}` cuenta las fechas programadas del evento en el año (el domingo 46 es la #46) y se reinicia cada 1 de enero; `{emision}` es el número global a partir de "la emisión del día R es la #N". Los números salen del calendario, no de un contador: una prueba, un reinicio o restaurar un respaldo no los mueven. El número avanza cuando termina la emisión del día (hora + duración + 30 min), así una prueba del sábado ya dice el número del domingo. Se ve en las tarjetas de Programación.
 
 > En HamVOIP la base de zonas horarias del sistema es de 2016: las zonas de EE. UU. funcionan bien, pero las del centro de México todavía creen que hay horario de verano. Ahí usa "Hora del nodo" para los programas de México.
+
+### Secciones y audios
+
+- **Vista «Por evento»**: las secciones agrupadas por evento en el orden en que salen al aire; las que no usa ningún evento quedan en «Sin usar», plegadas.
+- **«Se renueva en cada emisión» 🔁**: para secciones que cambian cada semana (editorial, DXpeditions, estadísticas…). La revisión previa avisa si alguna sigue con el audio de la emisión anterior.
+- **Versión anterior**: al reemplazar un audio se guarda el anterior (`audios/anteriores/`, no va en los respaldos) y se puede regresar a él. Se controla con la opción "Al reemplazar el audio de una sección, guardar el anterior".
+- **Descargar ⬇** el audio de una sección: el archivo tal cual si es un formato común; si no, convertido a WAV.
+- **Exportar** secciones de un evento a un solo archivo (MP3 o WAV): eliges y ordenas las secciones, el silencio entre ellas y el nivel en LUFS; se arma en segundo plano y se descarga al terminar (44.1 kHz si hay originales, 8 kHz si solo existe la versión del aire).
+- Si subes un audio que el nodo no puede leer (p. ej. MP3 en un nodo sin mpg123), la página lo convierte a WAV en el navegador antes de subirlo. Las subidas se rechazan antes de copiarse si no hay espacio.
+
+**Voces** (Ajustes → Voz): Azure, **Google Cloud** (Neural2 / Chirp HD, con clave de API), **ElevenLabs** (clave de API; se ve la cuota), Piper y eSpeak. Los textos largos se parten por frases. Con **respaldo automático** activado, si el motor elegido falla se usan los demás que estén configurados (Azure → Google → ElevenLabs → Piper → eSpeak) y llega un solo aviso por Telegram.
 
 ### Cómo sale al aire
 
@@ -206,6 +222,8 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 **Pestaña Conexiones**: los nodos enlazados en este momento, con indicativo y ciudad (del directorio de AllStar), modo, dirección, tiempo conectado, IP y quién está hablando; un resumen con los nodos alcanzables en toda la red; y botones para **conectar** (transceptor o solo monitor) y **desconectar**. Si el Asterisk tiene varios nodos, se elige cuál ver. Se actualiza cada 4 s solo con la pestaña abierta.
 
+**En IRLP** la pestaña muestra a qué nodo o reflector está conectado (de `$LOCAL/active`), con la IP, el puerto y el formato de audio; el estado del radio (COS y PTT) y si HAMNA está transmitiendo, leídos cada 1.5 s; y los **otros nodos del mismo reflector**, según status.irlp.net (esa página se actualiza cada pocos minutos, así que una conexión de unos segundos no alcanza a aparecer).
+
 **Conexiones automáticas de un evento** (Eventos → detalle → abajo): conectar o desconectar enlaces antes de empezar y al terminar.
 
 | Sistema | Conectar | Desconectar |
@@ -226,6 +244,17 @@ outstreamcmd = /opt/hamna-web/bin/hamna-live
 ```
 
 app_rpt le pasa el audio del nodo a ese pequeño programa, que lo reenvía a HAMNA Web dentro del mismo equipo (127.0.0.1:8091). Si HAMNA Web está apagado, el audio simplemente se descarta: nunca detiene a Asterisk. HAMNA lo convierte a µ-law solo mientras alguien escucha (≈1 % de CPU en una Raspberry Pi 4) y el navegador lo reproduce sin complementos. En **Ajustes → Sistema** se ve si llega audio y quién está escuchando.
+
+**En IRLP** se enciende desde la página: **Ajustes → Sistema → Audio en vivo** (administrador). HAMNA agrega un bloque marcado en `/home/irlp/.asoundrc` que deriva lo que IRLP reproduce hacia `bin/hamna-live-irlp` y lee el receptor con `arecord` (dsnoop), sin quitarle la tarjeta de sonido a IRLP. Al encender prueba la salida y el receptor y, si algo falla, deja todo como estaba. Viene apagado; también se maneja con `/opt/hamna-web/bin/hamna-irlp-envivo on|off|status`, y el desinstalador quita el bloque.
+
+### Grabaciones
+
+Graba lo que se escucha en el nodo (lo que recibe y lo que transmite), por ejemplo la **toma de reportes** después del boletín. Usa el mismo audio de [Escuchar en vivo](#escuchar-en-vivo), así que necesita `outstreamcmd` (ASL) o el audio en vivo encendido (IRLP).
+
+- Se inicia a mano, desde el bot (`/grabar`) o sola al terminar o al iniciar un evento (Ajustes). Mientras graba, la barra de abajo muestra **REC**.
+- Los silencios largos no se graban (se dejan pausas de hasta 1 s), así la grabación queda corrida. Termina sola tras N minutos sin actividad (5 por omisión) o al llegar al tope (180 min), y se recorta el final.
+- Se guarda en MP3 si el nodo puede (si no, WAV) con un título como «Boletín Dominical 46 · Toma de reportes», en la pestaña **Grabaciones**. Se borran solas después de 30 días (ajustable).
+- Opcional: avisos de Telegram al empezar y terminar, y el audio mandado al grupo de avisos.
 
 ### Sincronizar eventos entre nodos
 
@@ -249,29 +278,53 @@ Al sincronizar:
 
 El nodo que recibe necesita llegar al puerto 443 (o 80) del nodo que comparte.
 
+### Panel de nodos
+
+Cada HAMNA puede reportarse a un **hub** (el nodo central del club) cada 60 s; en la pestaña **Nodos** del hub aparece una tarjeta por nodo con:
+
+- estación, número, tipo (ASL3/ASL/HamVOIP/IRLP) y versión (verde si está al día, naranja si hay que actualizar);
+- qué está al aire o el próximo evento, si está grabando, la salud del equipo, CPU/RAM/disco/temperatura y el último respaldo recibido;
+- **Editar** (administrador): la dirección del dashboard del nodo en la red local y en internet. Clic en el nombre lo abre: la local si entraste al hub desde la red local, la de internet si no.
+
+Para reportar, en el nodo: **Ajustes → Nodo → Panel de nodos**, marcar "Reportar el estado de este nodo a un hub" y poner la dirección y el código del hub (si se dejan vacíos, se usan los del respaldo a otro nodo). Cada nodo ve en su propia pestaña solo su tarjeta y las de quienes le reportan; el panel completo está en el hub. Si un nodo deja de reportar más de 10 min (ajustable), el hub manda aviso por Telegram y otro cuando vuelve. "🗑 Quitar del panel" borra la tarjeta.
+
 ### Avisos por Telegram
 
 En **Ajustes → Avisos** (administradores) HAMNA puede mandarte un mensaje de Telegram cuando algo falla:
 
 - ❌ un evento no pudo iniciar o terminó con error;
 - ⚠ la **revisión 30 minutos antes** de cada evento programado encontró un problema: secciones sin audio, el nodo no responde, falta la clave de Azure para las voces que se regeneran, poco disco, o la última sincronización falló;
-- ❌ falló una sincronización automática desde otro nodo;
-- opcional: cada transmisión que empieza y termina.
+- ❌ falló una sincronización automática desde otro nodo o un respaldo automático;
+- ⚠ la salud del equipo empeoró (ver [Salud del equipo](#salud-del-equipo-y-diagnóstico)), un nodo del panel dejó de reportar, o un motor de voz falló;
+- opcional: N minutos antes de cada evento programado (uno o varios avisos), resumen al iniciar y al terminar, cada sección que empieza, grabaciones, y cuando un colaborador sube su audio.
+
+**Probar avisos** manda un mensaje simple o un ejemplo de cada tipo con datos de un evento real.
 
 Para configurarlo: crea un bot con **@BotFather** (`/newbot`), pega su token, escríbele algo al bot (o agrégalo a un grupo) y usa **Buscar mi chat**; guarda y prueba con **Enviar prueba**. Para que los avisos lleguen con el logo de HAMNA, en @BotFather usa `/setuserpic` y mándale [`hamna/static/icon-512.png`](hamna/static/icon-512.png). Cada mensaje dice de qué estación y nodo viene; el mismo aviso no se repite en 15 minutos, y los envíos van en segundo plano (nunca detienen una transmisión).
+
+### Bot de Telegram
+
+Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nodo por bot), el mismo bot también responde. Cada usuario lo **vincula** desde Mi perfil con un código de 6 dígitos, y el bot le ofrece lo que su rol permite:
+
+- **Menú con botones** (📋 Menú, `/menu`): estado, próximo evento, salud, historial, nodos, transmitir un evento y grabar, con confirmación antes de actuar.
+- Comandos: `/estado`, `/proximo`, `/salud`, `/historial`, `/nodos` (en el hub), `/grabar [título]`, `/ayuda`.
+- Botones en los avisos: "siguiente sección" y "detalles" al iniciar; "transmitir ya" y "saltar esta vez" en el aviso del próximo evento.
+- **Colaboradores**: mandan su audio o nota de voz (hasta 20 MB) y eligen la sección; reciben recordatorio días antes si no lo han subido y un mensaje cuando su sección salió al aire. Los administradores pueden cambiar así cualquier sección.
+- **Respaldo por Telegram**: el respaldo automático (sin audios, hasta 49 MB) les llega en privado a los administradores vinculados.
 
 ### Usuarios y seguridad
 
 | Rol | Puede |
 |---|---|
-| Administrador | Todo: Ajustes, Cron, logo, usuarios, compartir y configurar sincronizaciones |
-| Operador | Transmitir, programar, editar eventos y secciones, conectar y desconectar nodos, sincronizar a mano, ver el cron |
-| Solo lectura | Ver estado, programación, eventos, secciones y conexiones |
+| Administrador | Todo: Ajustes, Cron, logo, usuarios, respaldos, compartir y configurar sincronizaciones |
+| Operador | Transmitir, programar, editar eventos y secciones, conectar y desconectar nodos, sincronizar a mano, grabar, ver el cron |
+| Solo lectura | Ver estado, programación, eventos, secciones y conexiones; escuchar en vivo |
+| Colaborador | Solo su página **Mis secciones**: subir el audio de las secciones que le asignan (desde la página o por Telegram), ver las tarjetas y detalles de los eventos donde salen, y escuchar la sección o el evento completo |
 
 - El servidor revisa el rol en cada acción; la página además esconde lo que el rol no puede usar.
 - La bitácora y el historial de transmisiones registran quién hizo cada cosa y desde qué IP (detrás de Apache se usa la IP real del visitante).
 - 5 contraseñas malas para un usuario desde una IP (o 20 desde una IP) la bloquean 15 minutos. Un administrador puede desbloquear en Ajustes → Usuarios; reiniciar el servicio también limpia los bloqueos.
-- Las sesiones abiertas se ven en **Ajustes → Mi cuenta** (las propias) y **Ajustes → Usuarios** (todas) y se pueden cerrar. Cambiar la contraseña o desactivar a un usuario lo saca al instante. De cada sesión solo se guarda la huella de su código.
+- Las sesiones duran 30 días desde el último uso (tope 90) y con https la cookie va marcada como `Secure`. Las abiertas se ven en **Mi perfil** (las propias) y **Ajustes → Usuarios** (todas) y se pueden cerrar. Cambiar la contraseña o desactivar a un usuario lo saca al instante. De cada sesión solo se guarda la huella de su código.
 - No se puede borrar, desactivar ni quitar el rol al último administrador activo.
 - Con Apache, la página solo se abre por `https://…/hamna/` (la contraseña viaja cifrada) y el 8090 escucha solo dentro del nodo. Para entrar al 8090 desde fuera del nodo (no recomendado), instala con `--listen-all`, o usa un túnel SSH: `ssh -L 8090:127.0.0.1:8090 usuario@nodo`.
 
@@ -281,14 +334,30 @@ La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab
 
 Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Un administrador de la página puede programar comandos como root**: dale ese rol solo a quien corresponda y usa contraseñas fuertes. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--no-cron`.
 
-### Archivos y respaldos
+### Respaldos
+
+**Ajustes → Respaldo** (administradores), en tres pestañas:
+
+- **Descargar y restaurar**: un `.tar.gz` con eventos, secciones, programación, usuarios, ajustes (con las claves), logo, fotos y audios de pausa; los audios de las secciones son opcionales. Se arma mientras se descarga, sin ocupar espacio en la SD. **Restaurar** valida el archivo y la base de datos, mueve lo actual a `/var/lib/hamna/antes-de-restaurar-<fecha>/` (guarda los 2 últimos), puede **conservar los datos propios del nodo** (número, tipo, logo, conexión con Asterisk/IRLP) y reinicia el servicio solo.
+- **Automático**: cada día a la hora elegida (espera si hay algo al aire), **a otro nodo HAMNA**, **a la nube** (Google Drive u OneDrive, con rclone; se pega el token de `rclone authorize`) y/o **por Telegram**. Los audios de las secciones solo se mandan cuando cambiaron desde el último respaldo con audios. **Respaldar ahora**, estado del último respaldo y aviso si falla.
+- **Recibir de otros nodos**: el nodo que guarda crea un código de acceso para cada nodo que le respalda. Conserva varios respaldos sin audios y 2 con audios por nodo (en `/var/lib/hamna/respaldos/<nodo>/`) y los ofrece para descargar. La conexión comprueba la huella del certificado.
+
+### Salud del equipo y diagnóstico
+
+- **Salud del equipo** (cada minuto, sin root): errores de la tarjeta SD (dmesg y ext4), disco en solo lectura, una prueba de escritura cada 10 min, **bajo voltaje**, temperatura, disco y memoria. Si algo empeora llega un aviso por Telegram con qué hacer, un recordatorio cada 12 h y otro cuando se normaliza; la barra lateral muestra la insignia **Revisar**. Un apagado sin cerrar (corte de luz) queda solo como nota.
+- **Revisar este nodo** (Ajustes → Sistema): nodo, audio en vivo (`outstreamcmd`, con los comandos para copiar), audios de pausa y de secciones legibles, voces (si la clave de Azure da 401 busca la región correcta y ofrece cambiarla; clave, voz y cuota de ElevenLabs), Telegram, respaldo automático, salud, hora y versión, cada cosa con cómo arreglarla.
+
+### Archivos
 
 | Ruta | Qué hay |
 |---|---|
 | `/opt/hamna-web/` | El programa, `install.sh`, `update.sh` y `uninstall.sh` |
 | `/var/lib/hamna/hamna.db` | Base de datos: secciones, eventos, programación, usuarios, sincronizaciones |
 | `/var/lib/hamna/settings.json` | Ajustes (incluida la clave de Azure) |
-| `/var/lib/hamna/audios/` | Audios de las secciones; `sonidos/` los de la pausa; `cache/` las versiones para el aire |
+| `/var/lib/hamna/audios/` | Audios de las secciones (`anteriores/`: versiones anteriores); `sonidos/` los de la pausa; `cache/` las versiones para el aire |
+| `/var/lib/hamna/grabaciones/` | Grabaciones |
+| `/var/lib/hamna/respaldos/` | Respaldos recibidos de otros nodos |
+| `/var/lib/hamna/fotos/` | Fotos de perfil |
 | `/var/lib/hamna/hamna.log` | Bitácora |
 | `/var/backups/hamna/` | Respaldos que hace el instalador antes de cada actualización (los últimos 5) |
 | `/var/backups/hamna-cron/` | Versiones anteriores de las tablas del cron |
@@ -310,8 +379,8 @@ Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y gua
 
 ### Diferencias con HAMNA Desktop
 
-- Mismo esquema de base de datos y mismas variables de voz, más `{fecha_larga}`, `{numero}` y `{nodo}`.
-- Voces: Azure (igual que Desktop), Piper (`asl3-tts`, voz neuronal local en ASL3) y eSpeak NG. No hay SAPI5. En HamVOIP solo Azure.
+- Mismo esquema de base de datos y mismas variables de voz, más `{fecha_larga}`, `{saludo}`, `{despedida}`, `{numero}`, `{emision}`, `{emision_anio}`, `{anio}` y `{nodo}`.
+- Voces: Azure (igual que Desktop), Google Cloud, ElevenLabs, Piper (`asl3-tts`, voz neuronal local en ASL3) y eSpeak NG. No hay SAPI5. En HamVOIP no hay voces locales.
 - El intervalo entre secciones es un ajuste aparte (en Desktop era la misma duración que la pausa).
 - No se pueden programar dos eventos a la vez en el mismo minuto: el segundo detiene al primero.
 
@@ -350,10 +419,17 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `tts.py` | Voces |
 | `auth.py` | Usuarios, sesiones y bloqueos |
 | `tz.py` | Zonas horarias |
-| `sessions.py` | Pestaña Conexiones (`rpt xnode`) |
+| `sessions.py` | Pestaña Conexiones (`rpt xnode`; IRLP con status.irlp.net) |
 | `links.py` | Conexiones automáticas |
 | `share.py` / `sync.py` | Compartir y sincronizar eventos entre nodos |
-| `sysmon.py` | Monitor del equipo |
+| `numeracion.py` | Numeración automática de emisiones |
+| `export.py` | Exportar secciones a un archivo |
+| `sysmon.py` / `health.py` | Monitor y salud del equipo |
+| `diagnose.py` | Revisar este nodo |
 | `updates.py` | Aviso de actualizaciones |
-| `notify.py` | Avisos por Telegram |
-| `live.py` | Audio en vivo (recibe de `bin/hamna-live`) |
+| `notify.py` / `bot.py` | Avisos y bot de Telegram |
+| `live.py` | Audio en vivo (recibe de `bin/hamna-live` y `bin/hamna-live-irlp`) |
+| `grabar.py` | Grabaciones |
+| `hub.py` | Panel de nodos (latidos) |
+| `backup.py` / `autobackup.py` | Respaldo, restauración y respaldo automático |
+| `cron.py` | Pestaña Cron |
