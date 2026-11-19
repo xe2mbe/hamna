@@ -225,6 +225,11 @@ def usuarios_editar(req, uid):
     f = {k: b[k] for k in ("nombre", "rol", "activo", "password") if k in b}
     if uid == req.user["id"] and (f.get("rol", "admin") != "admin" or f.get("activo") is False):
         raise ValueError("No puedes quitarte el rol de administrador ni desactivarte a ti mismo")
+    if b.get("desvincular_tg"):                     # solo quitar su Telegram (Ajustes → Usuarios)
+        auth.set_tg(uid, "", "")
+        log.info("%s desvinculó el Telegram del usuario #%s", req.user["usuario"], uid)
+        if set(b) == {"desvincular_tg"}:
+            return ok()
     auth.update_user(uid, cur_sid=req.user["sid"], **f)
     if "secciones" in b:
         auth.set_user_sections(uid, b["secciones"])
@@ -688,7 +693,7 @@ def mi_seccion_anterior(req, sid):
 def mi_seccion_regresar(req, sid):
     s = _mi_seccion(req, sid)
     _restaurar_anterior(sid)
-    quien = req.user.get("nombre") or req.user["usuario"]
+    quien = req.user["usuario"].upper()
     log.info("%s (colaborador) regresó la versión anterior de «%s»", req.user["usuario"], s["nombre"])
     notify.send("colaborador", "↩ <b>{}</b> regresó la versión anterior de «{}»".format(
         notify.esc(quien), notify.esc(s["nombre"])))
@@ -738,7 +743,7 @@ def colaborador_audio(user, sid, up, via=""):
 
 def _aviso_colaborador(user, sid, que, via=""):
     s = db.get_seccion(sid)
-    quien = user.get("nombre") or user["usuario"]
+    quien = user["usuario"].upper()
     log.info("%s (colaborador) %s la sección «%s»%s", user["usuario"], que, s["nombre"], " por Telegram" if via else "")
     evs = [e["nombre"] for e in db.rows("""SELECT e.nombre FROM evento_secciones es JOIN eventos e ON e.id=es.evento_id
                                           WHERE es.seccion_id=?""", (sid,))]
@@ -1631,7 +1636,7 @@ def grabaciones(req):
 @app.route("/api/grabaciones/iniciar", ("POST",))
 def grabacion_iniciar(req):
     from . import grabar
-    titulo = (req.json().get("titulo") or "").strip() or "Grabación de {}".format(req.user.get("nombre") or req.user["usuario"])
+    titulo = (req.json().get("titulo") or "").strip() or "Grabación de {}".format(req.user["usuario"].upper())
     st = grabar.grabadora.iniciar(titulo, "a mano · " + req.user["usuario"])
     return ok(estado=st)
 

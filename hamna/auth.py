@@ -73,6 +73,9 @@ def init():
         if "tg_id" not in cols:     # Telegram vinculado (bot.py)
             c.execute("ALTER TABLE usuarios ADD COLUMN tg_id TEXT DEFAULT ''")
             c.execute("ALTER TABLE usuarios ADD COLUMN tg_nombre TEXT DEFAULT ''")
+        if "tg_ultimo" not in cols:     # cuándo vinculó su Telegram y cuándo usó el bot por última vez (epoch)
+            c.execute("ALTER TABLE usuarios ADD COLUMN tg_desde REAL")
+            c.execute("ALTER TABLE usuarios ADD COLUMN tg_ultimo REAL")
         if "foto" not in cols:      # versión de la foto de perfil ('' = sin foto); el archivo va en fotos/<id>.jpg
             c.execute("ALTER TABLE usuarios ADD COLUMN foto TEXT DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS usuario_secciones (
@@ -232,6 +235,7 @@ def revoke_user(usuario_id, except_sid=None):
 # ── Usuarios ─────────────────────────────────────────────────────────────────
 def users():
     out = db.rows("""SELECT u.id, u.usuario, u.nombre, u.rol, u.activo, u.creado_en, u.ultimo_acceso, u.foto, u.tg_nombre,
+                            u.tg_id <> '' AS tg, u.tg_desde, u.tg_ultimo,
                        (SELECT COUNT(*) FROM sesiones_web s WHERE s.usuario_id=u.id AND s.expira > ?) AS sesiones
                      FROM usuarios u ORDER BY u.usuario COLLATE NOCASE""", (time.time(),))
     secs = {}
@@ -250,14 +254,36 @@ def user_by_tg(tg_id):
     """Usuario activo con ese Telegram vinculado, o None."""
     if not tg_id:
         return None
-    return _clean_user(db.row("SELECT * FROM usuarios WHERE tg_id=? AND activo=1", (str(tg_id),)))
+    u = _clean_user(db.row("SELECT * FROM usuarios WHERE tg_id=? AND activo=1", (str(tg_id),)))
+    if u:
+        _tg_visto(u["id"])
+    return u
+
+
+TG_VISTO_SECS = 60
+_tg_visto_mem = {}
+
+
+def _tg_visto(uid):
+    """El bot atendió a este usuario: anotar la hora (máx. 1 vez por minuto, para no escribir de más en la SD)."""
+    now = time.time()
+    if now - _tg_visto_mem.get(uid, 0) < TG_VISTO_SECS:
+        return
+    _tg_visto_mem[uid] = now
+    try:
+        db.execute("UPDATE usuarios SET tg_ultimo=? WHERE id=?", (now, uid))
+    except Exception:
+        pass
 
 
 def set_tg(uid, tg_id, tg_nombre):
     with db.conn() as c:
         if tg_id:   # un Telegram, un usuario
-            c.execute("UPDATE usuarios SET tg_id='', tg_nombre='' WHERE tg_id=? AND id<>?", (tg_id, uid))
-        c.execute("UPDATE usuarios SET tg_id=?, tg_nombre=? WHERE id=?", (tg_id or "", (tg_nombre or "")[:60], uid))
+            c.execute("UPDATE usuarios SET tg_id='', tg_nombre='', tg_desde=NULL, tg_ultimo=NULL WHERE tg_id=? AND id<>?",
+                      (tg_id, uid))
+        c.execute("UPDATE usuarios SET tg_id=?, tg_nombre=?, tg_desde=?, tg_ultimo=NULL WHERE id=?",
+                  (tg_id or "", (tg_nombre or "")[:60], time.time() if tg_id else None, uid))
+    _tg_visto_mem.pop(uid, None)
 
 
 def set_photo(uid, version):

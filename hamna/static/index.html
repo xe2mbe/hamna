@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.32.0">
+<link rel="stylesheet" href="static/app.css?v=1.33.0">
 </head>
 <body>
 
@@ -166,7 +166,7 @@
           <h2>Enlaces directos</h2>
           <form id="sesConnect" class="connect" autocomplete="off">
             <input name="destino" placeholder="Nodo" inputmode="numeric" pattern="[0-9]{3,7}" required>
-            <select name="modo"><option value="transceptor">Transceptor</option><option value="monitor">Solo monitor</option></select>
+            <select name="modo"><option value="transceptor">Transceptor</option><option value="monitor">Solo monitor</option><option value="monitor_local">Monitor local</option></select>
             <button class="btn primary" type="submit">Conectar</button>
           </form>
         </div>
@@ -411,6 +411,7 @@
             <h3>Comandos y botones</h3>
             <label class="check"><input type="checkbox" name="tg_bot_on"> 🤖 El bot responde comandos (/estado, /proximo, /salud, /historial) y pone botones en los avisos para detener, pasar a la siguiente sección, transmitir ya o saltar una emisión.</label>
             <p class="muted bot-st" id="botSt"></p>
+            <div id="botUsers"></div>
             <label class="check"><input type="checkbox" name="tg_collab_dm"> 📩 Mensajes privados al colaborador: le recuerdo subir su audio si no lo ha cambiado desde la última emisión, y le aviso cuando su sección sale al aire. También puede mandarme su audio por Telegram.</label>
             <label class="tg-sub">Recordarle con (días de anticipación)<input name="tg_recordar_dias" type="number" min="0" max="14" step="1" placeholder="2">
               <small>0 = no recordar. Los recordatorios se mandan de 9 a 21 h.</small></label>
@@ -634,7 +635,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.32.0"></script>
-<script src="static/app.js?v=1.32.0"></script>
+<script src="static/i18n.js?v=1.33.0"></script>
+<script src="static/app.js?v=1.33.0"></script>
 </body>
 </html>

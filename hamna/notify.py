@@ -8,7 +8,10 @@ detienen una transmisión) y un mismo aviso no se repite en 15 minutos.
 import datetime as dt
 import os
 import html
+import http.client
 import json
+import socket
+import ssl
 import re
 import logging
 import threading
@@ -58,12 +61,64 @@ def header(cfg=None):
     return "📻 <b>{}</b>{}".format(esc(est), " · nodo {}".format(esc(nodo)) if nodo else "")
 
 
+# ── Conexión a Telegram sin atorarse ────────────────────────────────────────
+# Con IPv6 a veces la conexión inicial se pierde y Python espera todo el
+# tiempo límite (15–40 s) antes de probar la otra dirección: el bot «tarda» en
+# contestar. Aquí cada dirección tiene CONECTAR_SECS para conectar; si no,
+# se prueba la siguiente (IPv4) y se recuerda la que funcionó.
+CONECTAR_SECS = 4
+_familia = {"ok": None}
+
+
+def _conectar(host, port, timeout):
+    addrs = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    pref = _familia["ok"]
+    if pref is not None:
+        addrs.sort(key=lambda a: a[0] != pref)
+    err = None
+    for fam, tipo, proto, _c, addr in addrs:
+        s = socket.socket(fam, tipo, proto)
+        try:
+            s.settimeout(min(CONECTAR_SECS, timeout or CONECTAR_SECS))
+            s.connect(addr)
+            s.settimeout(timeout)
+            if _familia["ok"] != fam:
+                if _familia["ok"] is not None:
+                    log.info("Telegram: ahora conecto por %s", "IPv6" if fam == socket.AF_INET6 else "IPv4")
+                _familia["ok"] = fam
+            return s
+        except OSError as e:
+            err = e
+            s.close()
+            if fam == _familia["ok"]:
+                _familia["ok"] = None
+    raise err or OSError("No encontré la dirección de {}".format(host))
+
+
+class _Conexion(http.client.HTTPSConnection):
+    def connect(self):
+        self.sock = self._context.wrap_socket(_conectar(self.host, self.port, self.timeout), server_hostname=self.host)
+
+
+class _Manejador(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_Conexion, req, context=ssl.create_default_context())
+
+
+_abridor = urllib.request.build_opener(_Manejador())
+
+
+def abrir(req, timeout):
+    """urlopen para Telegram (ver arriba)."""
+    return _abridor.open(req, timeout=timeout)
+
+
 def _call(token, method, params, timeout=15):
     data = urllib.parse.urlencode(params).encode()
     req = urllib.request.Request(API.format(token, method), data=data,
                                  headers={"User-Agent": "HAMNA-Web"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with abrir(req, timeout) as r:
             out = json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         try:
@@ -93,7 +148,7 @@ def send_document(token, chat, path, filename, caption="", timeout=300, metodo="
     req = urllib.request.Request(API.format(token, metodo), data=body, headers={
         "User-Agent": "HAMNA-Web", "Content-Type": "multipart/form-data; boundary=" + bd})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with abrir(req, timeout) as r:
             out = json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         try:

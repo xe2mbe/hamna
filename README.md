@@ -314,6 +314,8 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 - Comandos: `/estado`, `/proximo`, `/salud`, `/historial`, `/nodos` (en el hub), `/grabar [título]`, `/ayuda`.
 - Botones en los avisos: "siguiente sección" y "detalles" al iniciar; "transmitir ya" y "saltar esta vez" en el aviso del próximo evento.
 - **Colaboradores**: mandan su audio o nota de voz (hasta 20 MB) y eligen la sección; reciben recordatorio días antes si no lo han subido y un mensaje cuando su sección salió al aire. Los administradores pueden cambiar así cualquier sección.
+- **🤝 Colaboración** (en el menú): los eventos, primero los que salen pronto, y en cada uno sus secciones en orden, con duración y si ya se actualizaron. Al tocar una sección se puede mandar el audio nuevo, cambiar el texto de una de texto a voz (o generar la voz otra vez), escucharla o regresar a la versión anterior. El colaborador ve los eventos donde sale y edita solo sus secciones. El operador y el administrador editan cualquiera, pueden **agregar una sección nueva** al final del evento (de audio o de texto a voz), **cambiarla de lugar** (↕ Mover de lugar: subir, bajar, al inicio o al final) y **borrarla** (quitarla solo de ese evento o borrarla por completo con su audio).
+- El menú ☰ de Telegram solo trae `/menu` y `/start`; todo lo demás está en los botones del menú (los comandos siguen funcionando si se escriben).
 - **Respaldo por Telegram**: el respaldo automático (sin audios, hasta 49 MB) les llega en privado a los administradores vinculados.
 
 ### Usuarios y seguridad

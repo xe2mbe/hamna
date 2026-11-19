@@ -853,7 +853,7 @@ async function exportForm(ev) {
 
 /* ── Conexiones automáticas de un evento ─────────────────────────────────── */
 const ACC = { conectar: "Conectar", desconectar: "Desconectar", desconectar_todo: "Desconectar todo" };
-const MODO = { transceptor: "transceptor", monitor: "solo monitor", permanente: "permanente" };
+const MODO = { transceptor: "transceptor", monitor: "solo monitor", monitor_local: "monitor local", permanente: "permanente" };
 const evSummary = (e) => `${e.num_secciones} secciones · ${fmt(e.duracion_total)}${e.tipo ? " · " + esc(e.tipo) : ""}${e.num_conexiones ? " · 🔗 " + e.num_conexiones : ""}`;
 function linkText(a) {
   if (a.sistema === "irlp") return a.accion === "conectar" ? `Conectar a ${esc(a.destino)}` : "Desconectar (end)";
@@ -1285,6 +1285,16 @@ async function loadBotSt() {
     el.textContent = b.activo ? `✅ El bot @${b.bot} está escuchando.` : b.error ? "⚠ " + b.error : "El bot no está escuchando (activa Telegram y esta casilla, y guarda).";
     el.className = "muted bot-st" + (b.activo ? " ok" : b.error ? " bad" : "");
   } catch { el.textContent = ""; }
+  const bu = $("#botUsers"); if (!bu) return;
+  try {
+    const r = await api("api/usuarios");
+    const act = r.usuarios.filter((u) => u.activo), con = act.filter((u) => u.tg)
+      .sort((a, b) => (b.tg_ultimo || 0) - (a.tg_ultimo || 0));
+    bu.innerHTML = `<p class="muted" style="margin:6px 0">👥 ${con.length} de ${act.length} usuarios tienen el bot vinculado</p>` +
+      (con.length ? `<div class="row gap wrap">${con.map((u) => `<span class="chip" title="${esc(u.tg_nombre || "")}">${esc(u.nombre || u.usuario)} · ${
+        u.tg_ultimo ? `<span>${esc(ago(u.tg_ultimo))}</span>` : "<span>sin usar</span>"}</span>`).join("")}</div>` : "") +
+      (act.length > con.length ? `<p class="muted" style="margin:6px 0;font-size:.85rem">Sin vincular: ${act.filter((u) => !u.tg).map((u) => esc(u.nombre || u.usuario)).join(", ")}</p>` : "");
+  } catch { bu.innerHTML = ""; }
 }
 async function loadAjustes() {
   S.cfg = await api("api/ajustes");
@@ -2818,7 +2828,8 @@ async function loadUsers() {
       <div class="avatar">${avatarInner(u)}</div>
       <div class="uinfo"><b>${esc(u.nombre || u.usuario)}</b>${u.id === r.yo ? ' <span class="chip ok">Tú</span>' : ""}
         <small>${esc(u.usuario)} · ${u.ultimo_acceso ? "último acceso " + esc(u.ultimo_acceso.slice(0, 16)) : "nunca ha entrado"}${u.sesiones ? ` · ${u.sesiones} sesión${u.sesiones > 1 ? "es" : ""} abierta${u.sesiones > 1 ? "s" : ""}` : ""}</small>
-        ${u.rol === "colaborador" ? `<small>📤 ${u.secciones.length ? u.secciones.map((i) => esc(secNom(i))).join(", ") : "Sin secciones asignadas"}</small>` : ""}</div>
+        ${u.rol === "colaborador" ? `<small>📤 ${u.secciones.length ? u.secciones.map((i) => esc(secNom(i))).join(", ") : "Sin secciones asignadas"}</small>` : ""}
+        ${tgLinea(u)}</div>
       <span class="chip rol-${u.rol}">${esc(u.rol_nombre)}</span>
       ${u.activo ? "" : '<span class="chip warn">Desactivado</span>'}
       <div class="mini"><button type="button" class="btn" data-uedit="${u.id}" title="Editar">✎</button>
@@ -2830,6 +2841,12 @@ async function loadUsers() {
   $("#lockBox").innerHTML = lk.length ? `<div class="tl-warn row gap wrap" style="justify-content:space-between;margin-top:14px">
       <span>🔒 Bloqueados por intentos fallidos: ${lk.map((l) => esc(l.clave.replace("|", " desde ")) + ` (${Math.ceil(l.segundos / 60)} min)`).join(", ")}</span>
       <button type="button" class="btn sm" id="btnUnlock">Desbloquear</button></div>` : "";
+}
+/* Telegram de cada usuario: con quién está vinculado y cuándo usó el bot por última vez */
+const tgUso = (u) => u.tg_ultimo ? `<span>usó el bot ${esc(ago(u.tg_ultimo))}</span>` : `<span>vinculado, sin usar</span>`;
+function tgLinea(u) {
+  if (!u.tg) return `<small class="muted tg-line"><span>Sin Telegram</span></small>`;
+  return `<small class="tg-line" title="${u.tg_desde ? "Vinculado el " + esc(fmtTs(u.tg_desde)) : ""}"><span>📲 ${esc(u.tg_nombre || "Telegram")}</span> · ${tgUso(u)}</small>`;
 }
 function userForm(u) {
   const isNew = !u;
@@ -2847,6 +2864,9 @@ function userForm(u) {
       <label>${isNew ? "Contraseña" : "Contraseña nueva"}<input name="password" type="password" autocomplete="new-password" minlength="8" ${isNew ? "required" : ""} placeholder="${isNew ? "" : "Déjala vacía para no cambiarla"}">
         <small>Al menos 8 caracteres.${isNew ? "" : " Si la cambias, se cierran sus sesiones."}</small></label>
       ${isNew ? "" : `<label class="check"><input type="checkbox" name="activo" ${u.activo ? "checked" : ""}> Activo (si lo desactivas, sale de inmediato y no puede entrar)</label>`}
+      ${!isNew && u.tg ? `<div class="row gap wrap tg-box" style="justify-content:space-between;align-items:center;margin:10px 0">
+          <span><b>📲 Telegram:</b> <span>${esc(u.tg_nombre || "vinculado")}</span> · ${tgUso(u)}${u.tg_desde ? ` · <span>vinculado el ${esc(fmtTs(u.tg_desde))}</span>` : ""}</span>
+          <button type="button" class="btn sm" id="ufTgOff">Desvincular Telegram</button></div>` : ""}
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button>
         <button class="btn primary">${isNew ? "Crear usuario" : "Guardar"}</button></div>
     </form>`);
@@ -2856,6 +2876,11 @@ function userForm(u) {
     $("#ufSecs").classList.toggle("hidden", uf.rol.value !== "colaborador");
   };
   uf.rol.onchange = rolUi; rolUi();
+  const tgOff = $("#ufTgOff");
+  if (tgOff) tgOff.onclick = async () => {
+    if (!(await confirmBox(`¿Desvincular el Telegram de «${u.usuario}»? El bot deja de reconocerlo hasta que lo vuelva a vincular desde Mi perfil.`, "Desvincular"))) return;
+    try { await run(() => api("api/usuarios/" + u.id, { method: "PUT", json: { desvincular_tg: true } }), "Telegram desvinculado"); closeModal(); loadUsers(); } catch {}
+  };
   (async () => {
     try { S.secciones = await api("api/secciones"); } catch (err) { $("#ufSecList").textContent = err.message; return; }
     const mine = new Set(u.secciones || []);
