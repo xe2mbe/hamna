@@ -2753,6 +2753,18 @@ $("#sesConnect").onsubmit = async (e) => {
   } catch {} finally { busy(b, false); }
 };
 
+// Favoritos como mini tarjetas: el número grande a la izquierda y la descripción abajo
+function favCards(favs, conectado, attr, titulo, editar) {
+  const head = `<div class="fav-head"><span class="lbl">${titulo}</span>${editar && isAdmin() ? `<button type="button" class="btn sm ghost ro" data-favedit="${editar}">✏️ Editar</button>` : ""}</div>`;
+  if (!favs.length) return head + `<p class="muted fav-empty">Todavía no hay favoritos.${editar && isAdmin() ? " Agrégalos con ✏️ Editar." : ""}</p>`;
+  return head + `<div class="fav-grid">` + favs.map((f) => {
+    const on = conectado(f.nodo);
+    return `<button type="button" class="favc ${on ? "on" : ""}" ${attr}="${esc(f.nodo)}" title="${on ? "Conectado" : "Conectar a " + esc(f.nodo)}">
+      <span class="n"><span>${esc(f.nodo)}</span>${on ? '<span class="st">● Conectado</span>' : '<span class="st">⭐</span>'}</span>
+      <small>${esc(f.nombre || "Sin descripción")}</small></button>`;
+  }).join("") + `</div>`;
+}
+
 /* ── Control del nodo IRLP (lo que hacía IRLPvCON) ─────────────────────────── */
 async function irlpInfo(force) {
   if (!S.irlp || force) { try { S.irlp = await api("api/irlp"); } catch { S.irlp = { favoritos: [] }; } }
@@ -2764,11 +2776,7 @@ async function renderIrlpCtl(s) {
   const info = await irlpInfo();
   $("#irlpEnd").classList.toggle("hidden", !s.activo);
   const favs = info.favoritos || [];
-  setHtml($("#irlpFavs"), `<span class="lbl">Favoritos</span>` + (favs.length ? favs.map((f) => {
-    const on = irlpEn(s.activo, f.nodo);
-    return `<button type="button" class="btn sm fav ${on ? "on" : ""}" data-irlpfav="${esc(f.nodo)}" title="${on ? "Conectado" : "Conectar a " + esc(f.nodo)}">${on ? "✅" : "⭐"} ${esc(f.nombre || "")}<b>${esc(f.nodo)}</b></button>`;
-  }).join("") : `<span class="muted">Todavía no hay favoritos.</span>`) +
-    (isAdmin() ? `<button type="button" class="btn sm ghost" id="irlpFavEdit">✏️ Editar</button>` : ""));
+  setHtml($("#irlpFavs"), favCards(favs, (n) => irlpEn(s.activo, n), "data-irlpfav", "Favoritos", "irlp"));
   const hab = s.habilitado !== false;
   const aux = info.aux ? [1, 2, 3].map((n) => `<span class="grp"><span class="lbl">AUX${n}</span>
       <button type="button" class="btn sm" data-irlpaux="${n}on">Encender</button><button type="button" class="btn sm" data-irlpaux="${n}off">Apagar</button></span>`).join("") : "";
@@ -2828,33 +2836,35 @@ $("#irlpCtl").addEventListener("click", async (e) => {
     } else if (aux) {
       const v = aux.dataset.irlpaux;
       await irlpHacer("aux", v, "AUX" + v[0] + (v.endsWith("on") ? " encendida" : " apagada"));
-    } else if (e.target.closest("#irlpFavEdit")) {
-      irlpFavEditor();
     }
   } catch {}
 });
-function irlpFavEditor() {
-  const favs = (S.irlp && S.irlp.favoritos) || [];
-  openModal("Favoritos de IRLP", `<form id="favForm" autocomplete="off">
-    <p class="muted" style="margin-top:0">Uno por línea: el nodo o reflector (4 a 6 dígitos) y su nombre. Aparecen aquí y en el bot de Telegram.</p>
-    <textarea name="lista" rows="10" style="width:100%;font-variant-numeric:tabular-nums" placeholder="9050 Reflector 9050">${esc(favs.map((f) => f.nodo + " " + (f.nombre || "")).join("\n"))}</textarea>
+function favEditor(tipo) {
+  const asl = tipo === "asl";
+  const favs = asl ? ((S.aslFavs || {})[S.ses.nodo] || []) : ((S.irlp && S.irlp.favoritos) || []);
+  const rx = asl ? /^(\d{3,7})\s*[-·,:]?\s*(.*)$/ : /^(\d{4,6})\s*[-·,:]?\s*(.*)$/;
+  openModal(asl ? "Favoritos de ASL" : "Favoritos de IRLP", `<form id="favForm" autocomplete="off">
+    <p class="muted" style="margin-top:0">${asl ? "Uno por línea: el número de nodo (3 a 7 dígitos; EchoLink 3xxxxxx) y su descripción. La primera vez se importaron de AllScan; los cambios se guardan en HAMNA." : "Uno por línea: el nodo o reflector (4 a 6 dígitos) y su descripción."} Aparecen en el Dashboard y en el bot de Telegram.</p>
+    <textarea name="lista" rows="12" style="width:100%;font-variant-numeric:tabular-nums" placeholder="${asl ? "58788 HamVOIP Durango" : "9050 Reflector 9050"}">${esc(favs.map((f) => f.nodo + " " + (f.nombre || "")).join("\n"))}</textarea>
     <div class="modal-actions"><button type="button" class="btn" id="favNo">Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
   $("#favNo").onclick = closeModal;
   $("#favForm").onsubmit = async (e) => {
     e.preventDefault();
     const lista = [], malas = [];
     e.target.lista.value.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => {
-      const m = l.match(/^(\d{4,6})\s*[-·,:]?\s*(.*)$/);
+      const m = l.match(rx);
       if (m) lista.push({ nodo: m[1], nombre: m[2].trim() }); else malas.push(l);
     });
     if (malas.length) return toast("Líneas sin número de nodo: " + malas.slice(0, 3).join(" · "), true);
     try {
-      const r = await run(() => api("api/irlp/favoritos", { method: "PUT", json: { favoritos: lista } }), "Favoritos guardados");
-      S.irlp.favoritos = r.favoritos; closeModal();
-      if (S.ses) renderIrlpCtl(S.ses);
+      const r = await run(() => api(asl ? "api/sesiones/favoritos" : "api/irlp/favoritos", { method: "PUT", json: { favoritos: lista } }), "Favoritos guardados");
+      if (asl) { S.aslFavs = {}; S.aslFavs[S.ses.nodo] = r.favoritos; } else S.irlp.favoritos = r.favoritos;
+      closeModal();
+      if (S.ses) renderSesiones();
     } catch {}
   };
 }
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-favedit]"); if (b) favEditor(b.dataset.favedit); });
 async function loadIrlpLog() {
   const pre = $("#irlpLog");
   try { const r = await api("api/irlp/bitacora?n=100"); pre.textContent = r.lineas.slice().reverse().join("\n") || "(vacía)"; }
@@ -2875,12 +2885,9 @@ async function aslFavsLoad(nodo) {
 async function renderAslFavs(s) {
   const box = $("#aslFavs");
   const favs = s.sistema === "asl" ? await aslFavsLoad(s.nodo) : [];
-  box.classList.toggle("hidden", !favs.length);
+  box.classList.toggle("hidden", s.sistema !== "asl" || (!favs.length && !isAdmin()));
   const con = new Set((s.enlaces || []).map((e) => e.nodo));
-  setHtml(box, `<span class="lbl">Favoritos de AllScan</span>` + favs.map((f) => {
-    const on = con.has(f.nodo), base = f.nombre.endsWith(f.nodo) ? f.nombre.slice(0, -f.nodo.length).replace(/[\s,]+$/, "") : f.nombre;
-    return `<button type="button" class="btn sm fav ${on ? "on" : ""}" data-aslfav="${esc(f.nodo)}" title="${esc(f.nombre)}">${on ? "✅" : "⭐"} ${esc(base)}<b>${esc(f.nodo)}</b></button>`;
-  }).join(""));
+  setHtml(box, favCards(favs, (n) => con.has(n), "data-aslfav", "Favoritos", "asl"));
   $("#sesAll").classList.toggle("hidden", !(s.enlaces || []).length);
 }
 $("#aslFavs").onclick = async (e) => {

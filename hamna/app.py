@@ -1512,12 +1512,18 @@ def irlp_vcon(req):
 
 @app.route("/api/sesiones/favoritos")
 def sesiones_favoritos(req):
-    """Favoritos de AllScan del nodo ASL (los mismos que ofrece el bot)."""
-    from . import bot
+    """Favoritos de ASL (los mismos que ofrece el bot; la primera vez se importan de AllScan)."""
+    from . import favoritos
     nodo = str(req.query.get("nodo") or settings.get("node") or "")
-    if not re.match(r"^\d{3,7}$", nodo):
-        return jsonr({"favoritos": []})
-    return jsonr({"favoritos": [{"nombre": et, "nodo": n} for et, n in bot._favoritos(nodo)]})
+    return jsonr({"favoritos": favoritos.asl(nodo if re.match(r"^\d{3,7}$", nodo) else "")})
+
+
+@app.route("/api/sesiones/favoritos", ("PUT",), rol="admin")
+def sesiones_favoritos_guardar(req):
+    from . import favoritos
+    favs = favoritos.guardar_asl(req.json().get("favoritos"))
+    log.info("%s guardó %d favoritos de ASL", req.user["usuario"], len(favs))
+    return ok(favoritos=favs)
 
 
 @app.route("/api/irlp/<accion>", ("POST",))

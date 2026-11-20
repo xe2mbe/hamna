@@ -1645,6 +1645,12 @@ FAV_ARCHIVOS = ("/var/www/html/allscan/favorites.ini", "/var/www/html/supermon/f
 
 
 def _favoritos(node):
+    """[(nombre, nodo)]: los favoritos de ASL de HAMNA (la primera vez se importan de AllScan)."""
+    from . import favoritos
+    return [(f.get("nombre") or f["nodo"], f["nodo"]) for f in favoritos.asl(node)]
+
+
+def _favoritos_allscan(node):
     """[(etiqueta, nodo)] de los favoritos de AllScan: la sección [general] y la del nodo."""
     import re
     for ruta in FAV_ARCHIVOS:
@@ -1845,7 +1851,7 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         pag = max(0, min(_ints(arg)[0], npag - 1))
         def boton(et, n):                           # el número primero: las etiquetas largas se cortan
             base = et[:-len(n)].rstrip(" ,") if et.endswith(n) else et
-            return ("{} {} · {}".format("✅" if n in conectados else "⭐", n, base))[:56]
+            return ("{} {}{}".format("✅" if n in conectados else "⭐", n, " · " + base if base else ""))[:56]
         filas = [[(boton(et, n), "m:conf:" + n)] for et, n in favs[pag * FAV_PAG:(pag + 1) * FAV_PAG]]
         nav = []
         if pag > 0:
@@ -1857,7 +1863,7 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         filas.append([("Cancelar", "m:conx")])
         return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n⭐ Elige uno de tus favoritos{}{}, o {}\n"
                                          "✅ = ya está conectado{}.".format(
-                                             " de AllScan" if kind == "asl" else "",
+                                             "",
                                              " (página {} de {})".format(pag + 1, npag) if npag > 1 else "",
                                              pide[2].lower() + pide[3:],
                                              " (tócalo para cambiarle el modo)" if kind == "asl" else ""), filas)

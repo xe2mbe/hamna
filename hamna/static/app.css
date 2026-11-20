@@ -298,8 +298,24 @@ main > .view { max-width: 1180px; margin: 0 auto; }
 .irlp-body { display: flex; flex-direction: column; gap: 14px; padding: 4px 18px 16px; }
 .irlp-favs, .irlp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .irlp-favs .lbl, .irlp-row .lbl { color: var(--text3); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-right: 2px; }
-.btn.fav b { font-variant-numeric: tabular-nums; margin-left: 4px; }
-.btn.fav.on { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.irlp-favs, .asl-favs { display: block; }
+.fav-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.fav-empty { margin: 0; }
+.fav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.favc { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; text-align: left; cursor: pointer;
+  padding: 9px 12px 10px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 12px;
+  background: var(--surface2); color: var(--text); font: inherit; transition: transform .12s, border-color .12s, box-shadow .12s; }
+.favc:hover { transform: translateY(-1px); border-color: var(--accent); box-shadow: var(--shadow); }
+.favc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.favc .n { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.favc .n > span:first-child { font-size: 1.12rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.favc .st { font-size: .7rem; color: var(--text3); white-space: nowrap; }
+.favc small { color: var(--text2); font-size: .78rem; line-height: 1.3; overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.favc.on { border-color: color-mix(in srgb, var(--ok) 45%, transparent); border-left-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, var(--surface2)); }
+.favc.on .st { color: var(--ok); font-weight: 600; }
+body.rol-lectura .favc { pointer-events: none; }
 .irlp-row .grp { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .irlp-dtmf { flex-wrap: wrap; }
 .asl-favs { padding: 0 18px 14px; }

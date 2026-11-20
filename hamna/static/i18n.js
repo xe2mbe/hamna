@@ -197,6 +197,12 @@
     // Control del nodo IRLP
     "Control del nodo IRLP": "IRLP node control", "Nodo o reflector": "Node or reflector", "✖ Desconectar": "✖ Disconnect",
     "Favoritos": "Favorites", "Todavía no hay favoritos.": "No favorites yet.", "✏️ Editar": "✏️ Edit",
+    "Todavía no hay favoritos. Agrégalos con ✏️ Editar.": "No favorites yet. Add them with ✏️ Edit.", "Sin descripción": "No description",
+    "● Conectado": "● Connected", "Favoritos de ASL": "ASL favorites",
+    "Uno por línea: el número de nodo (3 a 7 dígitos; EchoLink 3xxxxxx) y su descripción. La primera vez se importaron de AllScan; los cambios se guardan en HAMNA. Aparecen en el Dashboard y en el bot de Telegram.":
+      "One per line: the node number (3 to 7 digits; EchoLink 3xxxxxx) and its description. The first time they were imported from AllScan; changes are saved in HAMNA. They show up in the Dashboard and in the Telegram bot.",
+    "Uno por línea: el nodo o reflector (4 a 6 dígitos) y su descripción. Aparecen en el Dashboard y en el bot de Telegram.":
+      "One per line: the node or reflector (4 to 6 digits) and its description. They show up in the Dashboard and in the Telegram bot.",
     "✅ Habilitado": "✅ Enabled", "⛔ Deshabilitado": "⛔ Disabled", "Habilitar": "Enable", "Deshabilitar": "Disable",
     "Desconexión por inactividad": "Inactivity disconnect", "Activada": "On",
     "IRLP se desconecta solo tras un rato sin actividad": "IRLP disconnects by itself after a while without activity",
@@ -684,7 +690,7 @@
   const M = (re, fn) => [re, fn];
   const P = [
     M(/^se detiene en (\S+)$/, (m, f) => "stops in " + f),
-    M(/^Conectar a (\d{4,6})$/, (m, n) => "Connect to " + n),
+    M(/^Conectar a (\d{3,7})$/, (m, n) => "Connect to " + n),
     M(/^Conectando a (\d{4,6})$/, (m, n) => "Connecting to " + n),
     M(/^Ya está conectado a (\d{4,6})$/, (m, n) => "Already connected to " + n),
     M(/^¿Conectar a (\d{4,6})\?$/, (m, n) => `Connect to ${n}?`),
