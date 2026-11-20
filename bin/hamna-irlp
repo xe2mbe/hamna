@@ -6,6 +6,8 @@
 #   hamna-irlp dtmf 73         → $SCRIPT/decode 73     (como si el código llegara por el radio)
 #   hamna-irlp timeout on|off  → crea o borra $LOCAL/timeout (desconexión por inactividad)
 #   hamna-irlp aux 1 on|off    → $BIN/aux1on | $BIN/aux1off
+#   hamna-irlp vcon on|off     → enciende o apaga IRLPvCON: su .htaccess pasa a «Require all denied»
+#                                (el original se guarda en .htaccess.hamna-antes y se restaura igual)
 # Solo acepta estos comandos y valores validados: no ejecuta nada más.
 set -u
 CMD="${1:-}"
@@ -17,6 +19,7 @@ case "$CMD" in
   end|enable|disable) [ $# -eq 1 ] || falla "Sobran argumentos" ;;
   dtmf) [[ $# -eq 2 && "$ARG" =~ ^[0-9A-Da-d*#]{1,16}$ ]] || falla "Código DTMF inválido: $ARG" ;;
   timeout) [[ $# -eq 2 && "$ARG" =~ ^(on|off)$ ]] || falla "Usa: timeout on|off" ;;
+  vcon) [[ $# -eq 2 && "$ARG" =~ ^(on|off)$ ]] || falla "Usa: vcon on|off" ;;
   aux) [[ $# -eq 3 && "$ARG" =~ ^[1-3]$ && "$ARG2" =~ ^(on|off)$ ]] || falla "Usa: aux 1-3 on|off" ;;
   *) [[ $# -eq 1 && "$CMD" =~ ^[0-9]{4,6}$ ]] || falla "Argumento inválido: $CMD" ;;
 esac
@@ -40,5 +43,21 @@ case "$CMD" in
   aux)
     [ -x "$BIN/aux$ARG$ARG2" ] || falla "Este nodo no tiene $BIN/aux$ARG$ARG2"
     exec "$BIN/aux$ARG$ARG2" ;;
+  vcon)
+    hay=0
+    for f in /var/www/html/irlpvcon/.htaccess /usr/lib/cgi-bin/irlpvcon/.htaccess; do
+      [ -d "$(dirname "$f")" ] || continue
+      hay=1
+      apagado=0; grep -qs "HAMNA-APAGADO" "$f" && apagado=1
+      if [ "$ARG" = off ] && [ $apagado = 0 ]; then
+        if [ -f "$f" ]; then cp -p "$f" "$f.hamna-antes"; else : > "$f.hamna-nada"; fi
+        printf '%s\n' "# HAMNA-APAGADO: IRLPvCON apagado desde HAMNA (Ajustes → Sistema)" "Require all denied" > "$f"
+      elif [ "$ARG" = on ] && [ $apagado = 1 ]; then
+        if [ -f "$f.hamna-antes" ]; then mv -f "$f.hamna-antes" "$f"; else rm -f "$f"; fi
+        rm -f "$f.hamna-nada"
+      fi
+    done
+    [ $hay = 1 ] || falla "IRLPvCON no está instalado en este nodo"
+    echo "vcon $ARG" ;;
   *) exec "$SCRIPT/decode" "$CMD" ;;
 esac

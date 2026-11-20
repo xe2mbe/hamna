@@ -302,6 +302,7 @@ main > .view { max-width: 1180px; margin: 0 auto; }
 .btn.fav.on { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 .irlp-row .grp { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .irlp-dtmf { flex-wrap: wrap; }
+.asl-favs { padding: 0 18px 14px; }
 .irlp-dtmf input { width: 150px; font-variant-numeric: tabular-nums; }
 .irlp-log { padding: 0 18px 18px; }
 .irlp-log pre { margin: 8px 0 0; max-height: 340px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--surface2);

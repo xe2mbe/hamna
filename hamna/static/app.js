@@ -133,7 +133,7 @@ async function start() {
   const q = new URLSearchParams(location.search).get("tab");
   let saved = ""; try { saved = localStorage.getItem("hamna.tab") || ""; } catch {}
   const pedida = location.hash.slice(1) || q || saved || "prog";
-  showTab(pedida === "sesiones" ? "conexiones" : pedida);   // nombre anterior
+  showTab(pedida);
 }
 
 /* ── Monitor del equipo ──────────────────────────────────────────────────────
@@ -256,8 +256,10 @@ $("#scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 try { if (localStorage.getItem("hamna.nav") === "collapsed") document.body.classList.add("nav-collapsed"); } catch {}
 const TABS = ["prog", "eventos", "secciones", "conexiones", "grab", "nodos", "cron", "ajustes"];
-window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
+const TAB_ALIAS = { dashboard: "conexiones", sesiones: "conexiones" };   // nombres anteriores o nuevos de la misma vista
+window.addEventListener("hashchange", () => { const t = TAB_ALIAS[location.hash.slice(1)] || location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
+  t = TAB_ALIAS[t] || t;
   if (!TABS.includes(t)) t = "prog";
   if (t === "ajustes" && S.me && S.me.rol !== "admin") t = "prog";
   if (t === "cron" && S.me && S.me.rol === "lectura") t = "prog";
@@ -1323,6 +1325,7 @@ async function loadAjustes() {
   renderPauseSounds();
   applyLogo(S.logo);
   showSet(S.setSec);
+  loadVcon(S.cfg.backend === "auto" || !S.cfg.backend ? info.detectado : S.cfg.backend);
 }
 function syncSetVis() {
   const f = $("#setForm");
@@ -2666,6 +2669,7 @@ function renderSesiones() {
   $("#sesConnect").classList.toggle("hidden", s.sistema !== "asl");
   $("#irlpCtl").classList.toggle("hidden", s.sistema !== "irlp");
   if (s.sistema === "irlp") renderIrlpCtl(s);
+  renderAslFavs(s);
   if (s.sistema !== "asl" && s.sistema !== "irlp") {
     $("#sesStats").innerHTML = "";
     $("#sesList").innerHTML = `<p class="empty">En modo simulado no hay enlaces que mostrar.</p>`;
@@ -2673,7 +2677,7 @@ function renderSesiones() {
     return;
   }
   const loc = s.local || {};
-  $("#sesSub").textContent = `Nodo ${s.nodo}${loc.indicativo ? " · " + loc.indicativo : ""} — nodos conectados en este momento`;
+  $("#sesSub").textContent = `Nodo ${s.nodo}${loc.indicativo ? " · " + loc.indicativo : ""} — el nodo y sus conexiones en este momento`;
   const estado = s.tx ? ["Transmitiendo", "tx"] : s.rx ? ["Recibiendo", "rx"] : ["En reposo", ""];
   const talking = s.enlaces.filter((e) => e.transmitiendo);
   const hm = s.hamna || {};
@@ -2858,6 +2862,66 @@ async function loadIrlpLog() {
 }
 $("#irlpLogWrap").addEventListener("toggle", (e) => { if (e.target.open) loadIrlpLog(); });
 $("#irlpLogReload").onclick = loadIrlpLog;
+
+/* Favoritos de AllScan en el Dashboard (ASL): los mismos que ofrece el bot */
+async function aslFavsLoad(nodo) {
+  S.aslFavs = S.aslFavs || {};
+  if (!S.aslFavs[nodo]) {
+    try { S.aslFavs[nodo] = (await api("api/sesiones/favoritos?nodo=" + encodeURIComponent(nodo))).favoritos; }
+    catch { S.aslFavs[nodo] = []; }
+  }
+  return S.aslFavs[nodo];
+}
+async function renderAslFavs(s) {
+  const box = $("#aslFavs");
+  const favs = s.sistema === "asl" ? await aslFavsLoad(s.nodo) : [];
+  box.classList.toggle("hidden", !favs.length);
+  const con = new Set((s.enlaces || []).map((e) => e.nodo));
+  setHtml(box, `<span class="lbl">Favoritos de AllScan</span>` + favs.map((f) => {
+    const on = con.has(f.nodo), base = f.nombre.endsWith(f.nodo) ? f.nombre.slice(0, -f.nodo.length).replace(/[\s,]+$/, "") : f.nombre;
+    return `<button type="button" class="btn sm fav ${on ? "on" : ""}" data-aslfav="${esc(f.nodo)}" title="${esc(f.nombre)}">${on ? "✅" : "⭐"} ${esc(base)}<b>${esc(f.nodo)}</b></button>`;
+  }).join(""));
+  $("#sesAll").classList.toggle("hidden", !(s.enlaces || []).length);
+}
+$("#aslFavs").onclick = async (e) => {
+  const b = e.target.closest("[data-aslfav]"); if (!b) return;
+  const n = b.dataset.aslfav, sel = $("#sesConnect").modo, modo = sel.value;
+  const modoTxt = sel.options[sel.selectedIndex].text.toLowerCase();
+  const ya = (S.ses.enlaces || []).some((x) => x.nodo === n);
+  if (!(await confirmBox(ya ? `El nodo ${n} ya está conectado. ¿Cambiarlo a ${modoTxt}?` : `¿Conectar el nodo ${n} como ${modoTxt}?`, "Conectar", false))) return;
+  try {
+    await run(() => api("api/sesiones/conectar", { method: "POST", json: { destino: n, modo, nodo: S.ses.nodo } }), "Conectando " + n);
+    setTimeout(loadSesiones, 2500);
+  } catch {}
+};
+$("#sesAll").onclick = async () => {
+  const n = (S.ses.enlaces || []).length;
+  if (!(await confirmBox(`¿Desconectar los ${n} enlaces del nodo ${S.ses.nodo}? También se sueltan los permanentes.`, "Desconectar todos"))) return;
+  try {
+    await run(() => api("api/sesiones/desconectar", { method: "POST", json: { nodo: S.ses.nodo } }), "Desconectando todos");
+    setTimeout(loadSesiones, 3000);
+  } catch {}
+};
+
+/* IRLPvCON: el admin lo apaga o enciende desde Ajustes → Sistema */
+async function loadVcon(be) {
+  const box = $("#vconBox");
+  if (be !== "irlp") { box.classList.add("hidden"); return; }
+  let st;
+  try { st = await api("api/irlp/vcon"); } catch { box.classList.add("hidden"); return; }
+  box.classList.toggle("hidden", !st.instalado);
+  if (!st.instalado) return;
+  box.innerHTML = `<div class="upd-head"><div><b>IRLPvCON</b> <span class="chip ${st.encendido ? "warn" : "ok"}">${st.encendido ? "Encendido" : "Apagado"}</span>
+      <div class="muted" style="font-size:.84rem">La consola web vieja de IRLP (/irlpvcon/). Su contraseña viaja sin cifrar y no tiene límite de intentos; el Dashboard de HAMNA hace lo mismo con tus usuarios. Al apagarla, Apache deja de servirla; al encenderla vuelve exactamente como estaba.</div></div>
+    <button type="button" class="btn sm ${st.encendido ? "danger-soft" : ""}" id="btnVcon" data-on="${st.encendido ? 0 : 1}">${st.encendido ? "Apagar IRLPvCON" : "Encender IRLPvCON"}</button></div>`;
+  $("#btnVcon").onclick = async (e) => {
+    const encender = e.target.dataset.on === "1";
+    if (!encender && !(await confirmBox("¿Apagar IRLPvCON? Nadie podrá abrir /irlpvcon/ hasta que lo vuelvas a encender aquí.", "Apagar"))) return;
+    try { await run(() => api("api/irlp/vcon", { method: "POST", json: { encender } }), encender ? "IRLPvCON encendido" : "IRLPvCON apagado"); } catch {}
+    loadVcon(be);
+  };
+}
+
 
 /* ── Usuarios, roles y sesiones ─────────────────────────────────────────────── */
 const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura", colaborador: "Colaborador" };

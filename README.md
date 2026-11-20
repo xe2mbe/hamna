@@ -36,7 +36,7 @@ The same words it was born with still go on the air: *«Les recordamos que esta 
 
 HAMNA Web runs **inside the node** (AllStarLink 3, HamVOIP, ASL2 or IRLP) and automates bulletins, nets and programs: from the browser you upload audio or type text, build events, schedule them, and the node transmits them by itself, with automatic pauses to respect the repeaters' timeout timers. No PC needs to be on.
 
-**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Connections](#connections) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
+**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
 
 ### Screenshots
 
@@ -48,7 +48,7 @@ Taken from the Radio Club Guadiana hub **299081** (the page is shown in Spanish;
 |---|---|
 | <img src="docs/img/pc-eventos.png?v=1.32.0" alt="Event detail with its sections in order"> | <img src="docs/img/pc-secciones.png?v=1.32.0" alt="Sections by event, including the ones renewed every broadcast"> |
 
-| Connections | Nodes panel (hub) |
+| Dashboard | Nodes panel (hub) |
 |---|---|
 | <img src="docs/img/pc-conexiones.png?v=1.32.0" alt="Connections: nodes linked right now"> | <img src="docs/img/pc-nodos.png?v=1.32.0" alt="Cards for the nodes reporting to the hub"> |
 
@@ -63,7 +63,7 @@ Taken from the Radio Club Guadiana hub **299081** (the page is shown in Spanish;
 - **Events built from sections**: audio files (MP3, WAV, OGG, FLAC…), text read with synthetic voice (Azure, Google Cloud, ElevenLabs, Piper or eSpeak, with automatic fallback between engines) and sounds, in any order you want.
 - **Scheduling**: once, daily, weekly or Monday to Friday, **in the program's time zone** (it follows that zone's daylight saving changes by itself), with **automatic numbering** of the broadcasts.
 - **Automatic transmission** through AllStarLink or IRLP, with an even audio level (-18 LUFS) and automatic pauses for the repeaters.
-- **Automatic connections** before and after each event, and a **Connections** tab to see and control the node's links live (on IRLP it replaces IRLPvCON: favorites, enable/disable, DTMF, AUX and log).
+- **Automatic connections** before and after each event, and a **Dashboard** tab to see and control the node live with your HAMNA user: on ASL its links and AllScan favorites, on IRLP it replaces IRLPvCON (favorites, enable/disable, DTMF, AUX and log).
 - **Listen to the node live** from the page (computer or phone), no plugins, on ASL and IRLP, and **record** what you hear (e.g. the check-ins) to MP3.
 - **Sync between nodes**: another HAMNA (for example, one rebroadcasting in another city) pulls the sections and audio of an event by itself, every week.
 - **Nodes panel** on the hub: one card for each of the club's HAMNA nodes with its status, health and last backup.
@@ -226,13 +226,15 @@ Each section longer than the "time before pausing" is cut into segments; each se
 
 Between segments the PTT is released for the pause, and the next segment can start a few seconds before the cut point (rewind).
 
-### Connections
+### Node dashboard
 
-**Connections tab**: the nodes linked right now, with callsign and city (from the AllStar directory), mode, direction, time connected, IP and who is talking; a summary with the nodes reachable across the whole network; and buttons to **connect** (transceive, monitor or local monitor) and **disconnect**. If Asterisk has several nodes, you choose which one to view. It refreshes every 4 s, only while the tab is open.
+**Dashboard tab** (it used to be called Connections): one place to control the node with your HAMNA user, without the AllScan or IRLPvCON passwords. On ASL: the nodes linked right now, with callsign and city (from the AllStar directory), mode, direction, time connected, IP and who is talking; a summary with the nodes reachable across the whole network; buttons to **connect** (transceive, monitor or local monitor) and **disconnect** one or **all** of them; and the **AllScan favorites** as buttons (they connect in the mode chosen next to the Connect button). If Asterisk has several nodes, you choose which one to view. It refreshes every 4 s, only while the tab is open.
 
 **On IRLP** the tab shows which node or reflector it's connected to (from `$LOCAL/active`), with the IP, port and audio format; the radio state (COS and PTT) and whether HAMNA is transmitting, read every 1.5 s; and the **other nodes on the same reflector**, according to status.irlp.net (that page updates every few minutes, so a connection of a few seconds may not show up).
 
-**IRLP node control** (same tab; replaces IRLPvCON): connect to a node or reflector by number or with one click on a **favorite**, and disconnect; **enable or disable** the node; turn the **inactivity disconnect** on or off (`$LOCAL/timeout`); switch the **AUX1–3** outputs; run a **DTMF code** as if it came in over the radio; and read the **IRLP log** (`/home/irlp/log/messages`). Operators and administrators use the controls, read-only users only see them, and only administrators edit the favorites. The first time, the IRLPvCON favorites are imported. Everything goes through `bin/hamna-irlp` as the `repeater` user, which only accepts those commands with validated values.
+**IRLP node control** (Dashboard tab; replaces IRLPvCON): connect to a node or reflector by number or with one click on a **favorite**, and disconnect; **enable or disable** the node; turn the **inactivity disconnect** on or off (`$LOCAL/timeout`); switch the **AUX1–3** outputs; run a **DTMF code** as if it came in over the radio; and read the **IRLP log** (`/home/irlp/log/messages`). Operators and administrators use the controls, read-only users only see them, and only administrators edit the favorites. The first time, the IRLPvCON favorites are imported. Everything goes through `bin/hamna-irlp` as the `repeater` user, which only accepts those commands with validated values.
+
+**Turning IRLPvCON off** (**Settings → System → IRLPvCON**, administrator, IRLP only): one button turns the old console off or back on. HAMNA replaces its `.htaccess` (in `/var/www/html/irlpvcon/` and `/usr/lib/cgi-bin/irlpvcon/`) with `Require all denied` and keeps the original as `.htaccess.hamna-antes`; turning it on restores it exactly. It doesn't need root or an Apache restart.
 
 **Automatic connections for an event** (Events → detail → bottom): connect or disconnect links before starting and when finished.
 
@@ -433,7 +435,7 @@ What's pushed to `main` without a tag isn't offered to the nodes. Converting aud
 | `tts.py` | Voices |
 | `auth.py` | Users, sessions and locks |
 | `tz.py` | Time zones |
-| `sessions.py` | Connections tab (`rpt xnode`; IRLP with status.irlp.net) |
+| `sessions.py` | Dashboard tab (`rpt xnode`; IRLP with status.irlp.net) |
 | `links.py` | Automatic connections |
 | `share.py` / `sync.py` | Sharing and syncing events between nodes |
 | `numeracion.py` | Automatic broadcast numbering |
@@ -481,7 +483,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Conexiones](#conexiones) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Capturas
 
@@ -493,7 +495,7 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 |---|---|
 | <img src="docs/img/pc-eventos.png?v=1.32.0" alt="Detalle de un evento con sus secciones en orden"> | <img src="docs/img/pc-secciones.png?v=1.32.0" alt="Secciones por evento, con las que se renuevan en cada emisión"> |
 
-| Conexiones | Panel de nodos (hub) |
+| Dashboard | Panel de nodos (hub) |
 |---|---|
 | <img src="docs/img/pc-conexiones.png?v=1.32.0" alt="Conexiones: nodos enlazados en este momento"> | <img src="docs/img/pc-nodos.png?v=1.32.0" alt="Tarjetas de los nodos que reportan al hub"> |
 
@@ -508,7 +510,7 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 - **Eventos armados con secciones**: audios (MP3, WAV, OGG, FLAC…), textos que se leen con voz sintética (Azure, Google Cloud, ElevenLabs, Piper o eSpeak, con respaldo automático entre motores) y sonidos, en el orden que quieras.
 - **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona), con **numeración automática** de las emisiones.
 - **Transmisión automática** por AllStarLink o IRLP, con nivel de audio parejo (-18 LUFS) y pausas automáticas para los repetidores.
-- **Conexiones automáticas** antes y después de cada evento, y una pestaña **Conexiones** para ver y controlar los enlaces del nodo en vivo (en IRLP reemplaza a IRLPvCON: favoritos, habilitar/deshabilitar, DTMF, AUX y bitácora).
+- **Conexiones automáticas** antes y después de cada evento, y una pestaña **Dashboard** para ver y controlar el nodo en vivo con tu usuario de HAMNA: en ASL sus enlaces y los favoritos de AllScan, en IRLP reemplaza a IRLPvCON (favoritos, habilitar/deshabilitar, DTMF, AUX y bitácora).
 - **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos, en ASL e IRLP, y **grabar** lo que se escucha (p. ej. la toma de reportes) en MP3.
 - **Sincronización entre nodos**: otro HAMNA (por ejemplo, el que retransmite en otra ciudad) se trae solo las secciones y audios de un evento, cada semana.
 - **Panel de nodos** en el hub: una tarjeta por cada HAMNA del club con su estado, salud y último respaldo.
@@ -671,13 +673,15 @@ Cada sección más larga que el "tiempo antes de pausar" se corta en tramos; cad
 
 Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empezar unos segundos antes del corte (retroceso).
 
-### Conexiones
+### Dashboard del nodo
 
-**Pestaña Conexiones**: los nodos enlazados en este momento, con indicativo y ciudad (del directorio de AllStar), modo, dirección, tiempo conectado, IP y quién está hablando; un resumen con los nodos alcanzables en toda la red; y botones para **conectar** (transceptor, monitor o monitor local) y **desconectar**. Si el Asterisk tiene varios nodos, se elige cuál ver. Se actualiza cada 4 s solo con la pestaña abierta.
+**Pestaña Dashboard** (antes se llamaba Conexiones): un solo lugar para controlar el nodo con tu usuario de HAMNA, sin las claves de AllScan ni de IRLPvCON. En ASL: los nodos enlazados en este momento, con indicativo y ciudad (del directorio de AllStar), modo, dirección, tiempo conectado, IP y quién está hablando; un resumen con los nodos alcanzables en toda la red; botones para **conectar** (transceptor, monitor o monitor local) y **desconectar** uno o **todos**; y los **favoritos de AllScan** como botones (conectan en el modo elegido junto al botón Conectar). Si el Asterisk tiene varios nodos, se elige cuál ver. Se actualiza cada 4 s solo con la pestaña abierta.
 
 **En IRLP** la pestaña muestra a qué nodo o reflector está conectado (de `$LOCAL/active`), con la IP, el puerto y el formato de audio; el estado del radio (COS y PTT) y si HAMNA está transmitiendo, leídos cada 1.5 s; y los **otros nodos del mismo reflector**, según status.irlp.net (esa página se actualiza cada pocos minutos, así que una conexión de unos segundos no alcanza a aparecer).
 
-**Control del nodo IRLP** (en la misma pestaña; reemplaza a IRLPvCON): conectar a un nodo o reflector escribiendo el número o con un clic en un **favorito**, y desconectar; **habilitar o deshabilitar** el nodo; activar o desactivar la **desconexión por inactividad** (`$LOCAL/timeout`); encender o apagar las salidas **AUX1–3**; ejecutar un **código DTMF** como si llegara por el radio; y ver la **bitácora de IRLP** (`/home/irlp/log/messages`). Los controles son para operador y administrador, solo lectura únicamente los ve, y los favoritos los edita el administrador. La primera vez se importan los favoritos de IRLPvCON. Todo pasa por `bin/hamna-irlp` como el usuario `repeater`, que solo acepta esos comandos con valores validados.
+**Control del nodo IRLP** (pestaña Dashboard; reemplaza a IRLPvCON): conectar a un nodo o reflector escribiendo el número o con un clic en un **favorito**, y desconectar; **habilitar o deshabilitar** el nodo; activar o desactivar la **desconexión por inactividad** (`$LOCAL/timeout`); encender o apagar las salidas **AUX1–3**; ejecutar un **código DTMF** como si llegara por el radio; y ver la **bitácora de IRLP** (`/home/irlp/log/messages`). Los controles son para operador y administrador, solo lectura únicamente los ve, y los favoritos los edita el administrador. La primera vez se importan los favoritos de IRLPvCON. Todo pasa por `bin/hamna-irlp` como el usuario `repeater`, que solo acepta esos comandos con valores validados.
+
+**Apagar IRLPvCON** (**Ajustes → Sistema → IRLPvCON**, administrador, solo en IRLP): un botón apaga la consola vieja o la vuelve a encender. HAMNA cambia su `.htaccess` (en `/var/www/html/irlpvcon/` y `/usr/lib/cgi-bin/irlpvcon/`) por `Require all denied` y guarda el original como `.htaccess.hamna-antes`; al encender lo restaura exacto. No necesita root ni reiniciar Apache.
 
 **Conexiones automáticas de un evento** (Eventos → detalle → abajo): conectar o desconectar enlaces antes de empezar y al terminar.
 
@@ -878,7 +882,7 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `tts.py` | Voces |
 | `auth.py` | Usuarios, sesiones y bloqueos |
 | `tz.py` | Zonas horarias |
-| `sessions.py` | Pestaña Conexiones (`rpt xnode`; IRLP con status.irlp.net) |
+| `sessions.py` | Pestaña Dashboard (`rpt xnode`; IRLP con status.irlp.net) |
 | `links.py` | Conexiones automáticas |
 | `share.py` / `sync.py` | Compartir y sincronizar eventos entre nodos |
 | `numeracion.py` | Numeración automática de emisiones |

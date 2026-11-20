@@ -122,3 +122,29 @@ def estado(cfg):
     return {"habilitado": st.get("habilitado"), "timeout": st.get("timeout"), "activo": st.get("activo") or "",
             "favoritos": favoritos(),
             "aux": os.path.isfile("/home/irlp/bin/aux1on")}
+
+
+# ── IRLPvCON: encenderlo o apagarlo desde Ajustes ───────────────────────────
+VCON_DIR = "/var/www/html/irlpvcon"
+VCON_HTACCESS = (VCON_DIR + "/.htaccess", "/usr/lib/cgi-bin/irlpvcon/.htaccess")
+
+
+def vcon_estado():
+    """{instalado, encendido}. Apagado = su .htaccess lo puso HAMNA en «Require all denied»."""
+    if not os.path.isdir(VCON_DIR):
+        return {"instalado": False, "encendido": False}
+    apagado = False
+    for f in VCON_HTACCESS:
+        try:
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                apagado = apagado or "HAMNA-APAGADO" in fh.read()
+        except OSError:
+            pass
+    return {"instalado": True, "encendido": not apagado}
+
+
+def vcon(encender):
+    if not vcon_estado()["instalado"]:
+        raise ValueError("IRLPvCON no está instalado en este nodo")
+    links.irlp_helper("vcon", "on" if encender else "off")
+    return vcon_estado()

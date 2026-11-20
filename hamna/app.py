@@ -1493,6 +1493,33 @@ def irlp_favoritos(req):
     return ok(favoritos=favs)
 
 
+@app.route("/api/irlp/vcon", rol="admin")
+def irlp_vcon_estado(req):
+    from . import irlpctl
+    _irlp_requerido(settings.load())
+    return jsonr(irlpctl.vcon_estado())
+
+
+@app.route("/api/irlp/vcon", ("POST",), rol="admin")
+def irlp_vcon(req):
+    from . import irlpctl
+    _irlp_requerido(settings.load())
+    encender = bool(req.json().get("encender"))
+    st = irlpctl.vcon(encender)
+    log.info("%s %s IRLPvCON", req.user["usuario"], "encendió" if encender else "apagó")
+    return ok(**st)
+
+
+@app.route("/api/sesiones/favoritos")
+def sesiones_favoritos(req):
+    """Favoritos de AllScan del nodo ASL (los mismos que ofrece el bot)."""
+    from . import bot
+    nodo = str(req.query.get("nodo") or settings.get("node") or "")
+    if not re.match(r"^\d{3,7}$", nodo):
+        return jsonr({"favoritos": []})
+    return jsonr({"favoritos": [{"nombre": et, "nodo": n} for et, n in bot._favoritos(nodo)]})
+
+
 @app.route("/api/irlp/<accion>", ("POST",))
 def irlp_accion(req, accion):
     from . import irlpctl
