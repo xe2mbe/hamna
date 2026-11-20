@@ -1710,7 +1710,7 @@ def _pantalla_con(cual, user, arg):
     except Exception as e:
         return "❌ No pude leer las conexiones: {}".format(notify.esc(e)), [abajo]
     if kind == "irlp":
-        return _pantalla_irlp(cual, st, op, abajo)
+        return _pantalla_irlp(cual, st, op, abajo, arg)
 
     enlaces = sorted(st.get("enlaces") or [], key=lambda e: e["nodo"])
     por_nodo = {e["nodo"]: e for e in enlaces}
@@ -1776,8 +1776,13 @@ def _pantalla_con(cual, user, arg):
     return "\n".join(t), filas
 
 
-def _pantalla_irlp(cual, st, op, abajo):
+def _pantalla_irlp(cual, st, op, abajo, arg=""):
     activo = st.get("activo") or ""
+    if cual == "condq" and arg == "dis":
+        return ("⛔ <b>¿Deshabilitar el nodo IRLP?</b>\nDeja de aceptar conexiones y códigos DTMF del radio "
+                "hasta que lo habilites."), [[("✅ Sí, deshabilitar", "m:condx:dis")], [("Cancelar", "m:con")]]
+    if cual == "condq" and arg == "ena":
+        return "✅ <b>¿Habilitar el nodo IRLP?</b>", [[("✅ Sí, habilitar", "m:condx:ena")], [("Cancelar", "m:con")]]
     if cual == "condq":
         if not activo:
             return "El nodo no está conectado a nada.", [abajo]
@@ -1793,12 +1798,16 @@ def _pantalla_irlp(cual, st, op, abajo):
     estado = [x for x, si in (("📥 recibiendo (COS)", st.get("cos")), ("📤 transmitiendo (PTT)", st.get("ptt"))) if si]
     if estado:
         t.append(" · ".join(estado))
+    habilitado = st.get("habilitado") is not False
+    if not habilitado:
+        t.append("⛔ <b>Nodo deshabilitado</b>: no acepta conexiones ni códigos del radio.")
     filas = []
     if op:
         fila = [("➕ Conectar", "m:conn")]
         if activo:
             fila.append(("✖ Desconectar", "m:condq:end"))
         filas.append(fila)
+        filas.append([("⛔ Deshabilitar nodo", "m:condq:dis") if habilitado else ("✅ Habilitar nodo", "m:condq:ena")])
     filas.append(abajo)
     return "\n".join(t), filas
 
@@ -1817,7 +1826,11 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         avisa("")
         pide = "✍ Escríbeme el número del {}.".format(
             "nodo o reflector IRLP (por ejemplo 9990)" if kind == "irlp" else "nodo ASL (por ejemplo 59624)")
-        favs = _favoritos(_cfg.get("node") or "") if kind == "asl" else []
+        if kind == "asl":
+            favs = _favoritos(_cfg.get("node") or "")
+        else:
+            from . import irlpctl
+            favs = [(f.get("nombre") or f["nodo"], f["nodo"]) for f in irlpctl.favoritos()]
         if not favs:
             return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n" + pide, [[("Cancelar", "m:conx")]])
         from . import sessions
@@ -1825,6 +1838,9 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
             conectados = {e["nodo"] for e in sessions.status(_cfg).get("enlaces") or []}
         except Exception:
             conectados = set()
+        if kind == "irlp":                          # «I- 0077,Experimental» → 0077
+            import re
+            conectados = {n for _et, n in favs for c in conectados if re.sub(r"\D", "", c)[-4:] == n[-4:]}
         npag = (len(favs) + FAV_PAG - 1) // FAV_PAG
         pag = max(0, min(_ints(arg)[0], npag - 1))
         def boton(et, n):                           # el número primero: las etiquetas largas se cortan
@@ -1839,14 +1855,21 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         if nav:
             filas.append(nav)
         filas.append([("Cancelar", "m:conx")])
-        return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n⭐ Elige uno de tus favoritos de AllScan{}, o {}\n"
-                                         "✅ = ya está conectado (tócalo para cambiarle el modo).".format(
+        return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n⭐ Elige uno de tus favoritos{}{}, o {}\n"
+                                         "✅ = ya está conectado{}.".format(
+                                             " de AllScan" if kind == "asl" else "",
                                              " (página {} de {})".format(pag + 1, npag) if npag > 1 else "",
-                                             pide[2].lower() + pide[3:]), filas)
+                                             pide[2].lower() + pide[3:],
+                                             " (tócalo para cambiarle el modo)" if kind == "asl" else ""), filas)
     if cual == "conf":                              # eligió un favorito
         if not arg.isdigit():
             return avisa("Nodo inválido.", True)
         _espera_quitar(tg)
+        if kind == "irlp":                          # IRLP no tiene modos: conecta directo
+            avisa("Conectando {}…".format(arg))
+            _editar(token, chat, mid, "⏳ Conectando {}…".format(notify.esc(arg)), None)
+            return threading.Thread(target=_con_hacer, args=(token, chat, mid, user, "conectar", arg),
+                                    daemon=True).start()
         avisa("")
         texto, botones = _pantalla_modo(arg, user)
         return _editar(token, chat, mid, texto, botones)
@@ -1857,8 +1880,9 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         return threading.Thread(target=_con_hacer, args=(token, chat, mid, user, "conectar", destino, modo or "transceptor"),
                                 daemon=True).start()
     if cual == "condx":
-        avisa("Desconectando…")
-        _editar(token, chat, mid, "⏳ Desconectando…", None)
+        que = {"dis": "Deshabilitando el nodo…", "ena": "Habilitando el nodo…"}.get(arg, "Desconectando…")
+        avisa(que)
+        _editar(token, chat, mid, "⏳ " + que, None)
         return threading.Thread(target=_con_hacer, args=(token, chat, mid, user, "desconectar", arg), daemon=True).start()
     avisa("Botón desconocido")
 
@@ -1872,6 +1896,10 @@ def _con_hacer(token, chat, mid, user, accion, destino, modo="transceptor"):
             cmd = sessions.action(cfg, "conectar", destino, modo if kind == "asl" else "transceptor")
             que = "🔗 Conecté el nodo {} como {}".format(destino, links.ASL_MODO_NOMBRE.get(modo, modo)) if kind == "asl" \
                 else "🔗 Conecté a {}".format(destino)
+        elif kind == "irlp" and destino in ("dis", "ena"):
+            from . import irlpctl
+            cmd = irlpctl.accion("deshabilitar" if destino == "dis" else "habilitar")
+            que = "⛔ Deshabilité el nodo IRLP" if destino == "dis" else "✅ Habilité el nodo IRLP"
         elif destino in ("all", "end", ""):
             cmd = sessions.action(cfg, "desconectar_todo")
             que = "⛔ Desconecté todos los enlaces" if kind == "asl" else "✖ Desconecté IRLP"

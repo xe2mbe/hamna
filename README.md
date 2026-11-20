@@ -63,7 +63,7 @@ Taken from the Radio Club Guadiana hub **299081** (the page is shown in Spanish;
 - **Events built from sections**: audio files (MP3, WAV, OGG, FLAC…), text read with synthetic voice (Azure, Google Cloud, ElevenLabs, Piper or eSpeak, with automatic fallback between engines) and sounds, in any order you want.
 - **Scheduling**: once, daily, weekly or Monday to Friday, **in the program's time zone** (it follows that zone's daylight saving changes by itself), with **automatic numbering** of the broadcasts.
 - **Automatic transmission** through AllStarLink or IRLP, with an even audio level (-18 LUFS) and automatic pauses for the repeaters.
-- **Automatic connections** before and after each event, and a **Connections** tab to see and control the node's links live.
+- **Automatic connections** before and after each event, and a **Connections** tab to see and control the node's links live (on IRLP it replaces IRLPvCON: favorites, enable/disable, DTMF, AUX and log).
 - **Listen to the node live** from the page (computer or phone), no plugins, on ASL and IRLP, and **record** what you hear (e.g. the check-ins) to MP3.
 - **Sync between nodes**: another HAMNA (for example, one rebroadcasting in another city) pulls the sections and audio of an event by itself, every week.
 - **Nodes panel** on the hub: one card for each of the club's HAMNA nodes with its status, health and last backup.
@@ -232,6 +232,8 @@ Between segments the PTT is released for the pause, and the next segment can sta
 
 **On IRLP** the tab shows which node or reflector it's connected to (from `$LOCAL/active`), with the IP, port and audio format; the radio state (COS and PTT) and whether HAMNA is transmitting, read every 1.5 s; and the **other nodes on the same reflector**, according to status.irlp.net (that page updates every few minutes, so a connection of a few seconds may not show up).
 
+**IRLP node control** (same tab; replaces IRLPvCON): connect to a node or reflector by number or with one click on a **favorite**, and disconnect; **enable or disable** the node; turn the **inactivity disconnect** on or off (`$LOCAL/timeout`); switch the **AUX1–3** outputs; run a **DTMF code** as if it came in over the radio; and read the **IRLP log** (`/home/irlp/log/messages`). Operators and administrators use the controls, read-only users only see them, and only administrators edit the favorites. The first time, the IRLPvCON favorites are imported. Everything goes through `bin/hamna-irlp` as the `repeater` user, which only accepts those commands with validated values.
+
 **Automatic connections for an event** (Events → detail → bottom): connect or disconnect links before starting and when finished.
 
 | System | Connect | Disconnect |
@@ -319,7 +321,7 @@ With **"The bot answers commands"** turned on (Settings → Alerts) (on only one
 - Buttons on alerts: "next section" and "details" when starting; "transmit now" and "skip this time" on the next-event alert.
 - **Contributors**: send their audio or voice note (up to 20 MB) and choose the section; they get a reminder days before if they haven't uploaded it, and a message when their section went on the air. Administrators can replace any section this way.
 - **🤝 Colaboración** (in the menu): the events, soonest first, and in each one its sections in order, with duration and whether they were updated. Tapping a section lets you send new audio, change the text of a text-to-speech section (or generate the voice again), listen to it or go back to the previous version. Contributors see the events they appear in and edit only their own sections. Operators and administrators edit any section, can **add a new section** at the end of the event (audio or text-to-speech), **move it** (↕ up, down, to the start or to the end) and **delete it** (remove it from that event only, or delete it completely with its audio).
-- **🔗 Conexiones** (in Nodes): the node's links with their mode and time connected; connect as transceive, monitor or local monitor, choosing from the **AllScan favorites** or typing the number; change the mode, disconnect one or all. On IRLP: connect to a node or reflector and disconnect.
+- **🔗 Conexiones** (in Nodes): the node's links with their mode and time connected; connect as transceive, monitor or local monitor, choosing from the **AllScan favorites** or typing the number; change the mode, disconnect one or all. On IRLP: connect to a node or reflector (with your IRLP favorites), disconnect, and enable or disable the node.
 - Telegram's ☰ menu only lists `/menu` and `/start`; everything else is in the menu buttons (the commands still work if typed).
 - **Backup via Telegram**: the automatic backup (without audio, up to 49 MB) is sent privately to linked administrators.
 
@@ -506,7 +508,7 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 - **Eventos armados con secciones**: audios (MP3, WAV, OGG, FLAC…), textos que se leen con voz sintética (Azure, Google Cloud, ElevenLabs, Piper o eSpeak, con respaldo automático entre motores) y sonidos, en el orden que quieras.
 - **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona), con **numeración automática** de las emisiones.
 - **Transmisión automática** por AllStarLink o IRLP, con nivel de audio parejo (-18 LUFS) y pausas automáticas para los repetidores.
-- **Conexiones automáticas** antes y después de cada evento, y una pestaña **Conexiones** para ver y controlar los enlaces del nodo en vivo.
+- **Conexiones automáticas** antes y después de cada evento, y una pestaña **Conexiones** para ver y controlar los enlaces del nodo en vivo (en IRLP reemplaza a IRLPvCON: favoritos, habilitar/deshabilitar, DTMF, AUX y bitácora).
 - **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos, en ASL e IRLP, y **grabar** lo que se escucha (p. ej. la toma de reportes) en MP3.
 - **Sincronización entre nodos**: otro HAMNA (por ejemplo, el que retransmite en otra ciudad) se trae solo las secciones y audios de un evento, cada semana.
 - **Panel de nodos** en el hub: una tarjeta por cada HAMNA del club con su estado, salud y último respaldo.
@@ -675,6 +677,8 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 **En IRLP** la pestaña muestra a qué nodo o reflector está conectado (de `$LOCAL/active`), con la IP, el puerto y el formato de audio; el estado del radio (COS y PTT) y si HAMNA está transmitiendo, leídos cada 1.5 s; y los **otros nodos del mismo reflector**, según status.irlp.net (esa página se actualiza cada pocos minutos, así que una conexión de unos segundos no alcanza a aparecer).
 
+**Control del nodo IRLP** (en la misma pestaña; reemplaza a IRLPvCON): conectar a un nodo o reflector escribiendo el número o con un clic en un **favorito**, y desconectar; **habilitar o deshabilitar** el nodo; activar o desactivar la **desconexión por inactividad** (`$LOCAL/timeout`); encender o apagar las salidas **AUX1–3**; ejecutar un **código DTMF** como si llegara por el radio; y ver la **bitácora de IRLP** (`/home/irlp/log/messages`). Los controles son para operador y administrador, solo lectura únicamente los ve, y los favoritos los edita el administrador. La primera vez se importan los favoritos de IRLPvCON. Todo pasa por `bin/hamna-irlp` como el usuario `repeater`, que solo acepta esos comandos con valores validados.
+
 **Conexiones automáticas de un evento** (Eventos → detalle → abajo): conectar o desconectar enlaces antes de empezar y al terminar.
 
 | Sistema | Conectar | Desconectar |
@@ -763,7 +767,7 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 - **Colaboradores**: mandan su audio o nota de voz (hasta 20 MB) y eligen la sección; reciben recordatorio días antes si no lo han subido y un mensaje cuando su sección salió al aire. Los administradores pueden cambiar así cualquier sección.
 - **🤝 Colaboración** (en el menú): los eventos, primero los que salen pronto, y en cada uno sus secciones en orden, con duración y si ya se actualizaron. Al tocar una sección se puede mandar el audio nuevo, cambiar el texto de una de texto a voz (o generar la voz otra vez), escucharla o regresar a la versión anterior. El colaborador ve los eventos donde sale y edita solo sus secciones. El operador y el administrador editan cualquiera, pueden **agregar una sección nueva** al final del evento (de audio o de texto a voz), **cambiarla de lugar** (↕ Mover de lugar: subir, bajar, al inicio o al final) y **borrarla** (quitarla solo de ese evento o borrarla por completo con su audio).
 - El menú ☰ de Telegram solo trae `/menu` y `/start`; todo lo demás está en los botones del menú (los comandos siguen funcionando si se escriben).
-- **🔗 Conexiones** (en Nodos): los enlaces del nodo con su modo y tiempo conectado; conectar como transceptor, monitor o monitor local eligiendo de los **favoritos de AllScan** o escribiendo el número; cambiar el modo, desconectar uno o todos. En IRLP: conectar a un nodo o reflector y desconectar.
+- **🔗 Conexiones** (en Nodos): los enlaces del nodo con su modo y tiempo conectado; conectar como transceptor, monitor o monitor local eligiendo de los **favoritos de AllScan** o escribiendo el número; cambiar el modo, desconectar uno o todos. En IRLP: conectar a un nodo o reflector (con tus favoritos de IRLP), desconectar, y habilitar o deshabilitar el nodo.
 - **Respaldo por Telegram**: el respaldo automático (sin audios, hasta 49 MB) les llega en privado a los administradores vinculados.
 
 ### Usuarios y seguridad

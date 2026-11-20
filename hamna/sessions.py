@@ -272,7 +272,11 @@ def irlp_status(cfg):
             detalle = "{}:{} · {}".format(t["ip"], t["port"], t["codec"])
     cos, ptt = _irlp_lines(env)
     red, red_info = irlp_reflector_nodes(activo, cfg.get("node") or "") if activo else ([], {})
+    # Habilitado (scripts/enable crea local/enable) y desconexión por inactividad (local/timeout)
+    habilitado = os.path.exists(os.path.join(local, "enable"))
+    timeout = os.path.exists(os.path.join(local, "timeout"))
     return {"sistema": "irlp", "nodo": cfg.get("node") or "", "activo": activo, "detalle": detalle,
+            "habilitado": habilitado, "timeout": timeout,
             "cos": cos, "ptt": ptt, "rx": bool(cos), "tx": bool(ptt), "red_info": red_info,
             "enlaces": [{"nodo": activo, "modo": "transceptor"}] if activo else [], "red": red}
 

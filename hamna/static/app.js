@@ -2664,6 +2664,8 @@ function renderSesiones() {
     sel.classList.remove("hidden");
   } else sel.classList.add("hidden");
   $("#sesConnect").classList.toggle("hidden", s.sistema !== "asl");
+  $("#irlpCtl").classList.toggle("hidden", s.sistema !== "irlp");
+  if (s.sistema === "irlp") renderIrlpCtl(s);
   if (s.sistema !== "asl" && s.sistema !== "irlp") {
     $("#sesStats").innerHTML = "";
     $("#sesList").innerHTML = `<p class="empty">En modo simulado no hay enlaces que mostrar.</p>`;
@@ -2746,6 +2748,116 @@ $("#sesConnect").onsubmit = async (e) => {
     setTimeout(loadSesiones, 2500);
   } catch {} finally { busy(b, false); }
 };
+
+/* ── Control del nodo IRLP (lo que hacía IRLPvCON) ─────────────────────────── */
+async function irlpInfo(force) {
+  if (!S.irlp || force) { try { S.irlp = await api("api/irlp"); } catch { S.irlp = { favoritos: [] }; } }
+  return S.irlp;
+}
+const irlpEn = (activo, nodo) => { const d = String(activo || "").replace(/\D/g, ""); return !!d && d.slice(-4) === nodo.slice(-4); };
+function setHtml(el, html) { if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; } }
+async function renderIrlpCtl(s) {
+  const info = await irlpInfo();
+  $("#irlpEnd").classList.toggle("hidden", !s.activo);
+  const favs = info.favoritos || [];
+  setHtml($("#irlpFavs"), `<span class="lbl">Favoritos</span>` + (favs.length ? favs.map((f) => {
+    const on = irlpEn(s.activo, f.nodo);
+    return `<button type="button" class="btn sm fav ${on ? "on" : ""}" data-irlpfav="${esc(f.nodo)}" title="${on ? "Conectado" : "Conectar a " + esc(f.nodo)}">${on ? "✅" : "⭐"} ${esc(f.nombre || "")}<b>${esc(f.nodo)}</b></button>`;
+  }).join("") : `<span class="muted">Todavía no hay favoritos.</span>`) +
+    (isAdmin() ? `<button type="button" class="btn sm ghost" id="irlpFavEdit">✏️ Editar</button>` : ""));
+  const hab = s.habilitado !== false;
+  const aux = info.aux ? [1, 2, 3].map((n) => `<span class="grp"><span class="lbl">AUX${n}</span>
+      <button type="button" class="btn sm" data-irlpaux="${n}on">Encender</button><button type="button" class="btn sm" data-irlpaux="${n}off">Apagar</button></span>`).join("") : "";
+  setHtml($("#irlpRow"), `
+    <span class="grp"><span class="chip ${hab ? "ok" : "warn"}">${hab ? "✅ Habilitado" : "⛔ Deshabilitado"}</span>
+      <button type="button" class="btn sm ${hab ? "danger-soft" : "primary"}" data-irlpacc="${hab ? "deshabilitar" : "habilitar"}">${hab ? "Deshabilitar" : "Habilitar"}</button></span>
+    <span class="grp" title="IRLP se desconecta solo tras un rato sin actividad"><span class="lbl">Desconexión por inactividad</span>
+      <span class="chip ${s.timeout ? "ok" : ""}">${s.timeout ? "Activada" : "Desactivada"}</span>
+      <button type="button" class="btn sm" data-irlptout="${s.timeout ? "off" : "on"}">${s.timeout ? "Desactivar" : "Activar"}</button></span>${aux}`);
+}
+async function irlpHacer(accion, valor, msg) {
+  await run(() => api("api/irlp/" + accion, { method: "POST", json: { valor } }), msg);
+  setTimeout(loadSesiones, 1200);
+}
+async function irlpConectar(n) {
+  await run(() => api("api/sesiones/conectar", { method: "POST", json: { destino: n } }), "Conectando a " + n);
+  setTimeout(loadSesiones, 3000);
+}
+$("#irlpConnect").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target, n = f.destino.value.trim(), b = $("button[type=submit]", f);
+  const s = S.ses || {};
+  if (s.activo && !(await confirmBox(`El nodo está conectado a ${s.activo}. ¿Conectar a ${n}?`, "Conectar", false))) return;
+  busy(b, true, "Conectando…");
+  try { await irlpConectar(n); f.destino.value = ""; } catch {} finally { busy(b, false); }
+};
+$("#irlpEnd").onclick = async () => {
+  const s = S.ses || {};
+  if (!(await confirmBox(`¿Desconectar de ${s.activo || "IRLP"}?`, "Desconectar"))) return;
+  try {
+    await run(() => api("api/sesiones/desconectar", { method: "POST", json: {} }), "Desconectando");
+    setTimeout(loadSesiones, 2000);
+  } catch {}
+};
+$("#irlpDtmf").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target, c = f.codigo.value.trim().toUpperCase();
+  if (!(await confirmBox(`¿Ejecutar el código DTMF ${c}? IRLP lo toma como si llegara por el radio.`, "Ejecutar", false))) return;
+  try { await irlpHacer("dtmf", c, "Código " + c + " enviado"); f.codigo.value = ""; } catch {}
+};
+$("#irlpCtl").addEventListener("click", async (e) => {
+  const fav = e.target.closest("[data-irlpfav]"), acc = e.target.closest("[data-irlpacc]");
+  const tout = e.target.closest("[data-irlptout]"), aux = e.target.closest("[data-irlpaux]");
+  try {
+    if (fav) {
+      const n = fav.dataset.irlpfav, s = S.ses || {};
+      if (irlpEn(s.activo, n)) return toast("Ya está conectado a " + n);
+      if (!(await confirmBox(s.activo ? `El nodo está conectado a ${s.activo}. ¿Conectar a ${n}?` : `¿Conectar a ${n}?`, "Conectar", false))) return;
+      await irlpConectar(n);
+    } else if (acc) {
+      const a = acc.dataset.irlpacc;
+      if (a === "deshabilitar" && !(await confirmBox("¿Deshabilitar el nodo? IRLP deja de aceptar conexiones y códigos DTMF del radio hasta que lo habilites.", "Deshabilitar"))) return;
+      await irlpHacer(a, "", a === "habilitar" ? "Nodo habilitado" : "Nodo deshabilitado");
+    } else if (tout) {
+      const on = tout.dataset.irlptout === "on";
+      await irlpHacer("timeout", tout.dataset.irlptout, on ? "Desconexión por inactividad activada" : "Desconexión por inactividad desactivada");
+    } else if (aux) {
+      const v = aux.dataset.irlpaux;
+      await irlpHacer("aux", v, "AUX" + v[0] + (v.endsWith("on") ? " encendida" : " apagada"));
+    } else if (e.target.closest("#irlpFavEdit")) {
+      irlpFavEditor();
+    }
+  } catch {}
+});
+function irlpFavEditor() {
+  const favs = (S.irlp && S.irlp.favoritos) || [];
+  openModal("Favoritos de IRLP", `<form id="favForm" autocomplete="off">
+    <p class="muted" style="margin-top:0">Uno por línea: el nodo o reflector (4 a 6 dígitos) y su nombre. Aparecen aquí y en el bot de Telegram.</p>
+    <textarea name="lista" rows="10" style="width:100%;font-variant-numeric:tabular-nums" placeholder="9050 Reflector 9050">${esc(favs.map((f) => f.nodo + " " + (f.nombre || "")).join("\n"))}</textarea>
+    <div class="modal-actions"><button type="button" class="btn" id="favNo">Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+  $("#favNo").onclick = closeModal;
+  $("#favForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const lista = [], malas = [];
+    e.target.lista.value.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => {
+      const m = l.match(/^(\d{4,6})\s*[-·,:]?\s*(.*)$/);
+      if (m) lista.push({ nodo: m[1], nombre: m[2].trim() }); else malas.push(l);
+    });
+    if (malas.length) return toast("Líneas sin número de nodo: " + malas.slice(0, 3).join(" · "), true);
+    try {
+      const r = await run(() => api("api/irlp/favoritos", { method: "PUT", json: { favoritos: lista } }), "Favoritos guardados");
+      S.irlp.favoritos = r.favoritos; closeModal();
+      if (S.ses) renderIrlpCtl(S.ses);
+    } catch {}
+  };
+}
+async function loadIrlpLog() {
+  const pre = $("#irlpLog");
+  try { const r = await api("api/irlp/bitacora?n=100"); pre.textContent = r.lineas.slice().reverse().join("\n") || "(vacía)"; }
+  catch (e) { pre.textContent = e.message; }
+}
+$("#irlpLogWrap").addEventListener("toggle", (e) => { if (e.target.open) loadIrlpLog(); });
+$("#irlpLogReload").onclick = loadIrlpLog;
 
 /* ── Usuarios, roles y sesiones ─────────────────────────────────────────────── */
 const ROL_TXT = { admin: "Administrador", operador: "Operador", lectura: "Solo lectura", colaborador: "Colaborador" };

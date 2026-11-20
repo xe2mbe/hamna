@@ -159,25 +159,32 @@ def _ctl_owner():
     return ""
 
 
-def _irlp(a):
+def irlp_helper(*args):
+    """Corre bin/hamna-irlp como repeater (él valida los argumentos). Devuelve lo que imprimió."""
     if not IRLP_HELPER.is_file():
         raise RuntimeError("Falta el ayudante de IRLP; vuelve a ejecutar install.sh")
-    arg = a["destino"] if a["accion"] == "conectar" else "end"
+    args = [str(x) for x in args]
     try:
         import pwd                       # no existe en Windows
         me = pwd.getpwuid(os.geteuid()).pw_name
     except (ImportError, KeyError):
         me = ""
     if me == "repeater":
-        cmd = [str(IRLP_HELPER), arg]
+        cmd = [str(IRLP_HELPER)] + args
     elif os.geteuid() == 0:
-        cmd = ["runuser", "-u", "repeater", "--", str(IRLP_HELPER), arg]
+        cmd = ["runuser", "-u", "repeater", "--", str(IRLP_HELPER)] + args
     else:
-        cmd = ["sudo", "-n", "-u", "repeater", str(IRLP_HELPER), arg]
+        cmd = ["sudo", "-n", "-u", "repeater", str(IRLP_HELPER)] + args
     r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
     out = r.stdout.decode(errors="ignore").strip()
     if r.returncode != 0:
-        raise RuntimeError("IRLP no aceptó «{}»: {}".format(arg, out[-200:] or r.returncode))
+        raise RuntimeError("IRLP no aceptó «{}»: {}".format(" ".join(args), out[-200:] or r.returncode))
+    return out
+
+
+def _irlp(a):
+    arg = a["destino"] if a["accion"] == "conectar" else "end"
+    irlp_helper(arg)
     return "decode {}".format(arg) if arg != "end" else "end"
 
 

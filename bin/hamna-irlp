@@ -1,22 +1,44 @@
 #!/bin/bash
-# HAMNA Web — conecta o desconecta IRLP. Corre como el usuario repeater.
-#   hamna-irlp 9050     → $SCRIPT/decode 9050
-#   hamna-irlp end      → $SCRIPT/end
-# Solo acepta un número o "end": no ejecuta nada más.
+# HAMNA Web — control de IRLP. Corre como el usuario repeater (por sudo).
+#   hamna-irlp 9050            → $SCRIPT/decode 9050   (conectar a un nodo o reflector)
+#   hamna-irlp end             → $SCRIPT/end           (desconectar)
+#   hamna-irlp enable|disable  → $SCRIPT/enable | $SCRIPT/disable
+#   hamna-irlp dtmf 73         → $SCRIPT/decode 73     (como si el código llegara por el radio)
+#   hamna-irlp timeout on|off  → crea o borra $LOCAL/timeout (desconexión por inactividad)
+#   hamna-irlp aux 1 on|off    → $BIN/aux1on | $BIN/aux1off
+# Solo acepta estos comandos y valores validados: no ejecuta nada más.
 set -u
-ARG="${1:-}"
-case "$ARG" in
-  end) ;;
-  *) [[ "$ARG" =~ ^[0-9]{4,6}$ ]] || { echo "Argumento inválido: $ARG" >&2; exit 2; } ;;
+CMD="${1:-}"
+ARG="${2:-}"
+ARG2="${3:-}"
+falla() { echo "$1" >&2; exit 2; }
+
+case "$CMD" in
+  end|enable|disable) [ $# -eq 1 ] || falla "Sobran argumentos" ;;
+  dtmf) [[ $# -eq 2 && "$ARG" =~ ^[0-9A-Da-d*#]{1,16}$ ]] || falla "Código DTMF inválido: $ARG" ;;
+  timeout) [[ $# -eq 2 && "$ARG" =~ ^(on|off)$ ]] || falla "Usa: timeout on|off" ;;
+  aux) [[ $# -eq 3 && "$ARG" =~ ^[1-3]$ && "$ARG2" =~ ^(on|off)$ ]] || falla "Usa: aux 1-3 on|off" ;;
+  *) [[ $# -eq 1 && "$CMD" =~ ^[0-9]{4,6}$ ]] || falla "Argumento inválido: $CMD" ;;
 esac
-[ "$(id -un)" = repeater ] || { echo "Debe correr como repeater" >&2; exit 2; }
+[ "$(id -un)" = repeater ] || falla "Debe correr como repeater"
 ENV=/home/irlp/custom/environment
-[ -f "$ENV" ] || { echo "No existe $ENV" >&2; exit 2; }
+[ -f "$ENV" ] || falla "No existe $ENV"
 # shellcheck disable=SC1090
 . "$ENV"
 SCRIPT="${SCRIPT:-/home/irlp/scripts}"
-if [ "$ARG" = end ]; then
-  exec "$SCRIPT/end"
-else
-  exec "$SCRIPT/decode" "$ARG"
-fi
+BIN="${BIN:-/home/irlp/bin}"
+LOCAL="${LOCAL:-/home/irlp/local}"
+
+case "$CMD" in
+  end) exec "$SCRIPT/end" ;;
+  enable) exec "$SCRIPT/enable" ;;
+  disable) exec "$SCRIPT/disable" ;;
+  dtmf) exec "$SCRIPT/decode" "$ARG" ;;
+  timeout)
+    if [ "$ARG" = on ]; then touch "$LOCAL/timeout"; else rm -f "$LOCAL/timeout"; fi
+    echo "timeout $ARG" ;;
+  aux)
+    [ -x "$BIN/aux$ARG$ARG2" ] || falla "Este nodo no tiene $BIN/aux$ARG$ARG2"
+    exec "$BIN/aux$ARG$ARG2" ;;
+  *) exec "$SCRIPT/decode" "$CMD" ;;
+esac

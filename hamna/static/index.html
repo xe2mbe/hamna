@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.33.1">
+<link rel="stylesheet" href="static/app.css?v=1.34.0">
 </head>
 <body>
 
@@ -161,6 +161,29 @@
         </div>
       </div>
       <div class="stats" id="sesStats"></div>
+      <div class="panel hidden" id="irlpCtl">
+        <div class="panel-head">
+          <h2>Control del nodo IRLP</h2>
+          <form id="irlpConnect" class="connect" autocomplete="off">
+            <input name="destino" placeholder="Nodo o reflector" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" required>
+            <button class="btn primary" type="submit">Conectar</button>
+            <button class="btn danger-soft hidden" type="button" id="irlpEnd">✖ Desconectar</button>
+          </form>
+        </div>
+        <div class="irlp-body">
+          <div class="irlp-favs" id="irlpFavs"></div>
+          <div class="irlp-row" id="irlpRow"></div>
+          <form id="irlpDtmf" class="connect irlp-dtmf" autocomplete="off">
+            <input name="codigo" placeholder="Código DTMF" maxlength="16" pattern="[0-9A-Da-d*#]{1,16}" required>
+            <button class="btn" type="submit">Enviar código</button>
+            <small class="muted">Se ejecuta como si llegara por el radio (p. ej. 73 desconecta).</small>
+          </form>
+        </div>
+        <details class="net" id="irlpLogWrap">
+          <summary><span>Bitácora de IRLP</span><small class="muted">Las últimas 100 líneas, la más nueva arriba</small></summary>
+          <div class="irlp-log"><button class="btn sm ro" type="button" id="irlpLogReload">↻ Actualizar</button><pre id="irlpLog"></pre></div>
+        </details>
+      </div>
       <div class="panel">
         <div class="panel-head">
           <h2>Enlaces directos</h2>
@@ -635,7 +658,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.33.1"></script>
-<script src="static/app.js?v=1.33.1"></script>
+<script src="static/i18n.js?v=1.34.0"></script>
+<script src="static/app.js?v=1.34.0"></script>
 </body>
 </html>

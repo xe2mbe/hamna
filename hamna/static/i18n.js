@@ -186,6 +186,23 @@
     "↻ Actualizar": "↻ Refresh", "↻ Recargar": "↻ Reload", "Enlaces directos": "Direct links", "Nodo": "Node",
     "Transceptor": "Transceive", "Solo monitor": "Monitor only", "Monitor local": "Local monitor", "monitor local": "local monitor", "Conectar": "Connect", "Cargando…": "Loading…",
     "Red completa": "Full network", "Nodos alcanzables a través de los enlaces": "Nodes reachable through the links",
+    // Control del nodo IRLP
+    "Control del nodo IRLP": "IRLP node control", "Nodo o reflector": "Node or reflector", "✖ Desconectar": "✖ Disconnect",
+    "Favoritos": "Favorites", "Todavía no hay favoritos.": "No favorites yet.", "✏️ Editar": "✏️ Edit",
+    "✅ Habilitado": "✅ Enabled", "⛔ Deshabilitado": "⛔ Disabled", "Habilitar": "Enable", "Deshabilitar": "Disable",
+    "Desconexión por inactividad": "Inactivity disconnect", "Activada": "On",
+    "IRLP se desconecta solo tras un rato sin actividad": "IRLP disconnects by itself after a while without activity",
+    "Encender": "Turn on", "Código DTMF": "DTMF code", "Enviar código": "Send code",
+    "Se ejecuta como si llegara por el radio (p. ej. 73 desconecta).": "It runs as if it came in over the radio (e.g. 73 disconnects).",
+    "Bitácora de IRLP": "IRLP log", "Las últimas 100 líneas, la más nueva arriba": "The last 100 lines, newest first", "(vacía)": "(empty)",
+    "Favoritos de IRLP": "IRLP favorites", "Favoritos guardados": "Favorites saved",
+    "Uno por línea: el nodo o reflector (4 a 6 dígitos) y su nombre. Aparecen aquí y en el bot de Telegram.":
+      "One per line: the node or reflector (4 to 6 digits) and its name. They show up here and in the Telegram bot.",
+    "Nodo habilitado": "Node enabled", "Nodo deshabilitado": "Node disabled", "Desconectando": "Disconnecting", "Conectado": "Connected",
+    "Desconexión por inactividad activada": "Inactivity disconnect turned on", "Desconexión por inactividad desactivada": "Inactivity disconnect turned off",
+    "¿Deshabilitar el nodo? IRLP deja de aceptar conexiones y códigos DTMF del radio hasta que lo habilites.":
+      "Disable the node? IRLP stops accepting connections and DTMF codes from the radio until you enable it.",
+    "Este nodo no es IRLP": "This node is not IRLP", "Código DTMF inválido: usa 0-9, A-D, * o # (hasta 16)": "Invalid DTMF code: use 0-9, A-D, * or # (up to 16)",
     "Tareas de cron": "Cron jobs", "Lo que el sistema del nodo corre a horas fijas": "What the node's system runs at set times",
     "Las tareas programadas del sistema del nodo (boletines, hora, conexiones). Cada cambio guarda antes un respaldo en":
       "The node's scheduled system jobs (bulletins, time, connections). Every change first saves a backup in",
@@ -659,6 +676,16 @@
   const M = (re, fn) => [re, fn];
   const P = [
     M(/^se detiene en (\S+)$/, (m, f) => "stops in " + f),
+    M(/^Conectar a (\d{4,6})$/, (m, n) => "Connect to " + n),
+    M(/^Conectando a (\d{4,6})$/, (m, n) => "Connecting to " + n),
+    M(/^Ya está conectado a (\d{4,6})$/, (m, n) => "Already connected to " + n),
+    M(/^¿Conectar a (\d{4,6})\?$/, (m, n) => `Connect to ${n}?`),
+    M(/^El nodo está conectado a (.+)\. ¿Conectar a (\d{4,6})\?$/, (m, a, n) => `The node is connected to ${a}. Connect to ${n}?`),
+    M(/^¿Desconectar de (.+)\?$/, (m, a) => `Disconnect from ${a}?`),
+    M(/^¿Ejecutar el código DTMF (\S+)\? IRLP lo toma como si llegara por el radio\.$/, (m, c) => `Run DTMF code ${c}? IRLP takes it as if it came in over the radio.`),
+    M(/^Código (\S+) enviado$/, (m, c) => `Code ${c} sent`),
+    M(/^AUX(\d) encendida$/, (m, n) => `AUX${n} on`), M(/^AUX(\d) apagada$/, (m, n) => `AUX${n} off`),
+    M(/^Líneas sin número de nodo: (.+)$/, (m, l) => "Lines without a node number: " + l),
     M(/^✅ Lista: (\d+) de (\d+) actualizadas$/, (m, a, b) => `✅ Ready: ${a} of ${b} updated`),
     M(/^⚠ Faltan (\d+): (\d+) de (\d+) actualizadas$/, (m, f, a, b) => `⚠ ${f} missing: ${a} of ${b} updated`),
     M(/^(\d+) secciones en la biblioteca$/, (m, n) => `${n} sections in the library`),

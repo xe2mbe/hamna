@@ -1456,6 +1456,56 @@ def sesiones_accion(req, accion):
     return ok(comando=cmd)
 
 
+# ── Control del nodo IRLP (lo que hacía IRLPvCON) ───────────────────────────
+def _irlp_requerido(cfg):
+    kind = cfg.get("backend") or "auto"
+    if kind == "auto":
+        kind = backends.detect()
+    if kind != "irlp":
+        raise HTTPError(404, "Este nodo no es IRLP")
+
+
+@app.route("/api/irlp")
+def irlp_estado(req):
+    from . import irlpctl
+    cfg = settings.load()
+    _irlp_requerido(cfg)
+    return jsonr(irlpctl.estado(cfg))
+
+
+@app.route("/api/irlp/bitacora")
+def irlp_bitacora(req):
+    from . import irlpctl
+    _irlp_requerido(settings.load())
+    try:
+        n = int(req.query.get("n") or 100)
+    except ValueError:
+        n = 100
+    return jsonr({"lineas": irlpctl.bitacora(n)})
+
+
+@app.route("/api/irlp/favoritos", ("PUT",), rol="admin")
+def irlp_favoritos(req):
+    from . import irlpctl
+    _irlp_requerido(settings.load())
+    favs = irlpctl.guardar_favoritos(req.json().get("favoritos"))
+    log.info("%s guardó %d favoritos de IRLP", req.user["usuario"], len(favs))
+    return ok(favoritos=favs)
+
+
+@app.route("/api/irlp/<accion>", ("POST",))
+def irlp_accion(req, accion):
+    from . import irlpctl
+    _irlp_requerido(settings.load())
+    if accion not in ("habilitar", "deshabilitar", "dtmf", "timeout", "aux"):
+        raise HTTPError(404)
+    hecho = irlpctl.accion(accion, req.json().get("valor"))
+    with sessions._cache_lock:
+        sessions._cache["key"] = None
+    log.info("IRLP: %s (%s)", hecho, req.user["usuario"])
+    return ok(hecho=hecho)
+
+
 # ── Ajustes ──────────────────────────────────────────────────────────────────
 NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_pitch": int,
             "google_rate": int, "google_pitch": float, "eleven_stability": int, "eleven_similarity": int,
