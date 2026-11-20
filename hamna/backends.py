@@ -27,7 +27,10 @@ from . import irlpnet
 log = logging.getLogger("hamna.backend")
 
 FINISH_BUFFER = 0.8
-REKEY_SECS = 2.0     # IRLP: reactivar el PTT durante la reproducción
+# IRLP: reactivar el PTT durante la reproducción. IRLP lo suelta cuando alguien termina de
+# hablar en el reflector aunque HAMNA siga sonando (probado en el stn8422 con el exp0077):
+# con 2 s se perdían hasta 2 s por el radio. Cada llamada cuesta ~40 ms en una Pi.
+REKEY_SECS = 0.3
 
 
 def _sleep_until(seconds, abort):

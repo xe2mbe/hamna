@@ -42,6 +42,16 @@ mimetypes.add_type("image/svg+xml", ".svg")
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
+# Cabeceras en todas las respuestas: que otra página no meta HAMNA en un iframe
+# (clickjacking), que el navegador no adivine tipos y no mande la dirección a otros sitios.
+SEGURIDAD = {
+    "X-Frame-Options": "SAMEORIGIN",
+    "Content-Security-Policy": "frame-ancestors 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+}
+
+
 class HTTPError(Exception):
     def __init__(self, code, msg=""):
         Exception.__init__(self, msg or str(code))
@@ -393,7 +403,7 @@ class App:
                         m = re.search(r'boundary="?([^";]+)"?', ctype)
                         if not m:
                             raise HTTPError(400, "Falta boundary")
-                        if not req.authed and req.path != "/api/login":
+                        if not req.authed:      # sin sesión no se recibe ningún archivo (ni en /api/login)
                             self.rfile.read(length) if length < 65536 else None
                             raise HTTPError(401, "Inicia sesión")
                         req.form, req.files = _parse_multipart(
@@ -431,7 +441,8 @@ class App:
 
             def _send(self, resp, req):
                 head_only = self.command == "HEAD"
-                hdrs = dict(resp.headers)
+                hdrs = dict(SEGURIDAD)
+                hdrs.update(resp.headers)
                 cookie = req.cookie_header() if req else None
                 if resp.stream is not None:
                     self.close_connection = True

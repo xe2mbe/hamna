@@ -10,8 +10,11 @@ Sesiones: la cookie lleva un código aleatorio; en la base solo se guarda su
 huella (sha256), así que leer la base no permite entrar. Cerrar una sesión,
 cambiar la contraseña o desactivar al usuario la invalida al instante.
 
-Bloqueo: 5 contraseñas malas para un usuario desde una IP, o 20 desde una IP
-para cualquier usuario, bloquean 15 minutos. Vive en memoria: reiniciar el
+Bloqueo: 5 contraseñas malas para un usuario desde una IP, 20 desde una IP
+para cualquier usuario, o 30 para un usuario desde cualquier IP, bloquean 15
+minutos. Lo último frena a quien cambia de IP (o la inventa en X-Forwarded-For
+cuando HAMNA está detrás de un túnel). Por 127.0.0.1 sin proxy entran todos
+juntos: ahí no se bloquea la IP entera, solo cada usuario. Vive en memoria: reiniciar el
 servicio lo limpia (sirve como "desbloqueo" de emergencia).
 """
 import hashlib
@@ -29,7 +32,8 @@ ROL_NOMBRE = {"colaborador": "Colaborador", "lectura": "Solo lectura", "operador
 SESSION_DAYS = 30               # la sesión se cierra sola tras 30 días sin usarse…
 SESSION_MAX_DAYS = 90           # …y a los 90 días de haber entrado, aunque se use diario
 TOUCH_SECS = 60                 # actualizar "última actividad" a lo mucho cada minuto
-MAX_USER_IP, MAX_IP, LOCK_SECS = 5, 20, 15 * 60
+MAX_USER_IP, MAX_IP, MAX_USER, LOCK_SECS = 5, 20, 30, 15 * 60
+LOOPBACK = ("127.0.0.1", "::1", "::ffff:127.0.0.1", "")
 USER_RX = re.compile(r"^[A-Za-z0-9._-]{2,32}$")
 
 
@@ -104,15 +108,21 @@ _locked = {}           # clave -> hasta cuándo
 _flock = threading.Lock()
 
 
-def _keys(usuario, ip):
-    return ("u:{}|{}".format(usuario.lower(), ip), MAX_USER_IP), ("ip:{}".format(ip), MAX_IP)
+def _keys(usuario, ip, todas=False):
+    """todas=True (entrar con contraseña): cuenta también los fallos del usuario desde cualquier IP."""
+    keys = [("u:{}|{}".format(usuario.lower(), ip), MAX_USER_IP)]
+    if ip not in LOOPBACK:
+        keys.append(("ip:{}".format(ip), MAX_IP))
+    if todas:
+        keys.append(("t:{}".format(usuario.lower()), MAX_USER))
+    return keys
 
 
-def locked_for(usuario, ip):
+def locked_for(usuario, ip, todas=False):
     now = time.time()
     with _flock:
         left = 0
-        for k, _ in _keys(usuario, ip):
+        for k, _ in _keys(usuario, ip, todas):
             until = _locked.get(k, 0)
             if until > now:
                 left = max(left, until - now)
@@ -121,10 +131,10 @@ def locked_for(usuario, ip):
         return int(left)
 
 
-def _fail(usuario, ip):
+def _fail(usuario, ip, todas=False):
     now = time.time()
     with _flock:
-        for k, limit in _keys(usuario, ip):
+        for k, limit in _keys(usuario, ip, todas):
             lst = [t for t in _fails.get(k, []) if now - t < LOCK_SECS] + [now]
             _fails[k] = lst
             if len(lst) >= limit:
@@ -156,16 +166,16 @@ def unlock_all():
 # ── Inicio y cierre de sesión ────────────────────────────────────────────────
 def login(usuario, password, ip, agente=""):
     usuario = (usuario or "").strip()
-    left = locked_for(usuario, ip)
+    left = locked_for(usuario, ip, True)
     if left:
         raise AuthError("Demasiados intentos. Espera {} min.".format(left // 60 + 1))
     u = db.row("SELECT * FROM usuarios WHERE usuario=? COLLATE NOCASE", (usuario,))
     if not u or not check_password(u["password_hash"], password or ""):
         if not u:   # mismo tiempo de respuesta que con usuario real
             check_password(hash_password("x", 1000), "y")
-        _fail(usuario, ip)
+        _fail(usuario, ip, True)
         time.sleep(1.0)
-        left = locked_for(usuario, ip)
+        left = locked_for(usuario, ip, True)
         if left:
             raise AuthError("Demasiados intentos. Espera {} min.".format(left // 60 + 1))
         raise AuthError("Usuario o contraseña incorrectos")

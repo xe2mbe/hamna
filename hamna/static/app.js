@@ -1708,9 +1708,9 @@ function nodoCard(d, p) {
   const r = d.respaldo || {};
   const titulo = d.estacion || LG("Nodo ", "Node ") + d.nodo;
   const clave = d.clave || d.nodo;
-  const url = dashUrl(d);
-  const ligas = [d.url_int ? `<a href="${esc(d.url_int)}" target="_blank" rel="noopener" title="${esc(d.url_int)}">🏠 ${LG("red local", "local network")}</a>` : "",
-    d.url_ext ? `<a href="${esc(d.url_ext)}" target="_blank" rel="noopener" title="${esc(d.url_ext)}">🌐 internet</a>` : ""].filter(Boolean).join(" · ");
+  const url = webUrl(dashUrl(d));
+  const ligas = [webUrl(d.url_int) ? `<a href="${esc(d.url_int)}" target="_blank" rel="noopener" title="${esc(d.url_int)}">🏠 ${LG("red local", "local network")}</a>` : "",
+    webUrl(d.url_ext) ? `<a href="${esc(d.url_ext)}" target="_blank" rel="noopener" title="${esc(d.url_ext)}">🌐 internet</a>` : ""].filter(Boolean).join(" · ");
   const edad = d.propio ? LG("ahora", "now") : est === "caido" ? "⚠ " + LG("sin reportar " + haceTxt(d.edad), "no report for " + lapso(d.edad)) : haceTxt(d.edad);
   const verTit = viejo ? LG("Hay una versión más nueva: v", "A newer version is available: v") + p.ultima_version : LG("Al día", "Up to date");
   const salud = sal === "ok" ? LG("Salud bien", "Health OK") : sal === "grave" || sal === "aviso"
@@ -1726,7 +1726,7 @@ function nodoCard(d, p) {
       <small>${[d.propio ? LG("este hub", "this hub") : esc(d.ip || ""), ligas].filter(Boolean).join(" · ")}</small></div>
       <span class="muted nodo-edad">${esc(edad)}</span></div>
     <div class="nodo-ver">${d.nodo ? `<span class="sys-chip num" title="${LG("Número de nodo", "Node number")}">#${esc(d.nodo)}</span>` : ""}${sysChips(sis)}<span class="sys-chip ${viejo ? "old" : "aldia"}" title="${esc(verTit)}">v${esc(d.version || "?")}${viejo ? LG(" · actualizar", " · update") : ""}</span>${d.bot ? '<span class="sys-chip">🤖 bot</span>' : ""}</div>
-    ${d.al_aire ? `<div class="nodo-aire">🔴 <b>${LG("Al aire", "On air")}:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${d.al_aire.i}/${d.al_aire.n} ${esc(d.al_aire.seccion)}` : ""} · ${LG("faltan", "remaining")} ${fmt(d.al_aire.falta)}</div>`
+    ${d.al_aire ? `<div class="nodo-aire">🔴 <b>${LG("Al aire", "On air")}:</b> ${esc(d.al_aire.evento)}${d.al_aire.seccion ? ` · ${esc(d.al_aire.i)}/${esc(d.al_aire.n)} ${esc(d.al_aire.seccion)}` : ""} · ${LG("faltan", "remaining")} ${fmt(d.al_aire.falta)}</div>`
       : d.proximo ? `<div class="meta">📅 ${esc(d.proximo.evento)}${d.proximo.num ? " " + esc(d.proximo.num) : ""} · ${esc(fechaCortaLG(d.proximo.fecha))}</div>` : `<div class="meta muted">${LG("Sin eventos programados", "No scheduled events")}</div>`}
     ${d.grabando ? `<div class="meta" style="color:var(--danger)">⏺ ${LG("Grabando", "Recording")} «${esc(d.grabando.titulo)}» · ${fmt(d.grabando.dur)}</div>` : ""}
     ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
@@ -1735,6 +1735,8 @@ function nodoCard(d, p) {
     ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm accent-soft" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
   </div>`;
 }
+// Solo enlaces http(s): nunca javascript:, data:…
+const webUrl = (u) => /^https?:\/\//i.test(String(u || "")) ? String(u) : "";
 // Desde la red de la casa conviene la dirección interna; desde fuera, la de internet
 function dashUrl(d) {
   const h = location.hostname;

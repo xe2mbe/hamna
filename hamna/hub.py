@@ -252,6 +252,11 @@ def panel():
             d = json.loads(r["datos"] or "{}")
         except ValueError:
             d = {}
+        if not isinstance(d, dict):
+            d = {}
+        # Lo que manda el nodo no decide los enlaces del panel ni si es «este hub»
+        for k in ("url_int", "url_ext", "propio", "clave"):
+            d.pop(k, None)
         d.update(nodo=r["nodo"], ip=r["ip"], edad=int(now - r["ultimo"]), ultimo=r["ultimo"],
                  recibido=recibidos.get(r["nodo"]), **dirs.get(r["nodo"], {}))
         nodos.append(d)

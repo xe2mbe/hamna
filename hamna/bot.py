@@ -252,9 +252,26 @@ def _atender(token, u):
         _responder(token, chat, resp, botones=botones, a=None if privado else m.get("message_id"))
 
 
+CODIGO_MAX_TODOS = 30          # códigos malos de todos juntos en 15 min: se anulan los pendientes
+_codigo_fallos = []
+
+
 def _vincular(token, chat, quien, code, msg_id):
+    # Frenar a quien prueba códigos al azar: 5 malos por cuenta de Telegram bloquean 15 min
+    # (lo lleva auth, como las contraseñas) y 30 malos entre todos anulan los códigos pendientes.
+    clave = "tg:{}".format(quien.get("id"))
+    if auth.locked_for("codigo", clave):
+        return _responder(token, chat, "⏳ Demasiados códigos equivocados. Espera 15 minutos y pide uno nuevo.")
     uid = _usar_codigo(code.strip())
     if not uid:
+        auth._fail("codigo", clave)
+        now = time.time()
+        with _lock:
+            _codigo_fallos[:] = [t for t in _codigo_fallos if now - t < auth.LOCK_SECS] + [now]
+            if len(_codigo_fallos) >= CODIGO_MAX_TODOS:
+                _codes.clear()
+                del _codigo_fallos[:]
+                log.warning("Demasiados códigos de Telegram equivocados: se anularon los pendientes")
         return _responder(token, chat, "❌ Ese código no existe o ya venció. Pide uno nuevo en HAMNA → Mi perfil.")
     tg_nombre = "@" + quien["username"] if quien.get("username") else \
         " ".join(x for x in (quien.get("first_name"), quien.get("last_name")) if x)

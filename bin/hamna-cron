@@ -16,6 +16,7 @@ import json
 import os
 import pwd
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -39,8 +40,19 @@ def sha(t):
 
 
 def read(path):
-    with open(path, "rb") as f:
+    # Sin seguir enlaces: custom.crons está en una carpeta de repeater y aquí se lee como root
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(fd, "rb") as f:
         return f.read().decode("utf-8", "surrogateescape")
+
+
+def es_root(u):
+    """Cuentas con uid 0: su crontab se ve pero no se edita desde la página
+    (editarlo daría root a quien tenga el rol admin en HAMNA)."""
+    try:
+        return pwd.getpwnam(u).pw_uid == 0
+    except KeyError:
+        return False
 
 
 def crontab_l(user):
@@ -100,6 +112,9 @@ def tables():
         if not t and u not in ("root", "asterisk"):
             continue
         item = {"id": tid, "titulo": "Usuario " + u, "editable": True, "texto": t, "hash": sha(t)}
+        if es_root(u):
+            item.update(editable=False, nota="Solo lectura: el cron de root se edita en el nodo "
+                        "(crontab -e como root), no desde la página.")
         if u == "repeater" and irlp:
             item.update(editable=False, nota="Se genera solo desde irlp.crons + custom.crons; "
                         "edita «IRLP (custom.crons)».")
@@ -181,14 +196,24 @@ def save(tid, expected, text):
         if sha(cur) != expected:
             raise LookupError("custom.crons cambió mientras lo editabas; recarga la página")
         bk = backup(tid, cur)
-        st = os.stat(IRLP_CUSTOM)
-        tmp = IRLP_CUSTOM + ".hamna-tmp"
-        with open(tmp, "w", encoding="utf-8", errors="surrogateescape") as f:
-            f.write(text)
-        os.chmod(tmp, st.st_mode & 0o7777)
-        if os.geteuid() == 0:
-            os.chown(tmp, st.st_uid, st.st_gid)
-        os.replace(tmp, IRLP_CUSTOM)
+        st = os.lstat(IRLP_CUSTOM)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("custom.crons no es un archivo normal")
+        # Temporal con nombre aleatorio (O_EXCL): la carpeta es de repeater y aquí se escribe como root
+        fd, tmp = tempfile.mkstemp(prefix=".custom.crons.", dir=os.path.dirname(IRLP_CUSTOM))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape") as f:
+                f.write(text)
+                os.fchmod(f.fileno(), st.st_mode & 0o777)
+                if os.geteuid() == 0:
+                    os.fchown(f.fileno(), st.st_uid, st.st_gid)
+            os.replace(tmp, IRLP_CUSTOM)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
         # Igual que hace IRLP a las 3:00: irlp.crons + custom.crons
         base = read(IRLP_BASE) if os.path.isfile(IRLP_BASE) else ""
         if base and not base.endswith("\n"):
@@ -200,6 +225,8 @@ def save(tid, expected, text):
     user = tid[5:]
     if user not in users():
         raise ValueError("Usuario desconocido")
+    if es_root(user):
+        raise ValueError("El cron de root no se edita desde la página")
     cur = crontab_l(user)
     if sha(cur) != expected:
         raise LookupError("El cron de {} cambió mientras lo editabas; recarga la página".format(user))
