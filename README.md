@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<p align="center"><b>Español</b> · <a href="README.en.md">English</a></p>
+
 # HAMNA — HAM Net Automation
 
 > La radioafición siempre ha destacado por la creatividad y la innovación de sus operadores.
@@ -201,7 +203,7 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **Radio + red** (predeterminado): este nodo **y el reflector o nodo conectado**, como `playback` en ASL.
 - **Solo el radio**: solo el transmisor de este nodo.
 
-IRLP solo manda a la red lo que entra por el receptor con COS, así que `aplay` por sí solo no llega al reflector. HAMNA usa el mismo `imike` de IRLP en modo archivo, con la identidad del nodo (`SPEAKFREE_CNAME` y `SPEAKFREE_ID`), y un relevo interno que lo reenvía al reflector desde un solo puerto y descarta la despedida RTCP (con ella el reflector olvida al emisor). imike comprime en el formato del canal (UNCOMP, ADPCM o GSM). La IP, el puerto y el formato salen de `local/calledip`, `local/udp_port` y `local/codec`, que IRLP escribe al conectar; en una llamada entrante de otro nodo IRLP no guarda la IP y el audio sale solo por el radio. Si algo de la parte de red falla, el radio sigue transmitiendo y queda anotado en la bitácora. Probado con el reflector de eco 9990.
+IRLP solo manda a la red lo que entra por el receptor con COS, así que `aplay` por sí solo no llega al reflector. HAMNA usa el mismo `imike` de IRLP en modo archivo, con la identidad del nodo (`SPEAKFREE_CNAME` y `SPEAKFREE_ID`), y un relevo interno que lo reenvía al reflector desde un solo puerto y descarta la despedida RTCP (con ella el reflector olvida al emisor). imike comprime en el formato del canal (UNCOMP, ADPCM o GSM). La IP, el puerto y el formato salen de `local/calledip`, `local/udp_port` y `local/codec`, que IRLP escribe al conectar; en una llamada entrante de otro nodo IRLP no guarda la IP y el audio sale solo por el radio. Si algo de la parte de red falla, el radio sigue transmitiendo y queda anotado en la bitácora. Mientras HAMNA suena, el PTT se reactiva cada 0.3 s, porque IRLP lo suelta cuando alguien termina de hablar en el reflector. Probado con el reflector de eco 9990.
 
 > **Importante (ASL3):** app_rpt solo manda el `playback` a los enlaces si el nodo tiene `duplex` mayor a 0 **o** `linktolink = yes`. En un hub con `duplex = 0`, agrega `linktolink = yes` en su estrofa de `rpt.conf` y reinicia Asterisk con `sudo systemctl restart asterisk` (nunca `rpt restart`). Sin eso, el audio suena en el hub pero los enlazados no lo oyen.
 
@@ -224,7 +226,7 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 ### Conexiones
 
-**Pestaña Conexiones**: los nodos enlazados en este momento, con indicativo y ciudad (del directorio de AllStar), modo, dirección, tiempo conectado, IP y quién está hablando; un resumen con los nodos alcanzables en toda la red; y botones para **conectar** (transceptor o solo monitor) y **desconectar**. Si el Asterisk tiene varios nodos, se elige cuál ver. Se actualiza cada 4 s solo con la pestaña abierta.
+**Pestaña Conexiones**: los nodos enlazados en este momento, con indicativo y ciudad (del directorio de AllStar), modo, dirección, tiempo conectado, IP y quién está hablando; un resumen con los nodos alcanzables en toda la red; y botones para **conectar** (transceptor, monitor o monitor local) y **desconectar**. Si el Asterisk tiene varios nodos, se elige cuál ver. Se actualiza cada 4 s solo con la pestaña abierta.
 
 **En IRLP** la pestaña muestra a qué nodo o reflector está conectado (de `$LOCAL/active`), con la IP, el puerto y el formato de audio; el estado del radio (COS y PTT) y si HAMNA está transmitiendo, leídos cada 1.5 s; y los **otros nodos del mismo reflector**, según status.irlp.net (esa página se actualiza cada pocos minutos, así que una conexión de unos segundos no alcanza a aparecer).
 
@@ -232,7 +234,7 @@ Entre tramos el PTT se suelta durante la pausa, y el tramo siguiente puede empez
 
 | Sistema | Conectar | Desconectar |
 |---|---|---|
-| ASL / HamVOIP | `rpt cmd <nodo> ilink 3` (transceptor), `2` (monitor) o `13` (permanente) | `ilink 1 <nodo>` o `ilink 6` (todos) |
+| ASL / HamVOIP | `rpt cmd <nodo> ilink 3` (transceptor), `2` (monitor), `8` (monitor local) o `13` (permanente) | `ilink 1 <nodo>` o `ilink 6` (todos); si un enlace permanente sigue conectado, `ilink 11 <nodo>` |
 | IRLP | `$SCRIPT/decode <nodo o reflector>` | `$SCRIPT/end` |
 
 "N min antes" se adelanta solo cuando el evento está programado; si lo lanzas a mano, se hace al iniciar. Las de "al terminar" corren también si detienes el evento.
@@ -288,7 +290,7 @@ Cada HAMNA puede reportarse a un **hub** (el nodo central del club) cada 60 s; e
 
 - estación, número, tipo (ASL3/ASL/HamVOIP/IRLP) y versión (verde si está al día, naranja si hay que actualizar);
 - qué está al aire o el próximo evento, si está grabando, la salud del equipo, CPU/RAM/disco/temperatura y el último respaldo recibido;
-- **Editar** (administrador): la dirección del dashboard del nodo en la red local y en internet. Clic en el nombre lo abre: la local si entraste al hub desde la red local, la de internet si no.
+- **Editar** (administrador): la dirección del dashboard del nodo en la red local y en internet. Clic en el nombre lo abre: la local si entraste al hub desde la red local, la de internet si no. Solo se usan las direcciones guardadas en el hub, nunca las que mande el nodo.
 
 Para reportar, en el nodo: **Ajustes → Nodo → Panel de nodos**, marcar "Reportar el estado de este nodo a un hub" y poner la dirección y el código del hub (si se dejan vacíos, se usan los del respaldo a otro nodo). Cada nodo ve en su propia pestaña solo su tarjeta y las de quienes le reportan; el panel completo está en el hub. Si un nodo deja de reportar más de 10 min (ajustable), el hub manda aviso por Telegram y otro cuando vuelve. "🗑 Quitar del panel" borra la tarjeta.
 
@@ -316,6 +318,7 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 - **Colaboradores**: mandan su audio o nota de voz (hasta 20 MB) y eligen la sección; reciben recordatorio días antes si no lo han subido y un mensaje cuando su sección salió al aire. Los administradores pueden cambiar así cualquier sección.
 - **🤝 Colaboración** (en el menú): los eventos, primero los que salen pronto, y en cada uno sus secciones en orden, con duración y si ya se actualizaron. Al tocar una sección se puede mandar el audio nuevo, cambiar el texto de una de texto a voz (o generar la voz otra vez), escucharla o regresar a la versión anterior. El colaborador ve los eventos donde sale y edita solo sus secciones. El operador y el administrador editan cualquiera, pueden **agregar una sección nueva** al final del evento (de audio o de texto a voz), **cambiarla de lugar** (↕ Mover de lugar: subir, bajar, al inicio o al final) y **borrarla** (quitarla solo de ese evento o borrarla por completo con su audio).
 - El menú ☰ de Telegram solo trae `/menu` y `/start`; todo lo demás está en los botones del menú (los comandos siguen funcionando si se escriben).
+- **🔗 Conexiones** (en Nodos): los enlaces del nodo con su modo y tiempo conectado; conectar como transceptor, monitor o monitor local eligiendo de los **favoritos de AllScan** o escribiendo el número; cambiar el modo, desconectar uno o todos. En IRLP: conectar a un nodo o reflector y desconectar.
 - **Respaldo por Telegram**: el respaldo automático (sin audios, hasta 49 MB) les llega en privado a los administradores vinculados.
 
 ### Usuarios y seguridad
@@ -329,16 +332,17 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 
 - El servidor revisa el rol en cada acción; la página además esconde lo que el rol no puede usar.
 - La bitácora y el historial de transmisiones registran quién hizo cada cosa y desde qué IP (detrás de Apache se usa la IP real del visitante).
-- 5 contraseñas malas para un usuario desde una IP (o 20 desde una IP) la bloquean 15 minutos. Un administrador puede desbloquear en Ajustes → Usuarios; reiniciar el servicio también limpia los bloqueos.
+- 5 contraseñas malas para un usuario desde una IP, 20 desde una IP, o 30 para un usuario desde cualquier IP, bloquean 15 minutos. En el bot, 5 códigos de vinculación equivocados bloquean esa cuenta de Telegram 15 minutos. Un administrador puede desbloquear en Ajustes → Usuarios; reiniciar el servicio también limpia los bloqueos.
 - Las sesiones duran 30 días desde el último uso (tope 90) y con https la cookie va marcada como `Secure`. Las abiertas se ven en **Mi perfil** (las propias) y **Ajustes → Usuarios** (todas) y se pueden cerrar. Cambiar la contraseña o desactivar a un usuario lo saca al instante. De cada sesión solo se guarda la huella de su código.
 - No se puede borrar, desactivar ni quitar el rol al último administrador activo.
+- La página no se deja meter en un iframe de otro sitio, y sin sesión no acepta archivos.
 - Con Apache, la página solo se abre por `https://…/hamna/` (la contraseña viaja cifrada) y el 8090 escucha solo dentro del nodo. Para entrar al 8090 desde fuera del nodo (no recomendado), instala con `--listen-all`, o usa un túnel SSH: `ssh -L 8090:127.0.0.1:8090 usuario@nodo`.
 
 ### Cron
 
-La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab de root y de asterisk, y en IRLP `custom/custom.crons` (el crontab de repeater se vuelve a armar solo cada día a las 3:00 con `irlp.crons` + `custom.crons`). `/etc/crontab` y `/etc/cron.d` se muestran en solo lectura.
+La pestaña **Cron** muestra y edita las tareas programadas del nodo: el crontab de asterisk (y de otros usuarios que tengan uno), y en IRLP `custom/custom.crons` (el crontab de repeater se vuelve a armar solo cada día a las 3:00 con `irlp.crons` + `custom.crons`). El crontab de **root**, `/etc/crontab` y `/etc/cron.d` se muestran en solo lectura: el de root se edita en el nodo con `crontab -e`.
 
-Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. **Un administrador de la página puede programar comandos como root**: dale ese rol solo a quien corresponda y usa contraseñas fuertes. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--no-cron`.
+Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y guarda antes la versión anterior en `/var/backups/hamna-cron/`. Para esto el instalador crea `/etc/sudoers.d/hamna-web`, limitado a los ayudantes `/opt/hamna-web/bin/hamna-cron` y `hamna-irlp`. Un administrador de la página puede programar comandos como esos usuarios (p. ej. asterisk): dale ese rol solo a quien corresponda y usa contraseñas fuertes. Los operadores ven el cron pero no lo editan. Para no dar ese permiso, instala con `--no-cron`.
 
 ### Respaldos
 
