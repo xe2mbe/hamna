@@ -132,7 +132,7 @@ async function start() {
   if (!S.clockTimer) S.clockTimer = setInterval(tickClock, 1000);
   const q = new URLSearchParams(location.search).get("tab");
   let saved = ""; try { saved = localStorage.getItem("hamna.tab") || ""; } catch {}
-  const pedida = location.hash.slice(1) || q || saved || "prog";
+  const pedida = location.hash.slice(1) || q || saved || "conexiones";   // la primera vez: el Dashboard
   showTab(pedida);
 }
 
@@ -255,7 +255,7 @@ $("#btnHideMenu").onclick = () => {
 $("#scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 try { if (localStorage.getItem("hamna.nav") === "collapsed") document.body.classList.add("nav-collapsed"); } catch {}
-const TABS = ["prog", "eventos", "secciones", "conexiones", "grab", "nodos", "cron", "ajustes"];
+const TABS = ["conexiones", "prog", "eventos", "secciones", "grab", "nodos", "cron", "ajustes"];
 const TAB_ALIAS = { dashboard: "conexiones", sesiones: "conexiones" };   // nombres anteriores o nuevos de la misma vista
 window.addEventListener("hashchange", () => { const t = TAB_ALIAS[location.hash.slice(1)] || location.hash.slice(1); if (TABS.includes(t) && t !== S.tab) showTab(t); });
 function showTab(t) {
