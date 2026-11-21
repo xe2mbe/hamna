@@ -77,6 +77,30 @@ def lookup(nodes):
 BUSCAR_MAX = 200
 
 
+_texto = {"path": None, "mtime": None, "txt": ""}
+_texto_lock = threading.Lock()
+
+
+def _directorio():
+    """El astdb.txt entero como un solo texto (~1.5 MB), releído solo si cambia.
+    Buscar con expresiones regulares sobre el texto es ~20 veces más rápido en
+    un Raspberry Pi que partir línea por línea."""
+    p = _astdb_path()
+    if not p:
+        return None
+    with _texto_lock:
+        try:
+            mt = os.stat(p).st_mtime
+            if _texto["path"] != p or _texto["mtime"] != mt:
+                with open(p, encoding="utf-8", errors="replace") as f:
+                    _texto.update(path=p, mtime=mt, txt=f.read())
+        except OSError as e:
+            log.warning("No pude leer %s: %s", p, e)
+            if _texto["path"] != p:
+                return ""
+        return _texto["txt"]
+
+
 def search(q, limit=BUSCAR_MAX):
     """Busca en el directorio de AllStar.
 
@@ -84,41 +108,36 @@ def search(q, limit=BUSCAR_MAX):
     empiece así (XE → todos los XE…; XE2MBE → sus nodos); con 3 letras o más
     también entra quien lo tenga en la descripción o la ubicación (Monterrey),
     pero después de los indicativos. Devuelve (resultados, total, hay_directorio)."""
-    q = (q or "").strip().upper()
-    p = _astdb_path()
-    if not p:
+    q = (q or "").strip()
+    txt = _directorio()
+    if txt is None:
         return [], 0, False
-    if not q:
+    if not q or "\n" in q or "|" in q:
         return [], 0, True
-    solo_num = q.isdigit()
-    por_ind, por_txt = [], []
-    try:
-        with open(p, encoding="utf-8", errors="replace") as f:
-            for line in f:
-                n, _, rest = line.partition("|")
-                n = n.strip()
-                if not n.isdigit():
-                    continue
-                if solo_num:
-                    if n.startswith(q):
-                        por_ind.append((n, rest))
-                    continue
-                parts = (rest.rstrip("\n").split("|") + ["", "", ""])[:3]
-                if parts[0].strip().upper().startswith(q):
-                    por_ind.append((n, parts))
-                elif len(q) >= 3 and (q in parts[1].upper() or q in parts[2].upper()):
-                    por_txt.append((n, parts))
-    except OSError as e:
-        log.warning("No pude leer %s: %s", p, e)
-        return [], 0, True
-    if solo_num:
-        por_ind = [(n, (r.rstrip("\n").split("|") + ["", "", ""])[:3]) for n, r in por_ind]
+    e = re.escape(q)
+    resto = r"\|?([^|\n]*)\|?([^|\n]*)"
+    if q.isdigit():
+        rx = re.compile(r"^[ \t]*(" + e + r"\d*)[ \t]*\|([^|\n]*)" + resto, re.M)
+        por_ind = [m.groups() for m in rx.finditer(txt)]
         por_ind.sort(key=lambda x: (len(x[0]), x[0]))
+        por_txt = []
     else:
-        por_ind.sort(key=lambda x: (x[1][0].strip().upper(), len(x[0]), x[0]))
+        rx = re.compile(r"^[ \t]*(\d+)[ \t]*\|[ \t]*(" + e + r"[^|\n]*)" + resto, re.M | re.I)
+        por_ind = [m.groups() for m in rx.finditer(txt)]
+        por_ind.sort(key=lambda x: (x[1].strip().upper(), len(x[0]), x[0]))
+        por_txt = []
+        if len(q) >= 3:
+            ya = {x[0] for x in por_ind}
+            linea = re.compile(r"[ \t]*(\d+)[ \t]*\|([^|\n]*)" + resto)
+            qu = q.upper()
+            # Filtro rápido (en C): solo las líneas que lo contienen en alguna parte
+            for m in re.finditer(r"^[^\n]*" + e + r"[^\n]*$", txt, re.M | re.I):
+                g = linea.match(m.group(0))
+                if g and g.group(1) not in ya and (qu in g.group(3).upper() or qu in g.group(4).upper()):
+                    por_txt.append(g.groups())
     total = len(por_ind) + len(por_txt)
-    return [{"nodo": n, "indicativo": p_[0].strip(), "descripcion": p_[1].strip(),
-             "ubicacion": p_[2].strip()} for n, p_ in (por_ind + por_txt)[:limit]], total, True
+    return [{"nodo": n, "indicativo": c.strip(), "descripcion": d.strip(), "ubicacion": u.strip()}
+            for n, c, d, u in (por_ind + por_txt)[:limit]], total, True
 
 
 def local_nodes():

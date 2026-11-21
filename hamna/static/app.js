@@ -2756,13 +2756,13 @@ $("#sesConnect").onsubmit = async (e) => {
 };
 
 // Favoritos como mini tarjetas: el número grande a la izquierda y la descripción abajo
-function favCards(favs, conectado, attr, titulo, editar) {
+function favCards(favs, conectado, attr, titulo, editar, estado) {
   const head = `<div class="fav-head"><span class="lbl">${titulo}</span>${editar && isAdmin() ? `<button type="button" class="btn sm ghost ro" data-favedit="${editar}">✏️ Editar</button>` : ""}</div>`;
   if (!favs.length) return head + `<p class="muted fav-empty">Todavía no hay favoritos.${editar && isAdmin() ? " Agrégalos con ✏️ Editar." : ""}</p>`;
   return head + `<div class="fav-grid">` + favs.map((f) => {
     const on = conectado(f.nodo);
     return `<button type="button" class="favc ${on ? "on" : ""}" ${attr}="${esc(f.nodo)}" title="${on ? "Conectado" : "Conectar a " + esc(f.nodo)}">
-      <span class="n"><span>${esc(f.nodo)}</span>${on ? '<span class="st">● Conectado</span>' : '<span class="st">⭐</span>'}</span>
+      <span class="n"><span>${esc(f.nodo)}</span>${on ? '<span class="st">● Conectado</span>' : (estado && estado(f.nodo)) || '<span class="st">⭐</span>'}</span>
       <small>${esc(f.nombre || "Sin descripción")}</small></button>`;
   }).join("") + `</div>`;
 }
@@ -2889,7 +2889,8 @@ async function renderAslFavs(s) {
   const favs = s.sistema === "asl" ? await aslFavsLoad(s.nodo) : [];
   box.classList.toggle("hidden", s.sistema !== "asl" || (!favs.length && !isAdmin()));
   const con = new Set((s.enlaces || []).map((e) => e.nodo));
-  setHtml(box, favCards(favs, (n) => con.has(n), "data-aslfav", "Favoritos", "asl"));
+  setHtml(box, favCards(favs, (n) => con.has(n), "data-aslfav", "Favoritos", "asl", presChip));
+  presenciaCargar(favs.map((f) => f.nodo).filter((n) => !con.has(n) && n !== s.nodo));
   $("#sesAll").classList.toggle("hidden", !(s.enlaces || []).length);
 }
 $("#aslFavs").onclick = async (e) => {
@@ -2952,10 +2953,48 @@ function renderBuscar() {
       <span class="n">${hl(r.nodo, true)}</span>
       <span class="c">${hl(r.indicativo, true)}</span>
       <span class="d">${txtHl ? hl(r.descripcion) : esc(r.descripcion)}${r.ubicacion ? `<small>${txtHl ? hl(r.ubicacion) : esc(r.ubicacion)}</small>` : ""}</span>
-      <span>${yo ? `<span class="st">${LG("Este nodo", "This node")}</span>`
-        : `${on ? `<span class="st">● ${LG("Conectado", "Connected")}</span> ` : ""}<button type="button" class="btn sm" data-buscon="${esc(r.nodo)}">${on ? LG("Cambiar modo", "Change mode") : LG("Conectar", "Connect")}</button>`}</span>
+      <span class="acc">${yo ? `<span class="st">${LG("Este nodo", "This node")}</span>`
+        : `${on ? `<span class="st">● ${LG("Conectado", "Connected")}</span>` : presChip(r.nodo)}<button type="button" class="btn sm" data-buscon="${esc(r.nodo)}">${on ? LG("Cambiar modo", "Change mode") : LG("Conectar", "Connect")}</button>`}</span>
     </div>`;
   }).join("") + `</div>`);
+  presenciaCargar(b.resultados.map((r) => r.nodo).filter((n) => n !== local && !con.has(n)));
+}
+
+/* ¿En línea? responde (verde) / registrado pero no contesta (amarillo) / fuera (gris).
+   El servidor lo averigua (DNS de AllStar + POKE de IAX) y lo guarda unos minutos. */
+const PRES_TTL = 120000;
+S.pres = S.pres || {}; var presPend = presPend || new Set(), presTimer = presTimer || 0;
+function presChip(n) {
+  const p = S.pres[n];
+  if (!p || !p.estado) return p && p.cargando ? `<span class="pres wait" title="${LG("Revisando si está en línea…", "Checking whether it's online…")}">···</span>` : "";
+  if (p.estado === "responde") return `<span class="pres ok" title="${LG(`Registrado en AllStar y responde (${p.ms} ms): se le puede conectar.`, `Registered with AllStar and answering (${p.ms} ms): it can be connected.`)}">● ${LG("En línea", "Online")}</span>`;
+  if (p.estado === "registrado") return `<span class="pres warn" title="${LG("Está prendido y registrado en AllStar, pero no contesta conexiones de fuera (casi siempre falta reenviar el puerto UDP " + (p.puerto || 4569) + " en su router). Él sí puede conectarse a ti.", "It's on and registered with AllStar, but doesn't answer incoming connections (usually UDP port " + (p.puerto || 4569) + " isn't forwarded on its router). It can still connect to you.")}">● ${LG("No responde", "Not answering")}</span>`;
+  return `<span class="pres off" title="${LG("No está registrado en AllStar: apagado o sin internet.", "Not registered with AllStar: off or without internet.")}">○ ${LG("Fuera de línea", "Offline")}</span>`;
+}
+function presenciaCargar(nodos) {
+  const ahora = Date.now();
+  nodos.forEach((n) => {
+    const p = S.pres[n];
+    if (/^\d{4,7}$/.test(n) && (!p || (!p.cargando && ahora - p.t > PRES_TTL))) presPend.add(n);
+  });
+  if (presPend.size && !presTimer) presTimer = setTimeout(presenciaPedir, 150);
+}
+async function presenciaPedir() {
+  presTimer = 0;
+  const lote = [...presPend].slice(0, 200);
+  lote.forEach((n) => { presPend.delete(n); S.pres[n] = { ...(S.pres[n] || {}), cargando: true }; });
+  if (!lote.length) return;
+  presPintar();
+  let r = {};
+  try { r = (await api("api/sesiones/presencia?nodos=" + lote.join(","))).estados || {}; } catch {}
+  const t = Date.now();
+  lote.forEach((n) => { S.pres[n] = { ...(r[n] || { estado: "" }), t, cargando: false }; });
+  presPintar();
+  if (presPend.size) presTimer = setTimeout(presenciaPedir, 50);
+}
+function presPintar() {
+  if (S.bus && !$("#aslBuscar").classList.contains("hidden")) renderBuscar();
+  if (S.ses && S.ses.sistema === "asl") renderAslFavs(S.ses);
 }
 $("#busList").onclick = async (e) => {
   const b = e.target.closest("[data-buscon]"); if (!b) return;

@@ -1518,6 +1518,14 @@ def sesiones_buscar(req):
     return jsonr({"resultados": res, "total": total, "directorio": hay, "max": sessions.BUSCAR_MAX})
 
 
+@app.route("/api/sesiones/presencia")
+def sesiones_presencia(req):
+    """¿En línea? responde / registrado (no contesta) / fuera, para ?nodos=1,2,3."""
+    from . import presencia
+    nodos = [n for n in str(req.query.get("nodos") or "").split(",") if n][:presencia.MAX_NODOS]
+    return jsonr({"estados": presencia.estado(nodos)})
+
+
 @app.route("/api/sesiones/favoritos")
 def sesiones_favoritos(req):
     """Favoritos de ASL (los mismos que ofrece el bot; la primera vez se importan de AllScan)."""
