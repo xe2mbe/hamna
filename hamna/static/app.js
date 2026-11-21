@@ -2841,28 +2841,125 @@ $("#irlpCtl").addEventListener("click", async (e) => {
     }
   } catch {}
 });
+/* Editor de favoritos: lista ordenable (arrastrar o ↑↓), nombre editable en el lugar,
+   🗑 para quitar y abajo un campo para agregar (en ASL busca en el directorio). */
 function favEditor(tipo) {
   const asl = tipo === "asl";
-  const favs = asl ? ((S.aslFavs || {})[S.ses.nodo] || []) : ((S.irlp && S.irlp.favoritos) || []);
-  const rx = asl ? /^(\d{3,7})\s*[-·,:]?\s*(.*)$/ : /^(\d{4,6})\s*[-·,:]?\s*(.*)$/;
-  openModal(asl ? "Favoritos de ASL" : "Favoritos de IRLP", `<form id="favForm" autocomplete="off">
-    <p class="muted" style="margin-top:0">${asl ? "Uno por línea: el número de nodo (3 a 7 dígitos; EchoLink 3xxxxxx) y su descripción. La primera vez se importaron de AllScan; los cambios se guardan en HAMNA." : "Uno por línea: el nodo o reflector (4 a 6 dígitos) y su descripción."} Aparecen en el Dashboard y en el bot de Telegram.</p>
-    <textarea name="lista" rows="12" style="width:100%;font-variant-numeric:tabular-nums" placeholder="${asl ? "58788 HamVOIP Durango" : "9050 Reflector 9050"}">${esc(favs.map((f) => f.nodo + " " + (f.nombre || "")).join("\n"))}</textarea>
-    <div class="modal-actions"><button type="button" class="btn" id="favNo">Cancelar</button><button class="btn primary">Guardar</button></div></form>`);
+  const L = (asl ? ((S.aslFavs || {})[S.ses.nodo] || []) : ((S.irlp && S.irlp.favoritos) || [])).map((f) => ({ nodo: f.nodo, nombre: f.nombre || "" }));
+  const numOk = asl ? /^\d{3,7}$/ : /^\d{4,6}$/;
+  openModal(asl ? LG("Favoritos de ASL", "ASL favorites") : LG("Favoritos de IRLP", "IRLP favorites"), `<form id="favForm" autocomplete="off">
+    <p class="muted fe-help">${LG("Cambia el nombre directo en la lista, arrastra ⠿ (o usa ↑ ↓) para ordenarlos y 🗑 para quitar. Se usan en el Dashboard y en el bot de Telegram.", "Edit names right in the list, drag ⠿ (or use ↑ ↓) to reorder and 🗑 to remove. They're used in the Dashboard and the Telegram bot.")}</p>
+    <div class="fe-list" id="feList" translate="no"></div>
+    <div class="fe-add">
+      <div class="fe-add-row">
+        <input id="feQ" placeholder="${asl ? LG("Agregar: indicativo, nodo o lugar…", "Add: callsign, node or place…") : LG("Nodo o reflector", "Node or reflector")}" maxlength="40" spellcheck="false" ${asl ? "" : 'inputmode="numeric"'}>
+        ${asl ? "" : `<input id="feNom" placeholder="${LG("Descripción", "Description")}" maxlength="60"><button type="button" class="btn" id="feAddIrlp">＋ ${LG("Agregar", "Add")}</button>`}
+      </div>
+      <div class="fe-res" id="feRes" translate="no"></div>
+    </div>
+    <div class="modal-actions"><button type="button" class="btn" id="favNo">${LG("Cancelar", "Cancel")}</button><button class="btn primary">${LG("Guardar", "Save")}</button></div></form>`);
+  const list = $("#feList"), res = $("#feRes");
+  let feRes = [], feSeq = 0, feT = 0;
+  const nombreDe = (r) => [r.indicativo, r.descripcion, r.ubicacion].filter(Boolean).join(" · ").slice(0, 60);
+
+  function pintar() {
+    list.innerHTML = !L.length ? `<p class="muted fe-empty">${LG("Todavía no hay favoritos. Agrégalos abajo.", "No favorites yet. Add them below.")}</p>`
+      : L.map((f, i) => `<div class="fe-row" draggable="true" data-i="${i}">
+        <span class="fe-grip" title="${LG("Arrastra para moverlo", "Drag to move it")}">⠿</span>
+        <b class="fe-n">${esc(f.nodo)}</b>
+        <input class="fe-nom" data-i="${i}" value="${esc(f.nombre)}" maxlength="60" placeholder="${LG("Sin descripción", "No description")}">
+        <span class="fe-btns">
+          <button type="button" class="btn sm ghost" data-fe="up" data-i="${i}" ${i === 0 ? "disabled" : ""} title="${LG("Subir", "Move up")}">↑</button>
+          <button type="button" class="btn sm ghost" data-fe="down" data-i="${i}" ${i === L.length - 1 ? "disabled" : ""} title="${LG("Bajar", "Move down")}">↓</button>
+          <button type="button" class="btn sm ghost fe-del" data-fe="del" data-i="${i}" title="${LG("Quitar", "Remove")}">🗑</button>
+        </span></div>`).join("");
+    if (asl) pintarRes();
+  }
+  function pintarRes() {
+    const q = $("#feQ").value.trim(), ya = new Set(L.map((f) => f.nodo));
+    let filas = feRes.slice(0, 8).map((r) => `<div class="fe-hit"><b>${esc(r.nodo)}</b><span>${esc(nombreDe(r))}</span>${ya.has(r.nodo)
+      ? `<span class="muted fe-ya">⭐ ${LG("En la lista", "On the list")}</span>`
+      : `<button type="button" class="btn sm" data-feadd="${esc(r.nodo)}">＋ ${LG("Agregar", "Add")}</button>`}</div>`).join("");
+    if (numOk.test(q) && !feRes.some((r) => r.nodo === q) && !ya.has(q))
+      filas += `<div class="fe-hit"><b>${esc(q)}</b><span class="muted">${LG("No está en el directorio (EchoLink, privado o nuevo)", "Not in the directory (EchoLink, private or new)")}</span><button type="button" class="btn sm" data-feadd="${esc(q)}">＋ ${LG("Agregar", "Add")}</button></div>`;
+    if (feRes.length > 8) filas += `<p class="muted fe-mas">${LG(`y ${feRes.length - 8} más; escribe más para afinar.`, `and ${feRes.length - 8} more; type more to narrow it down.`)}</p>`;
+    res.innerHTML = filas;
+  }
+  const mover = (i, j) => { if (j < 0 || j >= L.length || i === j) return; const [x] = L.splice(i, 1); L.splice(j, 0, x); pintar(); };
+  list.oninput = (e) => { const t = e.target.closest(".fe-nom"); if (t) L[+t.dataset.i].nombre = t.value; };
+  list.onclick = (e) => {
+    const b = e.target.closest("[data-fe]"); if (!b) return;
+    const i = +b.dataset.i;
+    if (b.dataset.fe === "up") mover(i, i - 1);
+    else if (b.dataset.fe === "down") mover(i, i + 1);
+    else { L.splice(i, 1); pintar(); }
+  };
+  // Arrastrar y soltar (computadora); en el celular quedan ↑ ↓
+  let desde = -1;
+  list.ondragstart = (e) => {
+    const r = e.target.closest && e.target.closest(".fe-row");
+    if (!r || e.target.closest(".fe-nom")) { e.preventDefault(); return; }
+    desde = +r.dataset.i; r.classList.add("drag"); e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", String(desde)); } catch {}
+  };
+  list.ondragover = (e) => {
+    if (desde < 0) return; e.preventDefault();
+    const r = e.target.closest(".fe-row");
+    $$(".fe-row.over", list).forEach((x) => { if (x !== r) x.classList.remove("over"); });
+    if (r) r.classList.add("over");
+  };
+  list.ondrop = (e) => { e.preventDefault(); const r = e.target.closest(".fe-row"); if (r && desde >= 0) mover(desde, +r.dataset.i); desde = -1; };
+  list.ondragend = () => { desde = -1; $$(".fe-row", list).forEach((x) => x.classList.remove("drag", "over")); };
+
+  const agregar = (nodo, nombre) => {
+    nodo = String(nodo).trim();
+    if (!numOk.test(nodo)) { toast(asl ? LG("El número de nodo debe tener de 3 a 7 dígitos.", "The node number must have 3 to 7 digits.") : LG("El nodo o reflector debe tener de 4 a 6 dígitos.", "The node or reflector must have 4 to 6 digits."), true); return false; }
+    if (L.some((f) => f.nodo === nodo)) { toast(LG(`El nodo ${nodo} ya está en la lista.`, `Node ${nodo} is already on the list.`), true); return false; }
+    if (L.length >= 60) { toast(LG("Máximo 60 favoritos.", "60 favorites at most."), true); return false; }
+    L.push({ nodo, nombre: String(nombre || "").slice(0, 60) });
+    pintar();
+    const ult = list.lastElementChild; if (ult && ult.scrollIntoView) ult.scrollIntoView({ block: "nearest" });
+    return true;
+  };
+
+  if (asl) {
+    // Buscar en el directorio mientras se escribe
+    $("#feQ").oninput = () => {
+      clearTimeout(feT);
+      feT = setTimeout(async () => {
+        const q = $("#feQ").value.trim(), seq = ++feSeq;
+        if (q.length < (/^\d+$/.test(q) ? 3 : 2)) { feRes = []; pintarRes(); return; }
+        try { const r = await api("api/sesiones/buscar?q=" + encodeURIComponent(q)); if (seq === feSeq) { feRes = r.resultados || []; pintarRes(); } } catch {}
+      }, 300);
+    };
+    res.onclick = (e) => {
+      const b = e.target.closest("[data-feadd]"); if (!b) return;
+      const n = b.dataset.feadd, r = feRes.find((x) => x.nodo === n);
+      agregar(n, r ? nombreDe(r) : "");
+    };
+  } else {
+    const add = () => { if (agregar($("#feQ").value, $("#feNom").value.trim())) { $("#feQ").value = ""; $("#feNom").value = ""; $("#feQ").focus(); } };
+    $("#feAddIrlp").onclick = add;
+    $("#feNom").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } };
+  }
+  $("#feQ").onkeydown = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (asl) { const b = $("[data-feadd]", res); if (b) b.click(); } else $("#feNom").focus();
+  };
+  // Enter en un nombre no debe guardar todo de golpe
+  list.onkeydown = (e) => { if (e.key === "Enter" && e.target.closest(".fe-nom")) { e.preventDefault(); e.target.blur(); } };
+  pintar();
   $("#favNo").onclick = closeModal;
   $("#favForm").onsubmit = async (e) => {
     e.preventDefault();
-    const lista = [], malas = [];
-    e.target.lista.value.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => {
-      const m = l.match(rx);
-      if (m) lista.push({ nodo: m[1], nombre: m[2].trim() }); else malas.push(l);
-    });
-    if (malas.length) return toast("Líneas sin número de nodo: " + malas.slice(0, 3).join(" · "), true);
+    const lista = L.map((f) => ({ nodo: f.nodo, nombre: f.nombre.trim() }));
     try {
-      const r = await run(() => api(asl ? "api/sesiones/favoritos" : "api/irlp/favoritos", { method: "PUT", json: { favoritos: lista } }), "Favoritos guardados");
+      const r = await run(() => api(asl ? "api/sesiones/favoritos" : "api/irlp/favoritos", { method: "PUT", json: { favoritos: lista } }), LG("Favoritos guardados", "Favorites saved"));
       if (asl) { S.aslFavs = {}; S.aslFavs[S.ses.nodo] = r.favoritos; } else S.irlp.favoritos = r.favoritos;
       closeModal();
       if (S.ses) renderSesiones();
+      if (S.bus) renderBuscar();
     } catch {}
   };
 }
