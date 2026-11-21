@@ -1488,9 +1488,10 @@ def irlp_bitacora(req):
 def irlp_favoritos(req):
     from . import irlpctl
     _irlp_requerido(settings.load())
-    favs = irlpctl.guardar_favoritos(req.json().get("favoritos"))
-    log.info("%s guardó %d favoritos de IRLP", req.user["usuario"], len(favs))
-    return ok(favoritos=favs)
+    b = req.json()
+    favs, cats = irlpctl.guardar_favoritos(b.get("favoritos"), b.get("categorias"))
+    log.info("%s guardó %d favoritos de IRLP en %d categorías", req.user["usuario"], len(favs), len(cats))
+    return ok(favoritos=favs, categorias=cats)
 
 
 @app.route("/api/irlp/vcon", rol="admin")
@@ -1531,15 +1532,17 @@ def sesiones_favoritos(req):
     """Favoritos de ASL (los mismos que ofrece el bot; la primera vez se importan de AllScan)."""
     from . import favoritos
     nodo = str(req.query.get("nodo") or settings.get("node") or "")
-    return jsonr({"favoritos": favoritos.asl(nodo if re.match(r"^\d{3,7}$", nodo) else "")})
+    favs, cats = favoritos.asl_todo(nodo if re.match(r"^\d{3,7}$", nodo) else "")
+    return jsonr({"favoritos": favs, "categorias": cats})
 
 
 @app.route("/api/sesiones/favoritos", ("PUT",), rol="admin")
 def sesiones_favoritos_guardar(req):
     from . import favoritos
-    favs = favoritos.guardar_asl(req.json().get("favoritos"))
-    log.info("%s guardó %d favoritos de ASL", req.user["usuario"], len(favs))
-    return ok(favoritos=favs)
+    b = req.json()
+    favs, cats = favoritos.guardar_asl(b.get("favoritos"), b.get("categorias"))
+    log.info("%s guardó %d favoritos de ASL en %d categorías", req.user["usuario"], len(favs), len(cats))
+    return ok(favoritos=favs, categorias=cats)
 
 
 @app.route("/api/irlp/<accion>", ("POST",))

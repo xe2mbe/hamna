@@ -20,7 +20,6 @@ log = logging.getLogger("hamna.irlp")
 
 VCON_CONF = "/var/www/irlpvutil/irlpvcon_conf"
 LOG_FILE = "/home/irlp/log/messages"
-MAX_FAVS = 30
 DTMF_RX = re.compile(r"^[0-9A-Da-d*#]{1,16}$")
 NODO_RX = re.compile(r"^\d{4,6}$")
 
@@ -43,34 +42,33 @@ def _vcon_favoritos():
     return out
 
 
-def favoritos():
+def favoritos_todo():
+    """(favoritos [{nodo, nombre, categoria}], categorías) de IRLP."""
+    from . import favoritos as fv
     favs = settings.get("irlp_favoritos")
     if favs is None:                                # primera vez: los de IRLPvCON
         favs = _vcon_favoritos()
         if favs:
             settings.save({"irlp_favoritos": favs})
             log.info("Importé %d favoritos de IRLPvCON", len(favs))
-    return [f for f in (favs or []) if isinstance(f, dict) and NODO_RX.match(str(f.get("nodo", "")))]
+    favs = [f for f in (favs or []) if isinstance(f, dict) and NODO_RX.match(str(f.get("nodo", "")))]
+    return fv.normalizar(favs, settings.get("irlp_fav_categorias"))
 
 
-def guardar_favoritos(lista):
-    if not isinstance(lista, list):
-        raise ValueError("Lista de favoritos inválida")
-    out = []
-    for f in lista:
-        if not isinstance(f, dict):
-            raise ValueError("Favorito inválido")
-        nodo = str(f.get("nodo") or "").strip()
-        nombre = str(f.get("nombre") or "").strip()[:40]
-        if not NODO_RX.match(nodo):
-            raise ValueError("El favorito «{}» necesita un nodo o reflector de 4 a 6 dígitos".format(nombre or nodo))
-        if nodo in {x["nodo"] for x in out}:
-            raise ValueError("El nodo {} está repetido".format(nodo))
-        out.append({"nombre": nombre, "nodo": nodo})
-    if len(out) > MAX_FAVS:
-        raise ValueError("Máximo {} favoritos".format(MAX_FAVS))
-    settings.save({"irlp_favoritos": out})
-    return out
+def favoritos():
+    """[{nodo, nombre, categoria}] en el orden de las categorías."""
+    from . import favoritos as fv
+    favs, cats = favoritos_todo()
+    return [f for _c, fs in fv.agrupar(favs, cats) for f in fs]
+
+
+def guardar_favoritos(lista, categorias=None):
+    from . import favoritos as fv
+    if categorias is None:
+        categorias = favoritos_todo()[1]
+    favs, cats = fv.validar(lista, categorias, NODO_RX, 40, "un nodo o reflector de 4 a 6 dígitos")
+    settings.save({"irlp_favoritos": favs, "irlp_fav_categorias": cats})
+    return favs, cats
 
 
 def accion(accion, valor=""):
@@ -120,7 +118,7 @@ def bitacora(n=100):
 def estado(cfg):
     st = sessions.irlp_status(cfg)
     return {"habilitado": st.get("habilitado"), "timeout": st.get("timeout"), "activo": st.get("activo") or "",
-            "favoritos": favoritos(),
+            "favoritos": favoritos(), "categorias": favoritos_todo()[1],
             "aux": os.path.isfile("/home/irlp/bin/aux1on")}
 
 

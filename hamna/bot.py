@@ -1637,7 +1637,7 @@ def _mandar_audio(token, chat, s):
 #         monitor local (ilink 3 / 2 / 8), cambiar el modo, desconectar uno o todos.
 #   IRLP  el reflector o nodo activo; conectar (decode) o desconectar (end).
 #   Ver: lectura en adelante · conectar y desconectar: operador o admin.
-CON_ACCIONES = ("conn", "conm", "condx", "conx", "conf")
+CON_ACCIONES = ("conn", "conk", "conm", "condx", "conx", "conf")
 FAV_PAG = 8
 # Dónde busca AllScan su favorites.ini (CfgModel.php: favsIniLoc), en ASL3 y en HamVOIP
 FAV_ARCHIVOS = ("/var/www/html/allscan/favorites.ini", "/var/www/html/supermon/favorites.ini",
@@ -1648,6 +1648,17 @@ def _favoritos(node):
     """[(nombre, nodo)]: los favoritos de ASL de HAMNA (la primera vez se importan de AllScan)."""
     from . import favoritos
     return [(f.get("nombre") or f["nodo"], f["nodo"]) for f in favoritos.asl(node)]
+
+
+def _favs_por_categoria(kind, cfg):
+    """[(categoría, [(nombre, nodo)])] en orden, sin categorías vacías."""
+    from . import favoritos
+    if kind == "irlp":
+        from . import irlpctl
+        favs, cats = irlpctl.favoritos_todo()
+    else:
+        favs, cats = favoritos.asl_todo(cfg.get("node") or "")
+    return [(c, [(f.get("nombre") or f["nodo"], f["nodo"]) for f in fs]) for c, fs in favoritos.agrupar(favs, cats)]
 
 
 def _favoritos_allscan(node):
@@ -1827,17 +1838,14 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
         avisa("Cancelado")
         texto, botones = _pantalla("con", user)
         return _editar(token, chat, mid, texto, botones)
-    if cual == "conn":
+    if cual in ("conn", "conk"):
+        # conn[:pág] = favoritos (o las categorías, si hay más de una); conk:<cat>[:pág] = los de una categoría
         _espera_poner(tg, modo="nodo")
         avisa("")
         pide = "✍ Escríbeme el número del {}.".format(
             "nodo o reflector IRLP (por ejemplo 9990)" if kind == "irlp" else "nodo ASL (por ejemplo 59624)")
-        if kind == "asl":
-            favs = _favoritos(_cfg.get("node") or "")
-        else:
-            from . import irlpctl
-            favs = [(f.get("nombre") or f["nodo"], f["nodo"]) for f in irlpctl.favoritos()]
-        if not favs:
+        grupos = _favs_por_categoria(kind, _cfg)
+        if not grupos:
             return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n" + pide, [[("Cancelar", "m:conx")]])
         from . import sessions
         try:
@@ -1846,24 +1854,42 @@ def _boton_con(token, chat, mid, user, cual, arg, avisa, tg):
             conectados = set()
         if kind == "irlp":                          # «I- 0077,Experimental» → 0077
             import re
-            conectados = {n for _et, n in favs for c in conectados if re.sub(r"\D", "", c)[-4:] == n[-4:]}
+            conectados = {n for _c, fs in grupos for _et, n in fs for c in conectados
+                          if re.sub(r"\D", "", c)[-4:] == n[-4:]}
+        nums = _ints(arg) if arg else []
+        if cual == "conn" and len(grupos) > 1:      # primero las categorías
+            filas = [[("📁 {} ({}{})".format(c, len(fs), ", ✅ {}".format(sum(1 for _e, n in fs if n in conectados))
+                                              if any(n in conectados for _e, n in fs) else "")[:56],
+                       "m:conk:{}".format(i))] for i, (c, fs) in enumerate(grupos)]
+            filas.append([("Cancelar", "m:conx")])
+            return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n📁 Elige una categoría de tus favoritos, o {}".format(
+                pide[2].lower() + pide[3:]), filas)
+        if cual == "conk":
+            ci = nums[0] if nums else 0
+            pag = nums[1] if len(nums) > 1 else 0
+        else:
+            ci, pag = 0, (nums[0] if nums else 0)
+        ci = max(0, min(ci, len(grupos) - 1))
+        cat, favs = grupos[ci]
         npag = (len(favs) + FAV_PAG - 1) // FAV_PAG
-        pag = max(0, min(_ints(arg)[0], npag - 1))
+        pag = max(0, min(pag, npag - 1))
+        varias = len(grupos) > 1
         def boton(et, n):                           # el número primero: las etiquetas largas se cortan
             base = et[:-len(n)].rstrip(" ,") if et.endswith(n) else et
             return ("{} {}{}".format("✅" if n in conectados else "⭐", n, " · " + base if base else ""))[:56]
         filas = [[(boton(et, n), "m:conf:" + n)] for et, n in favs[pag * FAV_PAG:(pag + 1) * FAV_PAG]]
+        ir = (lambda p: "m:conk:{}:{}".format(ci, p)) if varias else (lambda p: "m:conn:{}".format(p))
         nav = []
         if pag > 0:
-            nav.append(("◀ Anteriores", "m:conn:{}".format(pag - 1)))
+            nav.append(("◀ Anteriores", ir(pag - 1)))
         if pag < npag - 1:
-            nav.append(("Siguientes ▶", "m:conn:{}".format(pag + 1)))
+            nav.append(("Siguientes ▶", ir(pag + 1)))
         if nav:
             filas.append(nav)
-        filas.append([("Cancelar", "m:conx")])
-        return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n⭐ Elige uno de tus favoritos{}{}, o {}\n"
+        filas.append(([("« Categorías", "m:conn")] if varias else []) + [("Cancelar", "m:conx")])
+        return _editar(token, chat, mid, "➕ <b>Conectar</b>\n\n{}⭐ Elige uno de tus favoritos{}, o {}\n"
                                          "✅ = ya está conectado{}.".format(
-                                             "",
+                                             "📁 <b>{}</b>\n".format(notify.esc(cat)) if varias else "",
                                              " (página {} de {})".format(pag + 1, npag) if npag > 1 else "",
                                              pide[2].lower() + pide[3:],
                                              " (tócalo para cambiarle el modo)" if kind == "asl" else ""), filas)
@@ -1953,7 +1979,7 @@ def _pantalla_modo(n, user):
     """¿Cómo lo conecto? (después de escribir el número o de elegir un favorito)."""
     from . import sessions
     kind, cfg = _sistema()
-    cancelar = [("« Favoritos", "m:conn:0"), ("Cancelar", "m:conx")]
+    cancelar = [("« Favoritos", "m:conn"), ("Cancelar", "m:conx")]
     if kind == "irlp":
         return "🔗 ¿Conectar a <b>{}</b>?".format(notify.esc(n)), \
             [[("✅ Sí, conectar", "m:conm:{}:x".format(n))], [("Cancelar", "m:conx")]]
