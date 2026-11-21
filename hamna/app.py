@@ -1510,6 +1510,14 @@ def irlp_vcon(req):
     return ok(**st)
 
 
+@app.route("/api/sesiones/buscar")
+def sesiones_buscar(req):
+    """Buscar nodos en el directorio de AllStar por número, indicativo o lugar."""
+    q = str(req.query.get("q") or "")[:40]
+    res, total, hay = sessions.search(q)
+    return jsonr({"resultados": res, "total": total, "directorio": hay, "max": sessions.BUSCAR_MAX})
+
+
 @app.route("/api/sesiones/favoritos")
 def sesiones_favoritos(req):
     """Favoritos de ASL (los mismos que ofrece el bot; la primera vez se importan de AllScan)."""

@@ -319,6 +319,27 @@ body.rol-lectura .favc { pointer-events: none; }
 .irlp-row .grp { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .irlp-dtmf { flex-wrap: wrap; }
 .asl-favs { padding: 0 18px 14px; }
+/* Buscar nodos (directorio de AllStar) */
+#busForm input { width: min(380px, 100%); }
+.bus-help { margin: 0; padding: 0 18px 10px; font-size: .84rem; }
+.bus-list { padding: 0 18px 16px; }
+.bus-list:empty { display: none; }
+.bus-rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-height: 520px; overflow-y: auto; }
+.bus-row { display: grid; grid-template-columns: 84px 110px 1fr auto; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); }
+.bus-row:first-child { border-top: 0; }
+.bus-row:nth-child(even) { background: var(--surface2); }
+.bus-row .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+.bus-row .c { font-weight: 600; }
+.bus-row .d { min-width: 0; color: var(--text2); font-size: .86rem; line-height: 1.3; }
+.bus-row .d small { display: block; color: var(--text3); font-size: .78rem; }
+.bus-row.on { background: color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+.bus-row .st { color: var(--ok); font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.bus-row mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+body.rol-lectura .bus-row [data-buscon] { display: none; }
+@media (max-width: 640px) {
+  .bus-row { grid-template-columns: auto 1fr auto; }
+  .bus-row .d { grid-column: 1 / -1; grid-row: 2; }
+}
 .irlp-dtmf input { width: 150px; font-variant-numeric: tabular-nums; }
 .irlp-log { padding: 0 18px 18px; }
 .irlp-log pre { margin: 8px 0 0; max-height: 340px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--surface2);

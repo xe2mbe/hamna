@@ -74,6 +74,53 @@ def lookup(nodes):
         return {n: info[n] for n in nodes if n in info}
 
 
+BUSCAR_MAX = 200
+
+
+def search(q, limit=BUSCAR_MAX):
+    """Busca en el directorio de AllStar.
+
+    Solo dígitos → número de nodo que empiece así. Si no, indicativo que
+    empiece así (XE → todos los XE…; XE2MBE → sus nodos); con 3 letras o más
+    también entra quien lo tenga en la descripción o la ubicación (Monterrey),
+    pero después de los indicativos. Devuelve (resultados, total, hay_directorio)."""
+    q = (q or "").strip().upper()
+    p = _astdb_path()
+    if not p:
+        return [], 0, False
+    if not q:
+        return [], 0, True
+    solo_num = q.isdigit()
+    por_ind, por_txt = [], []
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                n, _, rest = line.partition("|")
+                n = n.strip()
+                if not n.isdigit():
+                    continue
+                if solo_num:
+                    if n.startswith(q):
+                        por_ind.append((n, rest))
+                    continue
+                parts = (rest.rstrip("\n").split("|") + ["", "", ""])[:3]
+                if parts[0].strip().upper().startswith(q):
+                    por_ind.append((n, parts))
+                elif len(q) >= 3 and (q in parts[1].upper() or q in parts[2].upper()):
+                    por_txt.append((n, parts))
+    except OSError as e:
+        log.warning("No pude leer %s: %s", p, e)
+        return [], 0, True
+    if solo_num:
+        por_ind = [(n, (r.rstrip("\n").split("|") + ["", "", ""])[:3]) for n, r in por_ind]
+        por_ind.sort(key=lambda x: (len(x[0]), x[0]))
+    else:
+        por_ind.sort(key=lambda x: (x[1][0].strip().upper(), len(x[0]), x[0]))
+    total = len(por_ind) + len(por_txt)
+    return [{"nodo": n, "indicativo": p_[0].strip(), "descripcion": p_[1].strip(),
+             "ubicacion": p_[2].strip()} for n, p_ in (por_ind + por_txt)[:limit]], total, True
+
+
 def local_nodes():
     """Nodos ASL definidos en rpt.conf (un mismo Asterisk puede tener varios)."""
     try:

@@ -196,6 +196,10 @@
     "Red completa": "Full network", "Nodos alcanzables a través de los enlaces": "Nodes reachable through the links",
     // Control del nodo IRLP
     "Control del nodo IRLP": "IRLP node control", "Nodo o reflector": "Node or reflector", "✖ Desconectar": "✖ Disconnect",
+    "Buscar nodos": "Search nodes",
+    "Indicativo, nodo o lugar (p. ej. XE2MBE, XE, 59624)": "Callsign, node or place (e.g. XE2MBE, XE, 59624)",
+    "Busca en el directorio de AllStar: el indicativo o el número de nodo por cómo empiezan; con 3 letras o más también por descripción o lugar.":
+      "Searches the AllStar directory: callsign or node number by how they start; with 3 letters or more also by description or location.",
     "Favoritos": "Favorites", "Todavía no hay favoritos.": "No favorites yet.", "✏️ Editar": "✏️ Edit",
     "Todavía no hay favoritos. Agrégalos con ✏️ Editar.": "No favorites yet. Add them with ✏️ Edit.", "Sin descripción": "No description",
     "● Conectado": "● Connected", "Favoritos de ASL": "ASL favorites",

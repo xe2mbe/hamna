@@ -2667,6 +2667,8 @@ function renderSesiones() {
     sel.classList.remove("hidden");
   } else sel.classList.add("hidden");
   $("#sesConnect").classList.toggle("hidden", s.sistema !== "asl");
+  $("#aslBuscar").classList.toggle("hidden", s.sistema !== "asl");
+  if (S.bus) renderBuscar();
   $("#irlpCtl").classList.toggle("hidden", s.sistema !== "irlp");
   if (s.sistema === "irlp") renderIrlpCtl(s);
   renderAslFavs(s);
@@ -2896,6 +2898,72 @@ $("#aslFavs").onclick = async (e) => {
   const modoTxt = sel.options[sel.selectedIndex].text.toLowerCase();
   const ya = (S.ses.enlaces || []).some((x) => x.nodo === n);
   if (!(await confirmBox(ya ? `El nodo ${n} ya está conectado. ¿Cambiarlo a ${modoTxt}?` : `¿Conectar el nodo ${n} como ${modoTxt}?`, "Conectar", false))) return;
+  try {
+    await run(() => api("api/sesiones/conectar", { method: "POST", json: { destino: n, modo, nodo: S.ses.nodo } }), "Conectando " + n);
+    setTimeout(loadSesiones, 2500);
+  } catch {}
+};
+/* Buscar nodos en el directorio de AllStar (astdb.txt del propio nodo) */
+let busTimer = 0, busSeq = 0;
+$("#busQ").oninput = () => { clearTimeout(busTimer); busTimer = setTimeout(buscarNodos, 350); };
+$("#busForm").onsubmit = (e) => { e.preventDefault(); clearTimeout(busTimer); buscarNodos(); };
+async function buscarNodos() {
+  const q = $("#busQ").value.trim();
+  const seq = ++busSeq;
+  if (q.length < (/^\d+$/.test(q) ? 3 : 2)) {
+    S.bus = null; $("#busList").innerHTML = "";
+    $("#busInfo").textContent = q ? LG("Escribe al menos 2 letras o 3 dígitos.", "Type at least 2 letters or 3 digits.")
+      : LG("Busca en el directorio de AllStar: el indicativo o el número de nodo por cómo empiezan; con 3 letras o más también por descripción o lugar.",
+           "Searches the AllStar directory: callsign or node number by how they start; with 3 letters or more also by description or location.");
+    return;
+  }
+  $("#busInfo").textContent = LG("Buscando…", "Searching…");
+  try {
+    const r = await api("api/sesiones/buscar?q=" + encodeURIComponent(q));
+    if (seq !== busSeq) return;             // llegó tarde: ya se escribió otra cosa
+    S.bus = { q, ...r };
+    renderBuscar();
+  } catch (e) {
+    if (seq === busSeq) $("#busInfo").textContent = LG("No se pudo buscar: ", "Search failed: ") + (e.message || e);
+  }
+}
+function renderBuscar() {
+  const b = S.bus; if (!b) return;
+  const info = $("#busInfo"), box = $("#busList");
+  if (!b.directorio) {
+    info.textContent = LG("Este nodo no tiene el directorio de AllStar (astdb.txt); no hay dónde buscar.", "This node has no AllStar directory (astdb.txt); nothing to search.");
+    box.innerHTML = ""; return;
+  }
+  const n = b.resultados.length;
+  info.textContent = !n ? LG(`Sin resultados para “${b.q}”.`, `No results for “${b.q}”.`)
+    : b.total > n ? LG(`${b.total} nodos; se muestran los primeros ${n}. Escribe más para afinar.`, `${b.total} nodes; showing the first ${n}. Type more to narrow it down.`)
+    : LG(`${n} ${n === 1 ? "nodo" : "nodos"}`, `${n} ${n === 1 ? "node" : "nodes"}`);
+  const con = new Set(((S.ses && S.ses.enlaces) || []).map((e) => e.nodo));
+  const local = S.ses && S.ses.nodo;
+  const Q = b.q.toUpperCase();
+  const hl = (txt, pref) => {        // resalta lo que coincide
+    const t = String(txt || ""), i = pref ? (t.toUpperCase().startsWith(Q) ? 0 : -1) : t.toUpperCase().indexOf(Q);
+    return i < 0 || Q.length < 1 ? esc(t) : esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + Q.length)) + "</mark>" + esc(t.slice(i + Q.length));
+  };
+  const txtHl = Q.length >= 3;
+  setHtml(box, !n ? "" : `<div class="bus-rows" translate="no">` + b.resultados.map((r) => {
+    const on = con.has(r.nodo), yo = r.nodo === local;
+    return `<div class="bus-row ${on ? "on" : ""}">
+      <span class="n">${hl(r.nodo, true)}</span>
+      <span class="c">${hl(r.indicativo, true)}</span>
+      <span class="d">${txtHl ? hl(r.descripcion) : esc(r.descripcion)}${r.ubicacion ? `<small>${txtHl ? hl(r.ubicacion) : esc(r.ubicacion)}</small>` : ""}</span>
+      <span>${yo ? `<span class="st">${LG("Este nodo", "This node")}</span>`
+        : `${on ? `<span class="st">● ${LG("Conectado", "Connected")}</span> ` : ""}<button type="button" class="btn sm" data-buscon="${esc(r.nodo)}">${on ? LG("Cambiar modo", "Change mode") : LG("Conectar", "Connect")}</button>`}</span>
+    </div>`;
+  }).join("") + `</div>`);
+}
+$("#busList").onclick = async (e) => {
+  const b = e.target.closest("[data-buscon]"); if (!b) return;
+  const n = b.dataset.buscon, sel = $("#sesConnect").modo, modo = sel.value;
+  const modoTxt = sel.options[sel.selectedIndex].text.toLowerCase();
+  const ya = (S.ses.enlaces || []).some((x) => x.nodo === n);
+  if (!(await confirmBox(ya ? LG(`El nodo ${n} ya está conectado. ¿Cambiarlo a ${modoTxt}?`, `Node ${n} is already connected. Change it to ${modoTxt}?`)
+    : LG(`¿Conectar el nodo ${n} como ${modoTxt}?`, `Connect node ${n} as ${modoTxt}?`), LG("Conectar", "Connect"), false))) return;
   try {
     await run(() => api("api/sesiones/conectar", { method: "POST", json: { destino: n, modo, nodo: S.ses.nodo } }), "Conectando " + n);
     setTimeout(loadSesiones, 2500);

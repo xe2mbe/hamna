@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.36.0">
+<link rel="stylesheet" href="static/app.css?v=1.37.0">
 </head>
 <body>
 
@@ -196,6 +196,16 @@
         </div>
         <div class="irlp-favs asl-favs hidden" id="aslFavs"></div>
         <div id="sesList" class="links-list"><p class="empty">Cargando…</p></div>
+      </div>
+      <div class="panel hidden" id="aslBuscar">
+        <div class="panel-head">
+          <h2>Buscar nodos</h2>
+          <form id="busForm" class="connect" autocomplete="off">
+            <input type="search" name="q" id="busQ" placeholder="Indicativo, nodo o lugar (p. ej. XE2MBE, XE, 59624)" maxlength="40" spellcheck="false" autocapitalize="characters">
+          </form>
+        </div>
+        <p class="muted bus-help" id="busInfo">Busca en el directorio de AllStar: el indicativo o el número de nodo por cómo empiezan; con 3 letras o más también por descripción o lugar.</p>
+        <div id="busList" class="bus-list"></div>
       </div>
       <details class="panel net" id="sesRedWrap">
         <summary><span id="sesRedTitle">Red completa</span><small class="muted">Nodos alcanzables a través de los enlaces</small></summary>
@@ -661,7 +671,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.36.0"></script>
-<script src="static/app.js?v=1.36.0"></script>
+<script src="static/i18n.js?v=1.37.0"></script>
+<script src="static/app.js?v=1.37.0"></script>
 </body>
 </html>
