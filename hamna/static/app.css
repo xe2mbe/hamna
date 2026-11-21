@@ -854,3 +854,6 @@ a.btn { text-decoration: none; }
 .sec-sin summary { cursor: pointer; margin: 0 2px 8px; list-style-position: inside; }
 .sec-compartida { font-size: .86rem; background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 12px; margin: -4px 0 12px; }
 #secList:not(.table) { background: none; border: 0; box-shadow: none; }
+/* ☆ Agregar a favoritos en el buscador */
+.bus-row [data-busfav] { white-space: nowrap; }
+.bus-row .fav-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }

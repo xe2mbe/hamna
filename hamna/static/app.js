@@ -2954,7 +2954,7 @@ function renderBuscar() {
       <span class="c">${hl(r.indicativo, true)}</span>
       <span class="d">${txtHl ? hl(r.descripcion) : esc(r.descripcion)}${r.ubicacion ? `<small>${txtHl ? hl(r.ubicacion) : esc(r.ubicacion)}</small>` : ""}</span>
       <span class="acc">${yo ? `<span class="st">${LG("Este nodo", "This node")}</span>`
-        : `${on ? `<span class="st">● ${LG("Conectado", "Connected")}</span>` : presChip(r.nodo)}<button type="button" class="btn sm" data-buscon="${esc(r.nodo)}">${on ? LG("Cambiar modo", "Change mode") : LG("Conectar", "Connect")}</button>`}</span>
+        : `${on ? `<span class="st">● ${LG("Conectado", "Connected")}</span>` : presChip(r.nodo)}<button type="button" class="btn sm" data-buscon="${esc(r.nodo)}">${on ? LG("Cambiar modo", "Change mode") : LG("Conectar", "Connect")}</button>`}${favBtn(r)}</span>
     </div>`;
   }).join("") + `</div>`);
   presenciaCargar(b.resultados.map((r) => r.nodo).filter((n) => n !== local && !con.has(n)));
@@ -2996,7 +2996,40 @@ function presPintar() {
   if (S.bus && !$("#aslBuscar").classList.contains("hidden")) renderBuscar();
   if (S.ses && S.ses.sistema === "asl") renderAslFavs(S.ses);
 }
+/* ☆ Agregar a favoritos desde el buscador (solo admin: la lista es la misma del bot) */
+function favBtn(r) {
+  if (!isAdmin()) return "";
+  const favs = ((S.aslFavs || {})[S.ses && S.ses.nodo]) || [];
+  const ya = favs.some((f) => f.nodo === r.nodo);
+  return ya ? `<button type="button" class="btn sm fav-on" data-busfav="${esc(r.nodo)}" data-quitar="1" title="${LG("Ya está en favoritos. Clic para quitarlo.", "Already a favorite. Click to remove it.")}">⭐ ${LG("En favoritos", "In favorites")}</button>`
+    : `<button type="button" class="btn sm" data-busfav="${esc(r.nodo)}" title="${LG("Agregarlo a los favoritos del Dashboard y del bot", "Add it to the Dashboard and bot favorites")}">☆ ${LG("Agregar a favoritos", "Add to favorites")}</button>`;
+}
+async function busFavorito(b) {
+  const n = b.dataset.busfav, quitar = !!b.dataset.quitar;
+  const r = ((S.bus && S.bus.resultados) || []).find((x) => x.nodo === n) || { nodo: n };
+  // Se lee la lista del servidor justo antes, por si alguien la cambió en otra pestaña o el bot
+  let favs;
+  try { favs = (await api("api/sesiones/favoritos?nodo=" + encodeURIComponent(S.ses.nodo))).favoritos || []; }
+  catch { return; }
+  if (quitar) {
+    if (!(await confirmBox(LG(`¿Quitar el nodo ${n} de favoritos?`, `Remove node ${n} from favorites?`), LG("Quitar", "Remove")))) return;
+    favs = favs.filter((f) => f.nodo !== n);
+  } else {
+    if (favs.some((f) => f.nodo === n)) { S.aslFavs = { [S.ses.nodo]: favs }; renderBuscar(); renderAslFavs(S.ses); return; }
+    if (favs.length >= 60) { toast(LG("Ya hay 60 favoritos, que es el máximo. Quita alguno con ✏️ Editar.", "There are already 60 favorites (the maximum). Remove one with ✏️ Edit."), true); return; }
+    const nombre = [r.indicativo, r.descripcion, r.ubicacion].filter(Boolean).join(" · ").slice(0, 60);
+    favs = favs.concat([{ nodo: n, nombre }]);
+  }
+  busy(b, true, "…");
+  try {
+    const res = await run(() => api("api/sesiones/favoritos", { method: "PUT", json: { favoritos: favs } }),
+      quitar ? LG(`Nodo ${n} quitado de favoritos`, `Node ${n} removed from favorites`) : LG(`Nodo ${n} agregado a favoritos`, `Node ${n} added to favorites`));
+    S.aslFavs = { [S.ses.nodo]: res.favoritos };
+    renderBuscar(); renderAslFavs(S.ses);
+  } catch {} finally { busy(b, false); }
+}
 $("#busList").onclick = async (e) => {
+  const fb = e.target.closest("[data-busfav]"); if (fb) return busFavorito(fb);
   const b = e.target.closest("[data-buscon]"); if (!b) return;
   const n = b.dataset.buscon, sel = $("#sesConnect").modo, modo = sel.value;
   const modoTxt = sel.options[sel.selectedIndex].text.toLowerCase();
