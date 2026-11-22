@@ -3,6 +3,7 @@ HAMNA Web — API HTTP y página. Funciona con Python 3.5 a 3.13 sin paquetes ex
 """
 import binascii
 import datetime as dt
+import json
 import logging
 import os
 import re
@@ -13,7 +14,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, anuncios, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -34,6 +35,8 @@ def init_app():
     share.init()
     sync.init()
     autobackup.init()
+    anuncios.init()
+    anuncios.emisor.start()
     from . import hub
     hub.init()
     app.roles = auth.ROLES
@@ -890,6 +893,68 @@ def tts_preview(req):
         src = audio.prepare(src, None)
     return ok(url="api/archivo/" + src.parent.name + "/" + src.name,
               texto=tts.resolve_variables(text, cfg, ctx))
+
+
+# ── Programación → Anuncios ──────────────────────────────────────────────────
+def _anuncio_req(req, aid=None):
+    try:
+        datos = json.loads(req.form.get("datos") or "{}")
+    except ValueError:
+        raise ValueError("Datos del anuncio inválidos")
+    up = req.files.get("archivo")
+    return anuncios.guardar(datos, up.path if up else None, up.filename if up else "",
+                            req.user["usuario"], aid)
+
+
+@app.route("/api/anuncios", rol="lectura")
+def anuncios_lista(req):
+    return jsonr(anuncios.resumen())
+
+
+@app.route("/api/anuncios", ("POST",), rol="operador")
+def anuncios_nuevo(req):
+    return ok(anuncio=_anuncio_req(req))
+
+
+@app.route("/api/anuncios/<int:aid>", ("PUT",), rol="operador")
+def anuncios_editar(req, aid):
+    return ok(anuncio=_anuncio_req(req, aid))
+
+
+@app.route("/api/anuncios/<int:aid>", ("DELETE",), rol="operador")
+def anuncios_borrar(req, aid):
+    anuncios.borrar(aid, req.user["usuario"])
+    return ok()
+
+
+@app.route("/api/anuncios/<int:aid>/activo", ("POST",), rol="operador")
+def anuncios_activo(req, aid):
+    return ok(anuncio=anuncios.activar(aid, truthy(req.json().get("activo")), req.user["usuario"]))
+
+
+@app.route("/api/anuncios/<int:aid>/ahora", ("POST",), rol="operador")
+def anuncios_ahora(req, aid):
+    a = anuncios.uno(aid)
+    if not anuncios.emisor.encolar(aid, "manual:" + req.user["usuario"]):
+        raise ValueError("Ese anuncio ya está en espera o al aire")
+    log.info("%s mandó al aire el anuncio «%s»", req.user["usuario"], a["nombre"])
+    return ok()
+
+
+@app.route("/api/anuncios/<int:aid>/audio", rol="lectura")
+def anuncios_audio(req, aid):
+    p = anuncios.ruta(anuncios.uno(aid))
+    if not p or not p.is_file():
+        raise HTTPError(404)
+    return send_file(p, "audio/wav")
+
+
+@app.route("/api/anuncios/voz", ("POST",), rol="operador")
+def anuncios_voz(req):
+    """Escuchar el texto con la voz configurada antes de guardar."""
+    b = req.json()
+    nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:2000], settings.load())
+    return ok(url="api/archivo/tmp/" + nombre, texto=dicho, duracion=round(dur, 1), max_seg=anuncios.MAX_SEG)
 
 
 @app.route("/api/archivo/<carpeta>/<name>")

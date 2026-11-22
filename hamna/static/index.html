@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.45.0">
+<link rel="stylesheet" href="static/app.css?v=1.46.0">
 </head>
 <body>
 
@@ -97,11 +97,23 @@
     <!-- Programación -->
     <section class="view" id="view-prog">
       <div class="view-head">
-        <div><h1>Programación</h1><p class="sub">Eventos disponibles para transmitir</p></div>
-        <button class="btn primary" id="btnNewProg">+ Programar evento</button>
+        <div><h1>Programación</h1><p class="sub" id="progSub">Eventos disponibles para transmitir</p></div>
+        <div class="row gap"><button class="btn primary" id="btnNewProg">+ Programar evento</button><button class="btn primary hidden" id="btnNewAnuncio">＋ Nuevo anuncio</button></div>
       </div>
-      <div id="nextCard" class="next-card hidden"></div>
-      <div id="progList" class="cards"></div>
+      <div class="prog-tabs" id="progTabs" role="tablist">
+        <button type="button" class="active" role="tab" data-prog="eventos">📅 Eventos <span class="cnt" id="evCnt"></span></button>
+        <button type="button" role="tab" data-prog="anuncios">📢 Anuncios <span class="cnt" id="anCnt"></span></button>
+      </div>
+      <div data-progpane="eventos">
+        <div id="nextCard" class="next-card hidden"></div>
+        <div id="progList" class="cards"></div>
+      </div>
+      <div data-progpane="anuncios" class="hidden">
+        <div id="anAviso"></div>
+        <div id="anNext"></div>
+        <div id="anList" class="cards"><p class="muted">Cargando…</p></div>
+        <details class="an-logwrap hidden" id="anLogWrap"><summary>Bitácora de anuncios</summary><div id="anLog"></div></details>
+      </div>
     </section>
 
     <!-- Eventos -->
@@ -671,7 +683,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.45.0"></script>
-<script src="static/app.js?v=1.45.0"></script>
+<script src="static/i18n.js?v=1.46.0"></script>
+<script src="static/app.js?v=1.46.0"></script>
 </body>
 </html>

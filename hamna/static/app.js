@@ -272,7 +272,7 @@ function showTab(t) {
   if (location.hash.slice(1) !== t) history.replaceState(null, "", "#" + t);
   $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === t));
   $$(".view").forEach((v) => v.classList.toggle("hidden", v.id !== "view-" + t));
-  ({ prog: loadProg, eventos: loadEventos, secciones: loadSecciones, conexiones: loadSesiones, grab: loadGrab, nodos: loadNodos, cron: loadCron, ajustes: loadAjustes })[t]();
+  ({ prog: loadProgTab, eventos: loadEventos, secciones: loadSecciones, conexiones: loadSesiones, grab: loadGrab, nodos: loadNodos, cron: loadCron, ajustes: loadAjustes })[t]();
   window.scrollTo(0, 0);
 }
 
@@ -497,6 +497,7 @@ async function txStart(eid, nombre) {
 async function loadProg() {
   const [prog, ev] = await Promise.all([api("api/programacion"), api("api/eventos")]);
   S.prog = prog; S.eventos = ev.eventos; S.tipos = ev.tipos;
+  $("#evCnt").textContent = prog.length || "";
   S.progLoaded = Date.now();
   renderProg();
   loadCronEntries().then((ch) => { if (ch && S.tab === "prog") renderProg(); });
@@ -3723,3 +3724,310 @@ $("#btnTgTest").onclick = async () => {
     me.auth ? start() : showLogin();
   } catch { showLogin(); }
 })();
+
+/* Programación: pestañas Eventos | Anuncios (la elegida se recuerda) */
+try { S.progSub = localStorage.getItem("hamna.progsub") || "eventos"; } catch { S.progSub = "eventos"; }
+function progSubTab(k) {
+  S.progSub = k === "anuncios" ? "anuncios" : "eventos";
+  try { localStorage.setItem("hamna.progsub", S.progSub); } catch {}
+  $$("#progTabs [data-prog]").forEach((b) => { b.classList.toggle("active", b.dataset.prog === S.progSub); b.setAttribute("aria-selected", b.dataset.prog === S.progSub); });
+  $$("#view-prog [data-progpane]").forEach((p) => p.classList.toggle("hidden", p.dataset.progpane !== S.progSub));
+  $("#btnNewProg").classList.toggle("hidden", S.progSub !== "eventos");
+  $("#progSub").textContent = S.progSub === "eventos" ? LG("Eventos disponibles para transmitir", "Events available to broadcast") : LG("Anuncios cortos que el nodo transmite solo", "Short announcements the node transmits on its own");
+  if (S.progSub === "anuncios") { $("#btnNewAnuncio").classList.toggle("hidden", !(S.an && puedeAnunciar())); loadAnuncios(); }
+  else { $("#btnNewAnuncio").classList.add("hidden"); clearTimeout(S.anT); loadProg(); }
+}
+function loadProgTab() {
+  progSubTab(S.progSub);
+  // Contadores de las dos pestañas
+  api("api/anuncios").then((d) => { $("#anCnt").textContent = d.anuncios.length || ""; }).catch(() => {});
+}
+$("#progTabs").onclick = (e) => { const b = e.target.closest("[data-prog]"); if (b) progSubTab(b.dataset.prog); };
+/* ── Programación → Anuncios ─────────────────────────────────────────────────
+   Anuncios cortos que el nodo transmite solo. El audio subido o grabado se
+   convierte aquí, en el navegador, a WAV 8 kHz mono (lo que lee Asterisk). */
+const AN_DIAS = () => LG("L M X J V S D", "Mo Tu We Th Fr Sa Su").split(" ");
+const AN_DIAS_LARGO = () => LG("Lun Mar Mié Jue Vie Sáb Dom", "Mon Tue Wed Thu Fri Sat Sun").split(" ");
+const AN_VAR_EN = { "{hora}": "Current time (HH:MM)", "{dia}": "Day of the week", "{fecha}": "Date (dd/mm/yyyy)",
+  "{fecha_larga}": "Date in words (2 de noviembre de 2026)", "{saludo}": "Buenos días / buenas tardes / buenas noches (by time of day)",
+  "{despedida}": "Buen día / buena tarde / buena noche (by time of day)", "{nodo}": "Node number" };
+const anDetalle = (t) => LG(t, String(t || "").replace(/^manual · /, "manual · ").replace("solo este nodo", "this node only").replace("nodo y enlaces", "node and links")
+  .replace(/^El canal estuvo ocupado (\d+) min$/, "The channel was busy for $1 min")
+  .replace(/^Los anuncios solo salen en nodos AllStar.*$/, "Announcements only go out on AllStar nodes with a node number (Settings → Node)")
+  .replace(/^Falta el audio del anuncio.*$/, "The announcement's audio is missing; edit it and save it again"));
+const puedeAnunciar = () => S.me && (S.me.rol === "admin" || S.me.rol === "operador");
+async function loadAnuncios() {
+  clearTimeout(S.anT);
+  try { S.an = await api("api/anuncios"); renderAnuncios(); }
+  catch (e) { $("#anList").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+  // Mientras se ve la pestaña: el estado (esperando canal / al aire) y el próximo se refrescan solos
+  const ocupado = S.an && S.an.emisor && (S.an.emisor.actual || S.an.emisor.en_cola.length);
+  S.anT = setTimeout(() => { if (S.tab === "prog" && S.progSub === "anuncios" && !document.hidden) loadAnuncios(); }, ocupado ? 3000 : 20000);
+}
+const anFecha = (s) => { const [d, h] = (s || "").split(" "); if (!d) return ""; const [y, m, dd] = d.split("-"); return `${dd}/${m}/${y}${h ? " " + h : ""}`; };
+const anMinutos = (desde, hasta) => Math.round((new Date(hasta.replace(" ", "T")) - new Date(desde.replace(" ", "T"))) / 60000);
+function anDiasTxt(d) {
+  if (d === "0123456") return LG("Todos los días", "Every day");
+  if (d === "01234") return LG("Lun a Vie", "Mon to Fri");
+  if (d === "56") return LG("Sáb y Dom", "Sat and Sun");
+  return d.split("").map((i) => AN_DIAS_LARGO()[+i]).join(", ");
+}
+/* Por dónde sale: RF (el radio de este nodo) siempre; Net (los nodos enlazados) solo con destino «red» */
+const anVia = (destino) => {
+  const net = destino === "red";
+  return `<span class="via rf on" title="${LG("Sale por el radio de este nodo", "Goes out on this node's radio")}">📻 RF</span>` +
+    `<span class="via net ${net ? "on" : ""}" title="${net ? LG("También sale a los nodos enlazados", "Also goes out to the linked nodes") : LG("No sale a los nodos enlazados", "Doesn't go out to the linked nodes")}">🌐 Net</span>`;
+};
+const anY = (l) => l.length < 2 ? l.join("") : l.slice(0, -1).join(", ") + LG(" y ", " and ") + l[l.length - 1];
+function anCuandoTxt(a) {
+  let t;
+  if (a.modo === "una") t = LG("Una vez", "Once") + " · " + anFecha(a.una_vez);
+  else if (a.modo === "cada") {
+    const m = a.cada_min, c = m % 60 === 0 ? `${m / 60} h` : `${m} min`;
+    t = anDiasTxt(a.dias) + " · " + LG(`Cada ${c} de ${a.desde_h} a ${a.hasta_h}`, `Every ${c} from ${a.desde_h} to ${a.hasta_h}`);
+  } else t = anDiasTxt(a.dias) + " · " + anY(a.horas);
+  if (a.vig_desde || a.vig_hasta) t += " · " + (a.vig_desde && a.vig_hasta ? LG(`del ${anFecha(a.vig_desde)} al ${anFecha(a.vig_hasta)}`, `from ${anFecha(a.vig_desde)} to ${anFecha(a.vig_hasta)}`)
+    : a.vig_desde ? LG("desde el ", "from ") + anFecha(a.vig_desde) : LG("hasta el ", "until ") + anFecha(a.vig_hasta));
+  return t;
+}
+function renderAnuncios() {
+  const d = S.an, lst = d.anuncios, puede = puedeAnunciar(), act = (d.emisor || {}).actual;
+  $("#btnNewAnuncio").classList.toggle("hidden", !puede || !d.asl || S.progSub !== "anuncios");
+  $("#anCnt").textContent = lst.length || "";
+  $("#anAviso").innerHTML = !d.asl ? `<div class="note warn">${LG("Los anuncios salen al aire solo en nodos AllStar (ASL). Este nodo no es ASL o no tiene número de nodo en Ajustes → Nodo.", "Announcements only go on air on AllStar (ASL) nodes. This node isn't ASL or has no node number in Settings → Node.")}</div>`
+    : !d.voz.lista ? `<div class="note warn">${LG("La voz no está configurada", "The voice isn't set up")} (${esc(d.voz.nombre || "")}). ${isAdmin() ? LG("Revisa Ajustes → Voz. Mientras, puedes subir o grabar el audio.", "Check Settings → Voice. Meanwhile you can upload or record the audio.") : LG("Pídele al administrador que la configure; mientras, puedes subir o grabar el audio.", "Ask the administrator to set it up; meanwhile you can upload or record the audio.")}</div>` : "";
+  const sig = d.siguiente;
+  $("#anNext").innerHTML = act ? `<div class="an-next live"><span class="lbl">${act.estado === "al_aire" ? "📡 " + LG("Al aire", "On air") : "⏳ " + LG("Esperando a que se libere el canal", "Waiting for the channel to clear")}</span><b translate="no">${esc(act.nombre)}</b></div>`
+    : sig ? `<div class="an-next"><span class="lbl">${LG("Próximo", "Next")}</span><b translate="no">📢 ${esc(sig.nombre)}</b><span>${anFecha(sig.cuando)} · ${LG("en", "in")} ${fmtLeft(anMinutos(d.ahora, sig.cuando) * 60)}</span></div>` : "";
+  if (!lst.length) {
+    $("#anList").innerHTML = `<p class="empty">${LG("Todavía no hay anuncios.", "No announcements yet.")}${puede && d.asl ? " " + LG("Crea el primero con «＋ Nuevo anuncio».", "Create the first one with «＋ New announcement».") : ""}</p>`;
+  } else $("#anList").innerHTML = lst.map((a) => {
+    const enCola = act && act.id === a.id ? act.estado : (d.emisor.en_cola || []).includes(a.id) ? "cola" : "";
+    const ult = a.ultimo ? `${LG("Último", "Last")}: ${anFecha(a.ultimo)} ${{ ok: "✓", saltado: "⚠ " + LG("saltado (canal ocupado)", "skipped (channel busy)"), error: "✗ " + LG("error", "error") }[a.ultimo_estado] || ""}` : LG("Todavía no ha salido", "Hasn't gone out yet");
+    return `<div class="card an-card ${a.activo ? "" : "off"} ${enCola ? "live" : ""}">
+      <div class="an-top"><h3 translate="no">📢 ${esc(a.nombre)}</h3>
+        ${puede ? `<label class="switch" title="${a.activo ? LG("Activo: clic para pausarlo", "Active: click to pause it") : LG("Pausado: clic para activarlo", "Paused: click to activate it")}"><input type="checkbox" data-anon="${a.id}" ${a.activo ? "checked" : ""}><span></span></label>`
+          : `<span class="chip ${a.activo ? "ok" : ""}">${a.activo ? LG("Activo", "Active") : LG("Pausado", "Paused")}</span>`}</div>
+      <div class="an-via">${anVia(a.destino)}</div>
+      <div class="an-que">${a.tipo === "tts" ? `🗣 <span translate="no">«${esc(a.texto.length > 140 ? a.texto.slice(0, 140) + "…" : a.texto)}»</span>` : `🎵 <span translate="no">${esc(a.archivo_nombre || "audio.wav")}</span>`}<span class="an-dur">${fmt(a.duracion)}</span></div>
+      <div class="meta">${esc(anCuandoTxt(a))}</div>
+      <div class="meta">${enCola === "al_aire" ? "📡 " + LG("Al aire ahora", "On air now") : enCola ? "⏳ " + LG("Esperando canal libre", "Waiting for a clear channel")
+        : a.activo && a.proximo ? LG("Próximo", "Next") + ": " + anFecha(a.proximo) : a.activo ? LG("Sin próximos turnos", "No upcoming slots") : ""}${a.creado_por ? ` · <span class="muted">${LG("creado por", "created by")} ${esc(a.creado_por)}</span>` : ""}</div>
+      <div class="meta muted">${ult}</div>
+      <div class="actions">
+        <button type="button" class="btn sm ro" data-anplay="${a.id}" data-v="${esc(a.modificado)}">▶ ${LG("Escuchar", "Listen")}</button>
+        ${puede && d.asl ? `<button type="button" class="btn sm danger-soft" data-anaire="${a.id}" ${enCola ? "disabled" : ""}>📡 ${LG("Transmitir ahora", "Transmit now")}</button>` : ""}
+        ${puede ? `<button type="button" class="btn sm" data-anedit="${a.id}">✏️ ${LG("Editar", "Edit")}</button>
+          <button type="button" class="btn sm ghost" data-andel="${a.id}" title="${LG("Borrar", "Delete")}">🗑</button>` : ""}
+      </div></div>`;
+  }).join("");
+  const log = d.bitacora || [];
+  $("#anLogWrap").classList.toggle("hidden", !log.length);
+  $("#anLog").innerHTML = log.map((l) => `<div class="an-log-row ${esc(l.estado)}"><span class="when">${anFecha(l.cuando)}</span>
+    <b translate="no">${esc(l.nombre)}</b><span>${{ ok: "✓ " + LG("Salió", "Went out"), saltado: "⚠ " + LG("Saltado", "Skipped"), error: "✗ Error" }[l.estado] || esc(l.estado)}</span>
+    <small class="muted">${esc(anDetalle(l.detalle || ""))}</small></div>`).join("");
+}
+let anAudio = null;
+$("#anList").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.anplay) {
+    if (anAudio && !anAudio.paused && anAudio.dataset.id === b.dataset.anplay) { anAudio.pause(); b.textContent = "▶ " + LG("Escuchar", "Listen"); return; }
+    if (anAudio) anAudio.pause();
+    $$("#anList [data-anplay]").forEach((x) => (x.textContent = "▶ " + LG("Escuchar", "Listen")));
+    anAudio = new Audio(`api/anuncios/${b.dataset.anplay}/audio?v=${encodeURIComponent(b.dataset.v)}`);
+    anAudio.dataset.id = b.dataset.anplay;
+    anAudio.onended = () => (b.textContent = "▶ " + LG("Escuchar", "Listen"));
+    b.textContent = "⏸ " + LG("Detener", "Stop");
+    anAudio.play().catch((err) => { toast(err.message, true); b.textContent = "▶ " + LG("Escuchar", "Listen"); });
+    return;
+  }
+  const id = +(b.dataset.anaire || b.dataset.anedit || b.dataset.andel);
+  const a = (S.an.anuncios || []).find((x) => x.id === id); if (!a) return;
+  if (b.dataset.anedit) return anuncioEditor(a);
+  if (b.dataset.andel) {
+    if (!(await confirmBox(LG(`¿Borrar el anuncio «${a.nombre}»? No se puede deshacer.`, `Delete the announcement «${a.nombre}»? This can't be undone.`), LG("Borrar", "Delete")))) return;
+    await run(() => api("api/anuncios/" + id, { method: "DELETE" }), LG("Anuncio borrado", "Announcement deleted")).catch(() => {});
+    return loadAnuncios();
+  }
+  if (b.dataset.anaire) {
+    const red = a.destino === "red";
+    if (!(await confirmBox(LG(`¿Transmitir «${a.nombre}» ahora${red ? " en este nodo y en todos los enlazados" : " por el radio de este nodo"}? Si alguien está hablando, espera a que se libere el canal.`,
+      `Transmit «${a.nombre}» now${red ? " on this node and every linked node" : " on this node's radio"}? If someone is talking, it waits for the channel to clear.`), "📡 " + LG("Transmitir", "Transmit"), false))) return;
+    await run(() => api(`api/anuncios/${id}/ahora`, { method: "POST" }), LG("En camino al aire", "On its way to air")).catch(() => {});
+    return loadAnuncios();
+  }
+});
+$("#anList").addEventListener("change", async (e) => {
+  const t = e.target.closest("[data-anon]"); if (!t) return;
+  try { await run(() => api(`api/anuncios/${t.dataset.anon}/activo`, { method: "POST", json: { activo: t.checked } }), t.checked ? LG("Anuncio activado", "Announcement activated") : LG("Anuncio pausado", "Announcement paused")); }
+  catch { t.checked = !t.checked; }
+  loadAnuncios();
+});
+$("#btnNewAnuncio").onclick = () => anuncioEditor(null);
+
+/* Audio del navegador → WAV 8 kHz mono 16 bits, con el pico a -1 dB */
+async function aWav8k(blob, nombre) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !window.OfflineAudioContext) throw new Error(LG("Este navegador no puede convertir audio", "This browser can't convert audio"));
+  let buf;
+  try { const ctx = new Ctx(); buf = await ctx.decodeAudioData(await blob.arrayBuffer()); ctx.close && ctx.close(); }
+  catch { throw new Error(LG("No pude leer ese audio. Prueba con MP3, WAV, M4A u OGG.", "Couldn't read that audio. Try MP3, WAV, M4A or OGG.")); }
+  const RATE = 8000, len = Math.max(1, Math.ceil(buf.duration * RATE));
+  const off = new OfflineAudioContext(1, len, RATE);
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  let pico = 0; for (let i = 0; i < pcm.length; i++) pico = Math.max(pico, Math.abs(pcm[i]));
+  const g = pico > 0.001 ? Math.min(8, 0.89 / pico) : 1;
+  const dv = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, RATE, true);
+  dv.setUint32(28, RATE * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) { const v = Math.max(-1, Math.min(1, pcm[i] * g)); dv.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true); }
+  return { file: new File([dv.buffer], (nombre || "anuncio").replace(/\.[^.]+$/, "") + ".wav", { type: "audio/wav" }), dur: buf.duration };
+}
+
+function anuncioEditor(a) {
+  const d = S.an, nuevo = !a;
+  a = a || { nombre: "", tipo: d.voz.lista ? "tts" : "audio", texto: "", dias: "0123456", modo: "horas", horas: ["09:00"], cada_min: 60,
+    desde_h: "08:00", hasta_h: "22:00", una_vez: "", vig_desde: "", vig_hasta: "", destino: "local", activo: true };
+  const ed = { tipo: a.tipo, horas: a.horas.slice(), archivo: null, archivoNombre: a.archivo_nombre || "", dur: a.duracion || 0 };
+  const puedeGrabar = !!(window.isSecureContext && navigator.mediaDevices && window.MediaRecorder);
+  const vars = (d.voz.variables || []).map(([v, t]) => `<button type="button" class="chip" data-anvar="${esc(v)}" title="${esc(LG(t, AN_VAR_EN[v] || t))}" translate="no">${esc(v)}</button>`).join("");
+  openModal(nuevo ? LG("Nuevo anuncio", "New announcement") : LG("Editar anuncio", "Edit announcement"), `<form id="anForm" class="an-form" autocomplete="off">
+    <label>${LG("Nombre", "Name")}<input name="nombre" maxlength="80" required value="${esc(a.nombre)}" placeholder="${LG("Red de los martes", "Tuesday net")}"></label>
+    <div class="an-sec"><b>${LG("Qué dice", "What it says")}</b>
+      <div class="seg" id="anTipo">
+        <button type="button" data-tipo="tts">🗣 ${LG("Texto → voz", "Text → voice")}</button>
+        <button type="button" data-tipo="audio">🎵 ${LG("Subir audio", "Upload audio")}</button>
+        ${puedeGrabar ? `<button type="button" data-tipo="grabar">🎙 ${LG("Grabar aquí", "Record here")}</button>` : ""}
+      </div>
+      <div data-pane="tts"><textarea name="texto" rows="3" maxlength="2000" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
+        <div class="an-vars"><span class="muted">${LG("Variables", "Variables")}:</span> ${vars}</div>
+        <div class="row gap wrap"><button type="button" class="btn sm" id="anVozPlay">▶ ${LG("Escuchar", "Listen")}</button><span class="muted" id="anVozMsg">${esc(d.voz.nombre || "")}${d.voz.lista ? "" : " · ⚠ " + LG("sin configurar", "not set up")}</span></div></div>
+      <div data-pane="audio" class="hidden"><label class="btn sm" style="margin:0">📁 ${LG("Elegir archivo", "Choose file")}<input type="file" id="anFile" accept="audio/*" hidden></label>
+        <span class="muted" id="anFileMsg">${ed.archivoNombre ? esc(ed.archivoNombre) + " · " + fmt(ed.dur) : LG("MP3, WAV, M4A u OGG", "MP3, WAV, M4A or OGG")}</span></div>
+      <div data-pane="grabar" class="hidden"><button type="button" class="btn sm" id="anRec">⏺ ${LG("Grabar", "Record")}</button> <span class="muted" id="anRecMsg">${LG("Habla cerca del micrófono", "Speak close to the microphone")}</span></div>
+      <audio id="anPrev" controls class="hidden"></audio>
+      <small class="muted">${LG(`Máximo ${d.max_seg} s.`, `${d.max_seg} s maximum.`)}${puedeGrabar ? "" : " " + LG("Para grabar desde aquí la página debe abrirse con https.", "To record here the page must be opened over https.")}</small>
+    </div>
+    <div class="an-sec"><b>${LG("Cuándo", "When")}</b>
+      <div class="seg" id="anModo">
+        <button type="button" data-modo="horas">${LG("A estas horas", "At these times")}</button>
+        <button type="button" data-modo="cada">${LG("Cada cierto tiempo", "Every so often")}</button>
+        <button type="button" data-modo="una">${LG("Una sola vez", "Just once")}</button>
+      </div>
+      <div class="an-dias" data-ver="horas cada">${AN_DIAS().map((t, i) => `<button type="button" data-dia="${i}" class="${a.dias.includes(String(i)) ? "on" : ""}">${t}</button>`).join("")}
+        <button type="button" class="btn sm ghost" data-diasrap="0123456">${LG("Todos", "All")}</button><button type="button" class="btn sm ghost" data-diasrap="01234">${LG("Lun–Vie", "Mon–Fri")}</button></div>
+      <div data-ver="horas"><div class="an-horas" id="anHoras"></div>
+        <div class="row gap"><input type="time" id="anHoraNueva" value="12:00"><button type="button" class="btn sm" id="anHoraAdd">＋ ${LG("Hora", "Time")}</button></div></div>
+      <div data-ver="cada" class="row gap wrap an-cada">${LG("Cada", "Every")} <select name="cada_min">${[15, 30, 60, 90, 120, 180, 240, 360].map((m) => `<option value="${m}" ${+a.cada_min === m ? "selected" : ""}>${m % 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select>
+        ${LG("de", "from")} <input type="time" name="desde_h" value="${esc(a.desde_h)}"> ${LG("a", "to")} <input type="time" name="hasta_h" value="${esc(a.hasta_h)}"></div>
+      <div data-ver="una"><input type="datetime-local" name="una_vez" value="${esc((a.una_vez || "").replace(" ", "T"))}"></div>
+      <details class="an-vig" ${a.vig_desde || a.vig_hasta ? "open" : ""} data-ver="horas cada"><summary>${LG("Vigencia (opcional)", "Valid dates (optional)")}</summary>
+        <div class="row gap wrap">${LG("desde", "from")} <input type="date" name="vig_desde" value="${esc(a.vig_desde)}"> ${LG("hasta", "to")} <input type="date" name="vig_hasta" value="${esc(a.vig_hasta)}"></div></details>
+    </div>
+    <div class="an-sec"><b>${LG("Dónde", "Where")}</b>
+      <label class="check"><input type="radio" name="destino" value="local" ${a.destino !== "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span> ${LG("Solo este nodo (el radio local)", "This node only (the local radio)")}</label>
+      <label class="check"><input type="radio" name="destino" value="red" ${a.destino === "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span><span class="via net on">🌐 Net</span> ${LG("Este nodo y los nodos enlazados", "This node and the linked nodes")}</label>
+      <small class="muted hidden" id="anRedAviso">⚠ ${LG("Se oye en todos los nodos conectados en ese momento.", "It's heard on every node connected at that moment.")}</small>
+    </div>
+    <p class="muted an-nota">ⓘ ${LG(`Si alguien está hablando, espera hasta ${d.espera_min} min a que se libere el canal; si no se libera, ese turno se salta y queda en la bitácora.`, `If someone is talking, it waits up to ${d.espera_min} min for the channel to clear; if it doesn't, that slot is skipped and logged.`)}</p>
+    <div class="modal-actions"><button type="button" class="btn" id="anCancel">${LG("Cancelar", "Cancel")}</button><button class="btn primary" id="anSave">${LG("Guardar", "Save")}</button></div>
+  </form>`);
+  const f = $("#anForm"), prev = $("#anPrev");
+  const setTipo = (t) => {
+    ed.tipo = t === "tts" ? "tts" : "audio"; ed.pane = t;
+    $$("#anTipo button").forEach((b) => b.classList.toggle("active", b.dataset.tipo === t));
+    $$("#anForm [data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== t));
+  };
+  const setModo = (m) => {
+    ed.modo = m;
+    $$("#anModo button").forEach((b) => b.classList.toggle("active", b.dataset.modo === m));
+    $$("#anForm [data-ver]").forEach((p) => p.classList.toggle("hidden", !p.dataset.ver.split(" ").includes(m)));
+  };
+  const pintaHoras = () => { $("#anHoras").innerHTML = ed.horas.length ? ed.horas.map((h) => `<span class="chip">${h} <button type="button" data-hdel="${h}" title="${LG("Quitar", "Remove")}">✕</button></span>`).join("") : `<span class="muted">${LG("Agrega al menos una hora", "Add at least one time")}</span>`; };
+  const oye = (url) => { prev.src = url; prev.classList.remove("hidden"); prev.play().catch(() => {}); };
+  const red = () => $("#anRedAviso").classList.toggle("hidden", f.destino.value !== "red");
+  setTipo(a.tipo === "audio" ? "audio" : "tts"); setModo(a.modo); pintaHoras(); red();
+  if (!nuevo && a.tipo === "audio") oyeGuardado();
+  function oyeGuardado() { prev.src = `api/anuncios/${a.id}/audio?v=${encodeURIComponent(a.modificado)}`; prev.classList.remove("hidden"); }
+  $("#anTipo").onclick = (e) => { const b = e.target.closest("[data-tipo]"); if (b) setTipo(b.dataset.tipo); };
+  $("#anModo").onclick = (e) => { const b = e.target.closest("[data-modo]"); if (b) setModo(b.dataset.modo); };
+  f.addEventListener("change", (e) => { if (e.target.name === "destino") red(); });
+  f.querySelector(".an-dias").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.diasrap) $$("#anForm [data-dia]").forEach((x) => x.classList.toggle("on", b.dataset.diasrap.includes(x.dataset.dia)));
+    else b.classList.toggle("on");
+  };
+  $("#anHoras").onclick = (e) => { const b = e.target.closest("[data-hdel]"); if (b) { ed.horas = ed.horas.filter((h) => h !== b.dataset.hdel); pintaHoras(); } };
+  $("#anHoraAdd").onclick = () => { const v = $("#anHoraNueva").value; if (v && !ed.horas.includes(v)) { ed.horas.push(v); ed.horas.sort(); pintaHoras(); } };
+  f.querySelector(".an-vars").onclick = (e) => {
+    const b = e.target.closest("[data-anvar]"); if (!b) return;
+    const t = f.texto, p = t.selectionStart ?? t.value.length;
+    t.value = t.value.slice(0, p) + b.dataset.anvar + t.value.slice(t.selectionEnd ?? p); t.focus();
+  };
+  $("#anVozPlay").onclick = async () => {
+    const b = $("#anVozPlay"); busy(b, true, LG("Generando…", "Generating…"));
+    try {
+      const r = await api("api/anuncios/voz", { method: "POST", json: { texto: f.texto.value } });
+      $("#anVozMsg").textContent = `${fmt(r.duracion)} ${LG("de", "of")} ${r.max_seg} s` + (r.duracion > r.max_seg ? " · ⚠ " + LG("muy largo", "too long") : "");
+      oye(r.url);
+    } catch (e) { toast(e.message, true); } finally { busy(b, false); }
+  };
+  $("#anFile").onchange = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    $("#anFileMsg").textContent = LG("Convirtiendo…", "Converting…");
+    try {
+      const r = await aWav8k(file, file.name);
+      if (r.dur > d.max_seg + 0.5) throw new Error(LG(`Dura ${Math.round(r.dur)} s; el máximo es ${d.max_seg} s`, `It's ${Math.round(r.dur)} s long; the maximum is ${d.max_seg} s`));
+      ed.archivo = r.file; ed.archivoNombre = file.name; ed.dur = r.dur;
+      $("#anFileMsg").textContent = `${file.name} · ${fmt(r.dur)}`;
+      oye(URL.createObjectURL(r.file));
+    } catch (err) { $("#anFileMsg").textContent = "⚠ " + err.message; ed.archivo = null; }
+  };
+  if (puedeGrabar) $("#anRec").onclick = async () => {
+    const b = $("#anRec");
+    if (ed.rec) { ed.rec.stop(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch { toast(LG("No hay permiso para usar el micrófono", "No permission to use the microphone"), true); return; }
+    const trozos = [], rec = new MediaRecorder(stream); ed.rec = rec;
+    const t0 = Date.now(), reloj = setInterval(() => {
+      const s = (Date.now() - t0) / 1000;
+      $("#anRecMsg").textContent = `⏺ ${fmt(s)} ${LG("de", "of")} ${d.max_seg} s`;
+      if (s >= d.max_seg) rec.stop();
+    }, 250);
+    rec.ondataavailable = (e) => e.data.size && trozos.push(e.data);
+    rec.onstop = async () => {
+      clearInterval(reloj); stream.getTracks().forEach((t) => t.stop()); ed.rec = null;
+      b.textContent = "⏺ " + LG("Grabar otra vez", "Record again");
+      try {
+        const r = await aWav8k(new Blob(trozos, { type: rec.mimeType }), "grabacion");
+        ed.archivo = r.file; ed.archivoNombre = LG("Grabación", "Recording") + " " + new Date().toLocaleDateString(); ed.dur = r.dur;
+        $("#anRecMsg").textContent = `${LG("Grabado", "Recorded")} · ${fmt(r.dur)}`;
+        oye(URL.createObjectURL(r.file));
+      } catch (err) { $("#anRecMsg").textContent = "⚠ " + err.message; }
+    };
+    rec.start(); b.textContent = "⏹ " + LG("Terminar", "Stop");
+  };
+  $("#anCancel").onclick = () => { if (ed.rec) ed.rec.stop(); closeModal(); };
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = {
+      nombre: f.nombre.value, tipo: ed.tipo, texto: f.texto.value, modo: ed.modo,
+      dias: $$("#anForm [data-dia].on").map((x) => x.dataset.dia).join(""), horas: ed.horas,
+      cada_min: f.cada_min.value, desde_h: f.desde_h.value, hasta_h: f.hasta_h.value, una_vez: f.una_vez.value,
+      vig_desde: f.vig_desde.value, vig_hasta: f.vig_hasta.value, destino: f.destino.value, activo: a.activo,
+    };
+    const fd = new FormData();
+    fd.append("datos", JSON.stringify(datos));
+    if (ed.tipo === "audio" && ed.archivo) fd.append("archivo", ed.archivo, ed.archivo.name);
+    const b = $("#anSave"); busy(b, true, ed.tipo === "tts" ? LG("Generando voz…", "Generating voice…") : LG("Guardando…", "Saving…"));
+    try {
+      await run(() => api(nuevo ? "api/anuncios" : "api/anuncios/" + a.id, { method: nuevo ? "POST" : "PUT", form: fd }), LG("Anuncio guardado", "Announcement saved"));
+      closeModal(); loadAnuncios();
+    } catch {} finally { busy(b, false); }
+  };
+}
+

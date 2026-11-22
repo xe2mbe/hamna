@@ -36,7 +36,7 @@ The same words it was born with still go on the air: *«Les recordamos que esta 
 
 HAMNA Web runs **inside the node** (AllStarLink 3, HamVOIP, ASL2 or IRLP) and automates bulletins, nets and programs: from the browser you upload audio or type text, build events, schedule them, and the node transmits them by itself, with automatic pauses to respect the repeaters' timeout timers. No PC needs to be on.
 
-**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
+**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Short announcements](#short-announcements) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
 
 ### Screenshots
 
@@ -62,6 +62,7 @@ Taken from the Radio Club Guadiana hub **299081** (the page is shown in Spanish;
 
 - **Events built from sections**: audio files (MP3, WAV, OGG, FLAC…), text read with synthetic voice (Azure, Google Cloud, ElevenLabs, Piper or eSpeak, with automatic fallback between engines) and sounds, in any order you want.
 - **Scheduling**: once, daily, weekly or Monday to Friday, **in the program's time zone** (it follows that zone's daylight saving changes by itself), with **automatic numbering** of the broadcasts.
+- Scheduled short **announcements** (text → voice, uploaded or recorded audio) that go out on their own when the channel is clear.
 - **Automatic transmission** through AllStarLink or IRLP, with an even audio level (-18 LUFS) and automatic pauses for the repeaters.
 - **Automatic connections** before and after each event, and a **Dashboard** tab to see and control the node live with your HAMNA user: on ASL its links, favorites and a node search, on IRLP it replaces IRLPvCON (favorites, enable/disable, DTMF, AUX and log).
 - **Listen to the node live** from the page (computer or phone), no plugins, on ASL and IRLP, and **record** what you hear (e.g. the check-ins) to MP3.
@@ -176,6 +177,17 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 - **Automatic numbering** (event detail): `{emision_anio}` counts the event's scheduled dates in the year (the 46th Sunday is #46) and restarts every January 1; `{emision}` is the global number based on "the broadcast on day R is #N". Numbers come from the calendar, not from a counter: a test, a restart or restoring a backup doesn't move them. The number advances when the day's broadcast ends (time + duration + 30 min), so a Saturday test already says Sunday's number. It's shown on the Schedule cards.
 
 > On HamVOIP the system's time zone database is from 2016: US zones work fine, but central Mexico zones still think there's daylight saving time. Use "Node time" there for Mexican programs.
+
+### Short announcements
+
+**Schedule → Announcements** (next to **Events**): short announcements (up to 60 s) that the node transmits on its own.
+
+- **What it says**: text read by the voice of Settings → Voice (with `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; if the text has variables the voice is generated again right before it goes out), an uploaded audio file, or a recording made from the page (needs https). Uploads and recordings are converted in the browser.
+- **When**: at given times on the chosen days, every N minutes within a time window, or just once; optionally only between two dates.
+- **Where**: only this node's radio (`localplay`, or IRLP local) or also the linked nodes / reflector (`playback`, or IRLP network).
+- **It never interrupts**: it waits for the channel to be quiet (nobody receiving, transmitting or talking through a link, and no HAMNA event on the air) for 3 s; if the channel doesn't clear in 5 min, that slot is skipped and logged. An event that starts while an announcement is playing waits for it to finish.
+- Each card has ▶ Listen, 📡 Transmit now, pause/activate, edit and delete, plus the next slot and the last result; the **announcement log** shows what went out, what was skipped and why. Administrators and operators create them; read-only users see them.
+- They're included in backups.
 
 ### Sections and audio
 
@@ -485,7 +497,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Anuncios](#anuncios) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Capturas
 
@@ -511,6 +523,7 @@ Tomadas del hub **299081** del Radio Club Guadiana.
 
 - **Eventos armados con secciones**: audios (MP3, WAV, OGG, FLAC…), textos que se leen con voz sintética (Azure, Google Cloud, ElevenLabs, Piper o eSpeak, con respaldo automático entre motores) y sonidos, en el orden que quieras.
 - **Programación** única, diaria, semanal o de lunes a viernes, **en la zona horaria del programa** (se ajusta sola al horario de verano de esa zona), con **numeración automática** de las emisiones.
+- **Anuncios** cortos programados (texto → voz, audio subido o grabado) que salen solos cuando el canal está libre.
 - **Transmisión automática** por AllStarLink o IRLP, con nivel de audio parejo (-18 LUFS) y pausas automáticas para los repetidores.
 - **Conexiones automáticas** antes y después de cada evento, y una pestaña **Dashboard** para ver y controlar el nodo en vivo con tu usuario de HAMNA: en ASL sus enlaces, favoritos y un buscador de nodos, en IRLP reemplaza a IRLPvCON (favoritos, habilitar/deshabilitar, DTMF, AUX y bitácora).
 - **Escuchar el nodo en vivo** desde la página (computadora o celular), sin complementos, en ASL e IRLP, y **grabar** lo que se escucha (p. ej. la toma de reportes) en MP3.
@@ -625,6 +638,17 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **Numeración automática** (detalle del evento): `{emision_anio}` cuenta las fechas programadas del evento en el año (el domingo 46 es la #46) y se reinicia cada 1 de enero; `{emision}` es el número global a partir de "la emisión del día R es la #N". Los números salen del calendario, no de un contador: una prueba, un reinicio o restaurar un respaldo no los mueven. El número avanza cuando termina la emisión del día (hora + duración + 30 min), así una prueba del sábado ya dice el número del domingo. Se ve en las tarjetas de Programación.
 
 > En HamVOIP la base de zonas horarias del sistema es de 2016: las zonas de EE. UU. funcionan bien, pero las del centro de México todavía creen que hay horario de verano. Ahí usa "Hora del nodo" para los programas de México.
+
+### Anuncios
+
+**Programación → Anuncios** (junto a **Eventos**): anuncios cortos (hasta 60 s) que el nodo transmite solo.
+
+- **Qué dice**: un texto que lee la voz de Ajustes → Voz (con `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; si el texto lleva variables la voz se genera otra vez justo antes de salir), un audio subido o una grabación hecha desde la página (requiere https). Lo subido y lo grabado se convierte en el navegador.
+- **Cuándo**: a ciertas horas los días elegidos, cada N minutos dentro de un horario, o una sola vez; si quieres, solo entre dos fechas.
+- **Dónde**: solo el radio de este nodo (`localplay`, o IRLP local) o también los nodos enlazados / el reflector (`playback`, o IRLP con la red).
+- **Nunca interrumpe**: espera a que el canal esté en silencio 3 s (nadie recibiendo, transmitiendo ni hablando por un enlace, y ningún evento de HAMNA al aire); si en 5 min no se libera, ese turno se salta y queda en la bitácora. Un evento que empieza mientras suena un anuncio espera a que termine.
+- Cada tarjeta tiene ▶ Escuchar, 📡 Transmitir ahora, pausar/activar, editar y borrar, con el próximo turno y el último resultado; la **bitácora de anuncios** dice qué salió, qué se saltó y por qué. Los crean el administrador y los operadores; solo lectura los ve.
+- Entran en los respaldos.
 
 ### Secciones y audios
 

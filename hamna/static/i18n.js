@@ -25,6 +25,9 @@
     jueves: "Thursday", viernes: "Friday", "sábado": "Saturday" };
 
   const D = {
+    // Programación → Eventos | Anuncios
+    "📅 Eventos": "📅 Events", "📢 Anuncios": "📢 Announcements", "＋ Nuevo anuncio": "＋ New announcement",
+    "Bitácora de anuncios": "Announcement log", "Anuncios cortos que el nodo transmite solo": "Short announcements the node transmits on its own",
     // Bot de Telegram apagado (perfil, sin ser administrador)
     "El bot de Telegram no está activo en este nodo. Pídele al administrador que lo active.":
       "The Telegram bot isn't active on this node. Ask the administrator to turn it on.",

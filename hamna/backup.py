@@ -9,6 +9,7 @@ El respaldo es un .tar.gz con:
   logo_*.png|jpg|…      logo de la estación
   sonidos/              audios de pausa (alerta, pausa, continuamos)
   audios/               audios de las secciones (opcional)
+  anuncios/             audios de los anuncios programados (siempre: son cortos)
 
 Se arma mientras se descarga (no ocupa espacio en la tarjeta SD salvo una
 copia de la base de datos) y se comprime con nivel 1: los audios casi no se
@@ -38,7 +39,7 @@ log = logging.getLogger("hamna.respaldo")
 MANIFEST = "hamna-respaldo.json"
 FORMATO = 1
 LOGO_RE = re.compile(r"^logo_[A-Za-z0-9]+\.(png|jpg|webp|gif)$")
-CARPETAS = ("sonidos", "audios", "fotos")
+CARPETAS = ("sonidos", "audios", "fotos", "anuncios")
 # Ajustes que describen a ESTE nodo; se conservan al restaurar un respaldo
 # de otro nodo si así se pide. secret_key nunca se toma del respaldo.
 NODE_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "station_name", "logo_file"}
@@ -89,7 +90,7 @@ def _files(folder):
 def estimate():
     """Tamaño aproximado (bytes) con y sin audios, para mostrarlo antes."""
     base = sum(f.stat().st_size for f in [paths.db_file(), paths.settings_file()] if f.is_file())
-    base += sum(f.stat().st_size for f in _files("sonidos"))
+    base += sum(f.stat().st_size for c in ("sonidos", "fotos", "anuncios") for f in _files(c))
     logo = settings.get("logo_file") or ""
     if logo and (paths.data_dir() / logo).is_file():
         base += (paths.data_dir() / logo).stat().st_size

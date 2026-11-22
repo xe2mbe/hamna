@@ -288,6 +288,8 @@ class Engine:
             self._post_timers[ev["id"]] = timers
 
     def _run_event(self, ev, origen):
+        from . import anuncios
+        anuncios.emisor.esperar_fin()        # un anuncio corto en curso termina antes del evento
         cfg = settings.load()
         be = backends.make(cfg)
         secs = [dict(s) for s in db.get_secciones_by_evento(ev["id"])]
@@ -587,6 +589,11 @@ class Engine:
         log.info("Programador iniciado")
         last_cleanup = 0.0
         while True:
+            try:
+                from . import anuncios       # aparte: un problema con los eventos no detiene los anuncios
+                anuncios.tick()
+            except Exception:
+                log.exception("Error al revisar los anuncios")
             try:
                 self._tick()
                 if time.time() - last_cleanup > 3600:
