@@ -175,18 +175,22 @@ def parse_xnode(txt):
             k, _, v = line.partition("=")
             vars_[k.strip()] = v.strip()
             continue
-        if re.match(r"^[TRCM]\w+(,\s*[TRCM]\w+)*,?$", line):
+        # Nodos de la red: «T1000, T58788, R299080, TXE2MEH-P» (hay nombres con guion o punto)
+        if re.match(r"^[TRCM][\w.-]+(,\s*[TRCM][\w.-]+)*,?$", line):
             red.extend(x.strip() for x in line.split(",") if x.strip())
     # Modo y si transmite (RPT_ALINKS=4,61734TU,59624TK,...)
     alinks = {}
     for item in (vars_.get("RPT_ALINKS") or "").split(",")[1:]:
-        m = re.match(r"^(\w+?)([TRCM])([KU])$", item.strip())
+        m = re.match(r"^([\w.-]+?)([TRCM])([KU])$", item.strip())
         if m:
             alinks[m.group(1)] = (m.group(2), m.group(3) == "K")
     for e in enlaces:
         modo, rx = alinks.get(e["nodo"], ("", False))
         e["modo"] = MODOS.get(modo, "")
         e["transmitiendo"] = rx
+    if not red:                     # respaldo: RPT_LINKS=44,T63650,T273052,...
+        red = [x.strip() for x in (vars_.get("RPT_LINKS") or "").split(",")[1:]
+               if re.match(r"^[TRCM][\w.-]+$", x.strip())]
     red_nodos = []
     seen = set()
     for x in red:
