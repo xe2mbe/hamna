@@ -25,6 +25,21 @@
     jueves: "Thursday", viernes: "Friday", "sábado": "Saturday" };
 
   const D = {
+    // Bot de Telegram apagado (perfil, sin ser administrador)
+    "El bot de Telegram no está activo en este nodo. Pídele al administrador que lo active.":
+      "The Telegram bot isn't active on this node. Ask the administrator to turn it on.",
+    // Ajustes → Avisos: cómo crear el bot (texto partido por <b>/<code>)
+    "En Telegram, abre": "In Telegram, open", "y envíale": "and send it",
+    ". Ponle un nombre (p. ej. «HAMNA Hub RCG»).": ". Give it a name (e.g. «HAMNA Hub RCG»).",
+    "BotFather te da un": "BotFather gives you a", "(algo como": "(something like", "): pégalo abajo.": "): paste it below.",
+    "Escríbele cualquier cosa a tu bot (o agrégalo a un grupo y escribe ahí) y presiona":
+      "Write anything to your bot (or add it to a group and write there) and press",
+    "Guarda los ajustes y presiona": "Save the settings and press",
+    "El bot de Telegram no está activo en este nodo. Actívalo en Ajustes → Avisos («Responder comandos y botones»).":
+      "The Telegram bot isn't active on this node. Turn it on in Settings → Alerts («Answer commands and buttons»).",
+    "Cada día te llega el respaldo": "Every day you get the backup",
+    "(pesa poco) en tu chat privado con el bot. Nunca va al grupo de avisos: lleva claves y contraseñas cifradas.":
+      "(it's small) in your private chat with the bot. It never goes to the alerts group: it carries encrypted keys and passwords.",
     // Colaborador
     "Colaborador": "Contributor", "Mis secciones": "My sections", "🔑 Contraseña": "🔑 Password", "Salir": "Sign out",
     "Aquí subes el audio de las secciones que te asignaron. El audio nuevo sale al aire en la próxima transmisión.":
@@ -397,7 +412,7 @@
     "Nadie transmitiendo": "Nobody transmitting", "Sin transmitir": "Not broadcasting",
     "Preparando audio": "Preparing audio", "Según status.irlp.net (se actualiza cada pocos minutos).": "From status.irlp.net (updated every few minutes).", "En pausa": "Paused", "Entre secciones": "Between sections", "Nodos en la red": "Nodes in the network",
     "alcanzables a través de los enlaces": "reachable through the links", "No hay nodos conectados.": "No nodes connected.",
-    "Hablando": "Talking", "Monitor": "Monitor", "↘ Entrante": "↘ Incoming", "↗ Saliente": "↗ Outgoing",
+    "Hablando": "Talking", "Grupo": "Group", "Monitor": "Monitor", "↘ Entrante": "↘ Incoming", "↗ Saliente": "↗ Outgoing",
     "En modo simulado no hay enlaces que mostrar.": "In simulated mode there are no links to show.", "Sin conexión": "Not connected",
     // Cron
     "+ Agregar tarea": "+ Add job", "Editar como texto": "Edit as text", "Editar tarea": "Edit job", "Nueva tarea de cron": "New cron job",

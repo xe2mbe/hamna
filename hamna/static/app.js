@@ -154,6 +154,8 @@ function renderSys(d, ver) {
     const k = el.dataset.l, en = { "Equipo": "System", "Disco": "Disk", "Temp.": "Temp.", "Carga": "Load" }[k];
     el.textContent = window.HAMNA_LANG === "es" ? k : (en || k);
   });
+  // Esta zona es translate="no" (números): sus títulos se ponen aquí
+  $$("#sideMon [data-t]").forEach((el) => { el.title = el.dataset.t === "rx" ? L("Bajada", "Download") : L("Subida", "Upload"); });
   setBar("#mbCpu", d.cpu); $("#mvCpu").textContent = d.cpu == null ? "—" : Math.round(d.cpu) + " %";
   const mp = d.mem && d.mem.total ? (d.mem.usada / d.mem.total) * 100 : null;
   setBar("#mbMem", mp); $("#mvMem").textContent = d.mem ? `${fmtB(d.mem.usada)} / ${fmtB(d.mem.total)}` : "—";
@@ -279,7 +281,7 @@ function updateNodeLabel() {
   const c = S.cfg || {};
   $("#topStation").textContent = c.station_name || (c.node ? "Nodo " + c.node : "HAMNA Web");
   $("#nodeLabel").innerHTML = (c.station_name ? `<b>${esc(c.station_name)}</b>` : "") +
-    `<span class="node-line">${c.node ? `<span class="sys-chip num" translate="no" title="Número de nodo">#${esc(c.node)}</span>` : ""}<span id="sysChips" class="node-line"></span></span>`;
+    `<span class="node-line">${c.node ? `<span class="sys-chip num" translate="no" title="${LG("Número de nodo", "Node number")}">#${esc(c.node)}</span>` : ""}<span id="sysChips" class="node-line"></span></span>`;
   // Etiqueta de color con el tipo de nodo detectado (ASL3 / ASL / HamVOIP / IRLP; puede haber dos)
   getInfo().then((i) => {
     const s = i.sistemas || {}, out = [];
@@ -355,7 +357,7 @@ function renderLive(lv) {
   const n = lv.oyentes.length;
   const html = lv.configurado
     ? `<div class="live-box"><h4>🔊 Audio en vivo</h4>
-        <div class="muted" style="font-size:.84rem">${lv.recibiendo ? "Recibiendo audio del nodo" : "Sin audio del nodo en los últimos segundos"} · ${n} ${n === 1 ? "persona escuchando" : "personas escuchando"}</div>
+        <div class="muted" style="font-size:.84rem">${lv.recibiendo ? LG("Recibiendo audio del nodo", "Receiving audio from the node") : LG("Sin audio del nodo en los últimos segundos", "No audio from the node in the last few seconds")} · ${n} ${LG(n === 1 ? "persona escuchando" : "personas escuchando", n === 1 ? "person listening" : "people listening")}</div>
         ${n ? `<ul class="upd-list">${lv.oyentes.map((o) => `<li><span class="d">${esc(o.usuario)}</span><span>${esc(o.ip)} · ${fmt(o.desde)}</span></li>`).join("")}</ul>` : ""}${lv.tipo === "irlp" ? irlpBtn(lv) : ""}</div>`
     : lv.tipo === "irlp" ? `<div class="live-box"><h4>🔊 Audio en vivo</h4>
         <p class="muted" style="margin:0 0 8px">Escuchar este nodo IRLP desde la página (reflector, estaciones locales y HAMNA al aire) y grabar los reportes. Está apagado. Al encenderlo, HAMNA agrega un bloque en <code>/home/irlp/.asoundrc</code> y lo prueba; si algo falla, lo deja como estaba.</p>
@@ -878,7 +880,7 @@ async function renderLinks(ev) {
     <h3>Conexiones automáticas</h3>
     <p class="muted" style="margin:0 0 8px">Se ejecutan al lanzar el evento (a mano o programado) y al terminar, aunque lo detengas.
       «N min antes» solo se adelanta cuando el evento está programado; a mano se hace al iniciar.
-      <br>${none ? "⚠ No detecté ASL ni IRLP en este equipo: las acciones no podrán ejecutarse." : "Detectado en este nodo: " + esc(det) + "."}</p>
+      <br>${none ? LG("⚠ No detecté ASL ni IRLP en este equipo: las acciones no podrán ejecutarse.", "⚠ Neither ASL nor IRLP was detected on this device: actions won't be able to run.") : LG("Detectado en este nodo: ", "Detected on this node: ") + esc(det) + "."}</p>
     <div id="lkList">${list.length ? list.map((a, i) => `
       <div class="link-row" data-i="${i}">
         <span class="when">${linkWhen(a)}</span>
@@ -1074,7 +1076,7 @@ function secFila(s, opt = {}) {
   return `<div class="trow ${opt.fresca === false ? "vieja" : ""}" data-id="${s.id}">
       <span class="chipcol"><span class="chip ${s.tipo}">${s.tipo}</span></span>
       <span class="name"><b>${opt.n ? `<span class="sec-n">${opt.n}.</span> ` : ""}${esc(s.nombre)}</b>${s.regenerar_antes ? " 🔄" : ""}${s.renovar ? ' <span class="sec-ren" title="Se renueva en cada emisión">🔁</span>' : ""}
-        <small>${otros.length ? (opt.evento ? "También en: " : "En: ") + otros.map(esc).join(", ") + " · " : ""}${esc(s.tipo === "TTS" ? s.texto_tts : s.ruta_archivo || "")}</small></span>
+        <small>${otros.length ? (opt.evento ? LG("También en: ", "Also in: ") : LG("En: ", "In: ")) + otros.map(esc).join(", ") + " · " : ""}${esc(s.tipo === "TTS" ? s.texto_tts : s.ruta_archivo || "")}</small></span>
       <span class="num">${s.tiene_audio ? fmt(s.duracion) : "⚠"}</span>
       <span class="num sec-act">${act}</span>
       <span class="mini">
@@ -1319,7 +1321,7 @@ async function loadAjustes() {
   elevenOption(S.cfg.eleven_voice, S.cfg.eleven_voice_name);
   $("#detectHint").textContent = `Detectado en este equipo: ${info.detectado.toUpperCase()}${info.nodo_detectado ? " · nodo " + info.nodo_detectado : ""}`;
   const names = TTS_NOMBRES;
-  $("#ttsHint").textContent = "Disponibles en este nodo: " + info.motores_tts.map((m) => names[m]).join(", ");
+  $("#ttsHint").textContent = LG("Disponibles en este nodo: ", "Available on this node: ") + info.motores_tts.map((m) => names[m]).join(", ");
   $$("#setForm [name=tts_engine] option").forEach((o) => (o.disabled = !info.motores_tts.includes(o.value)));
   syncSetVis();
   renderPauseSounds();
@@ -1613,7 +1615,7 @@ function nombreBonito(titulo, archivo) {
 }
 async function recTituloPrev() {
   const f = $("#setForm"), el = $("#recTitPrev"); if (!f || !el || !f.rec_titulo) return;
-  try { const r = await api("api/grabaciones/titulo", { method: "POST", json: { plantilla: f.rec_titulo.value } }); el.textContent = "Quedaría: " + r.titulo; }
+  try { const r = await api("api/grabaciones/titulo", { method: "POST", json: { plantilla: f.rec_titulo.value } }); el.textContent = LG("Quedaría: ", "Would be: ") + r.titulo; }
   catch { el.textContent = ""; }
 }
 function recAhora() {
@@ -2696,11 +2698,16 @@ function renderSesiones() {
       <div class="d">${s.enlaces.filter((e) => e.direccion === "IN").length} entrantes · ${s.enlaces.filter((e) => e.direccion === "OUT").length} salientes</div></div>
     <div class="stat"><div class="k">Nodos en la red</div><div class="v">${s.total_red}</div><div class="d">alcanzables a través de los enlaces</div></div>
     <div class="stat ${estado[1]}"><div class="k">Estado del nodo</div><div class="v sm">${estado[0]}</div>
-      <div class="d">${talking.length ? "Habla: " + talking.map((e) => esc(e.indicativo || e.nodo)).join(", ") : "Nadie transmitiendo"}${hm.on_air ? " · HAMNA al aire" : ""}</div></div>`;
+      <div class="d">${talking.length ? "Habla: " + talking.map((e) => esc(e.indicativo || e.nodo)).join(", ") : "Nadie transmitiendo"}${hm.on_air ? " · " + LG("HAMNA al aire", "HAMNA on air") : ""}</div></div>`;
   if (!s.enlaces.length) {
     $("#sesList").innerHTML = `<p class="empty">No hay nodos conectados.</p>`;
   } else {
-    $("#sesList").innerHTML = s.enlaces.map((e) => {
+    const asl = s.sistema === "asl";
+    // Encabezados (escritorio); en celular cada fila es una tarjeta y el grupo lleva su etiqueta
+    const cab = `<div class="lnk-h" aria-hidden="true"><span></span><span>${LG("Nodo", "Node")}</span>
+      ${asl ? `<span title="${LG("La categoría de tus favoritos en la que está el nodo", "The category of your favorites the node is in")}">${LG("Grupo de favoritos", "Favorites group")}</span>` : ""}
+      <span class="r">${LG("Modo · dirección", "Mode · direction")}</span><span class="r">${LG("Conectado · IP", "Connected · IP")}</span></div>`;
+    $("#sesList").innerHTML = cab + s.enlaces.map((e) => {
       const desc = [e.descripcion, e.ubicacion].filter(Boolean).join(" · ");
       const dir = e.direccion === "IN" ? "↘ Entrante" : e.direccion === "OUT" ? "↗ Saliente" : "";
       const disc = s.sistema === "asl" ? `<button class="btn sm danger-soft" data-disc="${esc(e.nodo)}" title="Desconectar">Desconectar</button>` : "";
@@ -2708,7 +2715,7 @@ function renderSesiones() {
         <div class="av">${ICON_NODE}</div>
         <div class="who"><b>${esc(e.indicativo || "Nodo " + e.nodo)}</b><span class="num">${esc(e.nodo)}</span>
           <small>${esc(desc || e.ip || "")}</small></div>
-        ${s.sistema === "asl" ? `<div class="grp" data-grp="${esc(e.nodo)}"></div>` : ""}
+        ${s.sistema === "asl" ? `<div class="grp" data-grp="${esc(e.nodo)}" data-lbl="${LG("Grupo", "Group")}"></div>` : ""}
         <div class="tags">
           ${e.transmitiendo ? '<span class="chip ok talk">Hablando</span>' : ""}
           ${e.modo ? `<span class="chip ${e.modo === "monitor" ? "warn" : ""}">${esc(e.modo[0].toUpperCase() + e.modo.slice(1))}</span>` : ""}
@@ -2725,7 +2732,8 @@ function renderSesiones() {
   if (s.sistema === "irlp") {
     // status.irlp.net: quién más está en el mismo reflector (se ve abierto)
     if (red.length && !S.sesRedOpened) { $("#sesRedWrap").open = true; S.sesRedOpened = true; }
-    $("#sesRedTitle").textContent = `En ${s.activo} · ${red.length} ${red.length === 1 ? "nodo más" : "nodos más"}`;
+    $("#sesRedTitle").textContent = LG(`En ${s.activo} · ${red.length} ${red.length === 1 ? "nodo más" : "nodos más"}`,
+      `On ${s.activo} · ${red.length} more node${red.length === 1 ? "" : "s"}`);
     $("#sesRed").innerHTML = red.map((r) => `<span class="nchip" title="${esc([r.descripcion, r.frecuencia, (window.HAMNA_LANG === "es" ? "conectado " : "connected ") + r.tiempo].filter(Boolean).join(" · "))}">
       <b>${esc(r.nodo)} ${esc(r.indicativo || "")}</b><small>${esc(r.ubicacion || r.descripcion || "—")}</small></span>`).join("") +
       `<p class="muted small" style="flex-basis:100%">Según status.irlp.net (se actualiza cada pocos minutos).</p>`;
@@ -2761,6 +2769,7 @@ $("#sesConnect").onsubmit = async (e) => {
 // Con más de una categoría, arriba van pestañas (Todos + una por categoría); la elegida se recuerda.
 const FAV_TODOS = "__todos__";
 const FAV_COLORES = 6;                  // --g0 … --g5 en app.css
+const catNom = (c) => (c === "Generales" ? LG("Generales", "General") : c);
 /* [[categoría, favoritos]] en orden, sin categorías vacías; los sin categoría van en «Generales» */
 function favGrupos(favs, cats) {
   const grupos = (cats || []).map((c) => [c, favs.filter((f) => f.categoria === c)]).filter(([, fs]) => fs.length);
@@ -2779,7 +2788,7 @@ function marcarGrupos(s) {
     const g = de[el.dataset.grp];
     const html = !g ? `<span class="grp-none" title="${LG("No está en tus favoritos", "Not in your favorites")}">—</span>`
       : grupos.length < 2 ? `<span class="grp-chip" title="${LG("Está en tus favoritos", "It's in your favorites")}">⭐ ${LG("Favorito", "Favorite")}</span>`
-      : `<span class="grp-chip" style="--gc:var(--g${g[1] % FAV_COLORES})" title="${LG("Grupo de favoritos", "Favorites group")}" translate="no"><i class="gdot"></i>${esc(g[0])}</span>`;
+      : `<span class="grp-chip" style="--gc:var(--g${g[1] % FAV_COLORES})" title="${LG("Grupo de favoritos", "Favorites group")}" translate="no"><i class="gdot"></i>${esc(catNom(g[0]))}</span>`;
     if (el.innerHTML !== html) el.innerHTML = html;
   });
 }        // valor de la pestaña «Todos» (no choca con un nombre real)
@@ -2803,10 +2812,10 @@ function favCards(favs, conectado, attr, titulo, editar, estado, cats) {
   // Cada categoría con su color (por su lugar en la lista: no cambia al elegir otra pestaña)
   const color = (c) => "--gc:var(--g" + (grupos.findIndex(([x]) => x === c) % FAV_COLORES) + ")";
   const tabs = `<div class="fav-tabs" role="tablist" translate="no">` +
-    [[FAV_TODOS, LG("Todos", "All"), favs.length]].concat(grupos.map(([c, fs]) => [c, c, fs.length])).map(([k, txt, n]) =>
+    [[FAV_TODOS, LG("Todos", "All"), favs.length]].concat(grupos.map(([c, fs]) => [c, catNom(c), fs.length])).map(([k, txt, n]) =>
       `<button type="button" role="tab" class="fav-tab ${k === tab ? "active" : ""}" aria-selected="${k === tab}" data-favtab="${editar}" data-cat="${esc(k)}"${k === FAV_TODOS ? "" : ` style="${color(k)}"`}>${k === FAV_TODOS ? "" : '<i class="gdot"></i>'}${esc(txt)}<span class="cnt">${n}</span></button>`).join("") + `</div>`;
   const conectados = (fs) => fs.filter((f) => conectado(f.nodo)).length;
-  const grupo = ([c, fs]) => `<section class="fav-cat" style="${color(c)}"><div class="fav-cat-h" translate="no"><i class="gdot"></i><b>${esc(c)}</b>
+  const grupo = ([c, fs]) => `<section class="fav-cat" style="${color(c)}"><div class="fav-cat-h" translate="no"><i class="gdot"></i><b>${esc(catNom(c))}</b>
       <span class="cnt">${fs.length}</span>${conectados(fs) ? `<span class="fav-cat-on">● ${conectados(fs)} ${LG("conectado" + (conectados(fs) > 1 ? "s" : ""), "connected")}</span>` : ""}</div>
       <div class="fav-grid">${fs.map(tarjeta).join("")}</div></section>`;
   const cuerpo = tab === FAV_TODOS ? grupos.map(grupo).join("") : grupo(grupos.find(([c]) => c === tab));
@@ -2878,7 +2887,7 @@ $("#irlpCtl").addEventListener("click", async (e) => {
   try {
     if (fav) {
       const n = fav.dataset.irlpfav, s = S.ses || {};
-      if (irlpEn(s.activo, n)) return toast("Ya está conectado a " + n);
+      if (irlpEn(s.activo, n)) return toast(LG("Ya está conectado a ", "Already connected to ") + n);
       if (!(await confirmBox(s.activo ? `El nodo está conectado a ${s.activo}. ¿Conectar a ${n}?` : `¿Conectar a ${n}?`, "Conectar", false))) return;
       await irlpConectar(n);
     } else if (acc) {
@@ -3634,7 +3643,7 @@ async function renderShare(ev) {
   let d; try { d = await api(`api/eventos/${ev.id}/compartir`); } catch { box.innerHTML = ""; return; }
   box.innerHTML = `<h3>Compartir con otros nodos</h3>
     <p class="muted" style="margin:0 0 8px">Un código de acceso deja que otro HAMNA traiga las secciones y audios de este evento (solo lectura, solo este evento).</p>
-    ${d.codigos.map((k) => `<div class="link-row"><span class="when">${esc(k.etiqueta || "Código #" + k.id)}</span>
+    ${d.codigos.map((k) => `<div class="link-row"><span class="when">${esc(k.etiqueta || LG("Código #", "Code #") + k.id)}</span>
       <span class="muted" style="font-size:.85rem">creado ${esc(fmtTs(k.creado))} · ${k.ultimo_uso ? "último uso " + esc(fmtTs(k.ultimo_uso)) + " desde " + esc(k.ultima_ip || "?") : "sin usar"}</span>
       <span class="mini"><button class="btn" data-revoke="${k.id}" title="Revocar">✕</button></span></div>`).join("")}
     <button class="btn" id="shareNew">+ Crear código de acceso</button>`;

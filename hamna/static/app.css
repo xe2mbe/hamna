@@ -271,10 +271,16 @@ main > .view { max-width: 1180px; margin: 0 auto; }
 .connect input { width: 110px; } .connect select { width: auto; }
 .links-list { display: flex; flex-direction: column; }
 /* Escritorio: las filas comparten columnas, como una tabla (subgrid; sin soporte, cada fila se acomoda sola) */
+.lnk-h { display: none; }
 @media (min-width: 961px) {
+  .lnk-h { display: grid; }
   .links-list:has(.lnk) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; column-gap: 14px; }
   .links-list > * { grid-column: 1 / -1; }
-  .links-list .lnk { grid-template-columns: subgrid; }
+  .links-list .lnk, .links-list .lnk-h { grid-template-columns: subgrid; }
+  .lnk-h { display: grid; gap: 14px; padding: 10px 18px 8px; border-bottom: 1px solid var(--border);
+    font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+  .lnk-h .r { text-align: right; }
+  .lnk-h span[title] { cursor: help; }
 }
 .lnk { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto auto; gap: 14px; align-items: center;
   padding: 14px 18px; border-bottom: 1px solid var(--border); transition: background .15s; }
@@ -661,6 +667,8 @@ main, .onair { transition: margin-left .22s ease, left .22s ease; }
   .lnk .av { width: 42px; height: 42px; }
   .lnk .grp { grid-column: 2 / -1; grid-row: 2; }
   .lnk .grp:has(.grp-none) { display: none; }
+  .lnk .grp:not(:empty)::before { content: attr(data-lbl) ": "; font-size: .74rem; color: var(--text3); margin-right: 6px; }
+  .lnk .grp { display: flex; align-items: center; }
   .lnk .tags { grid-column: 2 / -1; grid-row: 3; justify-content: flex-start; }
 }
 @media (max-width: 520px) {
