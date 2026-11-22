@@ -7,7 +7,9 @@ Lo arranca app_rpt con esta línea en la sección del nodo de rpt.conf:
     outstreamcmd = /opt/hamna-web/bin/hamna-live
 
 app_rpt le pasa por la entrada el audio del nodo (8 kHz, 16 bits, mono) y
-este programa lo reenvía en paquetes UDP a HAMNA Web (127.0.0.1:8091).
+este programa lo reenvía en paquetes UDP a HAMNA Web (127.0.0.1:8091) y a
+ASLSCAN (127.0.0.1:8096), por si también está en el nodo: rpt.conf admite un
+solo outstreamcmd.
 Si HAMNA Web no está corriendo, los paquetes simplemente se pierden: nunca
 detiene a Asterisk.
 """
@@ -16,7 +18,7 @@ import select
 import socket
 import sys
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
+PORTS = [int(x) for x in sys.argv[1:] if x.isdigit()] or [8091, 8096]
 CHUNK = 1600                     # 100 ms de audio
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -24,10 +26,11 @@ buf = b""
 
 
 def send(data):
-    try:
-        sock.sendto(data, ("127.0.0.1", PORT))
-    except OSError:
-        pass
+    for port in PORTS:
+        try:
+            sock.sendto(data, ("127.0.0.1", port))
+        except OSError:
+            pass
 
 
 while True:

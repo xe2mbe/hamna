@@ -33,7 +33,8 @@ log = logging.getLogger("hamna.autorespaldo")
 
 KEEP_CON_AUDIOS = 2          # respaldos con audios que se conservan (por nodo / en la nube)
 REMOTE = "hamna"             # nombre del remoto en rclone.conf
-NAME_RE = re.compile(r"^hamna-respaldo-[A-Za-z0-9]+-\d{8}_\d{4,6}(-con-audios)?\.tar\.gz$")
+APPS = {"hamna-respaldo.json": "hamna-web", "aslscan-respaldo.json": "aslscan"}   # ASLSCAN usa el mismo protocolo
+NAME_RE = re.compile(r"^(hamna|aslscan)-respaldo-[A-Za-z0-9]+-\d{8}_\d{4,6}(-con-audios)?\.tar\.gz$")
 _run_lock = threading.Lock()
 _fired = set()
 
@@ -151,16 +152,17 @@ def receive(token, tmp_path, nodo, estacion, version, ip):
     try:
         with tarfile.open(tmp_path, "r:gz") as tf:
             first = tf.next()
-            if not first or first.name != backup.MANIFEST:
+            if not first or first.name not in APPS:
                 raise ValueError()
             man = json.loads(tf.extractfile(first).read().decode("utf-8"))
-            if man.get("app") != "hamna-web":
+            if man.get("app") != APPS[first.name]:
                 raise ValueError()
     except Exception:
         raise ValueError("El archivo recibido no es un respaldo de HAMNA")
     con = bool(man.get("incluye_audios"))
     d = recv_dir(nodo)
-    name = "hamna-respaldo-{}-{}{}.tar.gz".format(nodo, dt.datetime.now().strftime("%Y%m%d_%H%M%S"),
+    pre = "aslscan" if man.get("app") == "aslscan" else "hamna"
+    name = "{}-respaldo-{}-{}{}.tar.gz".format(pre, nodo, dt.datetime.now().strftime("%Y%m%d_%H%M%S"),
                                                   "-con-audios" if con else "")
     shutil.move(tmp_path, str(d / name))
     keep = int(settings.get("ab_recv_keep") or 7)

@@ -23,7 +23,7 @@ import socket
 import struct
 import sys
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8091
+PORTS = [int(x) for x in sys.argv[1:] if x.isdigit()] or [8091, 8096]   # 8096 = ASLSCAN
 OUT_RATE = 8000
 CHUNK = 1600                     # 100 ms de audio a 8 kHz
 
@@ -78,10 +78,11 @@ def main():
     out = b""
 
     def send(data):
-        try:
-            sock.sendto(data, ("127.0.0.1", PORT))
-        except OSError:
-            pass
+        for port in PORTS:
+            try:
+                sock.sendto(data, ("127.0.0.1", port))
+            except OSError:
+                pass
 
     while True:
         r, _, _ = select.select([0], [], [], 0.25)

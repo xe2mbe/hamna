@@ -257,6 +257,8 @@ outstreamcmd = /opt/hamna-web/bin/hamna-live
 
 app_rpt hands the node's audio to that small program, which forwards it to HAMNA Web on the same machine (127.0.0.1:8091). If HAMNA Web is off, the audio is simply discarded: it never blocks Asterisk. HAMNA converts it to µ-law only while someone is listening (≈1% CPU on a Raspberry Pi 4) and the browser plays it with no plugins. **Settings → System** shows whether audio is arriving and who is listening.
 
+**With [ASLSCAN](https://github.com/xe2mbe/aslscan) on the same node** (HAMNA's Dashboard as a separate program): `rpt.conf` accepts only one `outstreamcmd`, and since 1.42 `hamna-live` also sends the audio to ASLSCAN (127.0.0.1:8096), so one line feeds both (ASLSCAN's `aslscan-live` does the same the other way). On IRLP, ASLSCAN uses the same tap. A HAMNA hub also accepts ASLSCAN nodes' automatic backups and their nodes-panel reports.
+
 **On IRLP** it's turned on from the page: **Settings → System → Live audio** (administrator). HAMNA adds a marked block to `/home/irlp/.asoundrc` that taps what IRLP plays into `bin/hamna-live-irlp`, and reads the receiver with `arecord` (dsnoop), without taking the sound card away from IRLP. When turning it on it tests the output and the receiver and, if anything fails, leaves everything as it was. It's off by default; it can also be managed with `/opt/hamna-web/bin/hamna-irlp-envivo on|off|status`, and the uninstaller removes the block.
 
 ### Recordings
@@ -703,6 +705,8 @@ outstreamcmd = /opt/hamna-web/bin/hamna-live
 ```
 
 app_rpt le pasa el audio del nodo a ese pequeño programa, que lo reenvía a HAMNA Web dentro del mismo equipo (127.0.0.1:8091). Si HAMNA Web está apagado, el audio simplemente se descarta: nunca detiene a Asterisk. HAMNA lo convierte a µ-law solo mientras alguien escucha (≈1 % de CPU en una Raspberry Pi 4) y el navegador lo reproduce sin complementos. En **Ajustes → Sistema** se ve si llega audio y quién está escuchando.
+
+**Con [ASLSCAN](https://github.com/xe2mbe/aslscan) en el mismo nodo** (el Dashboard de HAMNA como programa aparte): `rpt.conf` acepta un solo `outstreamcmd`, y desde la 1.42 `hamna-live` también le manda el audio a ASLSCAN (127.0.0.1:8096), así que una sola línea sirve para los dos (el `aslscan-live` de ASLSCAN hace lo mismo al revés). En IRLP, ASLSCAN usa el mismo derivador. Un hub con HAMNA también acepta los respaldos automáticos y los reportes del panel de nodos de los nodos con ASLSCAN.
 
 **En IRLP** se enciende desde la página: **Ajustes → Sistema → Audio en vivo** (administrador). HAMNA agrega un bloque marcado en `/home/irlp/.asoundrc` que deriva lo que IRLP reproduce hacia `bin/hamna-live-irlp` y lee el receptor con `arecord` (dsnoop), sin quitarle la tarjeta de sonido a IRLP. Al encender prueba la salida y el receptor y, si algo falla, deja todo como estaba. Viene apagado; también se maneja con `/opt/hamna-web/bin/hamna-irlp-envivo on|off|status`, y el desinstalador quita el bloque.
 
