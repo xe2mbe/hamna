@@ -1043,3 +1043,20 @@ body.rol-lectura .fav-tab { pointer-events: auto; }
 .an-elegir { display: grid; gap: 8px; margin: 12px 0; }
 .an-elegir .btn { justify-content: flex-start; gap: 8px; padding: 12px 14px; height: auto; }
 .an-elegir .btn.primary .via { background: #fff; }
+
+/* Horas: un renglón por hora */
+#anHoras { display: grid; gap: 6px; margin-bottom: 8px; }
+.an-hrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px 6px 12px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, var(--border)); background: color-mix(in srgb, var(--ok) 7%, transparent); }
+.an-hrow.red { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.an-hrow > b { font-variant-numeric: tabular-nums; min-width: 46px; }
+.an-hdel { margin-left: auto; border: 0; background: none; color: var(--text3); cursor: pointer; font-size: .95rem; padding: 4px 6px; }
+.an-hdel:hover { color: var(--danger); }
+
+/* Horas: casillas RF (fija) y Net */
+.an-cas { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 5px 10px; border-radius: 999px; font-size: .85rem; font-weight: 700;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text2); cursor: pointer; white-space: nowrap; user-select: none; }
+.an-cas input { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.an-cas.rf { cursor: help; color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.an-cas.rf input { accent-color: var(--ok); cursor: help; }
+.an-cas.net:has(input:checked) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }

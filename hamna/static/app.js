@@ -3946,7 +3946,7 @@ function anuncioEditor(a) {
         <button type="button" class="btn sm ghost" data-diasrap="0123456">${LG("Todos", "All")}</button><button type="button" class="btn sm ghost" data-diasrap="01234">${LG("Lun–Vie", "Mon–Fri")}</button></div>
       <div data-ver="horas"><div class="an-horas" id="anHoras"></div>
         <div class="row gap"><input type="time" id="anHoraNueva" value="12:00"><button type="button" class="btn sm" id="anHoraAdd">＋ ${LG("Hora", "Time")}</button></div>
-        <small class="muted an-hint">ⓘ ${LG("Haz clic en una hora para cambiar entre 📻 RF y 📻 RF + 🌐 Net.", "Click a time to switch between 📻 RF and 📻 RF + 🌐 Net.")}</small></div>
+        <small class="muted an-hint">ⓘ ${LG("📻 RF siempre va. Marca 🌐 Net en las horas que también deban salir a los nodos enlazados.", "📻 RF always goes. Check 🌐 Net on the times that should also go out to the linked nodes.")}</small></div>
       ${d.eventos ? `<div data-ver="evento" class="an-ev">
         <label>${LG("Evento", "Event")}<select name="evento_id"><option value="">— ${LG("Elige el evento", "Choose the event")} —</option>${d.eventos.map((e) => `<option value="${e.id}" ${+a.evento_id === e.id ? "selected" : ""}>${esc(e.nombre)}${e.programado ? "" : " · " + LG("sin programar", "not scheduled")}</option>`).join("")}</select></label>
         <div class="an-horas" id="anAntes"></div>
@@ -3963,7 +3963,7 @@ function anuncioEditor(a) {
       <label class="check"><input type="radio" name="destino" value="local" ${a.destino !== "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span> ${LG("Solo este nodo (el radio local)", "This node only (the local radio)")}</label>
       <label class="check"><input type="radio" name="destino" value="red" ${a.destino === "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span><span class="via net on">🌐 Net</span> ${LG("Este nodo y los nodos enlazados", "This node and the linked nodes")}</label>
       <small class="muted hidden" id="anRedAviso">⚠ ${LG("Se oye en todos los nodos conectados en ese momento.", "It's heard on every node connected at that moment.")}</small>
-      <small class="muted an-hint" id="anDondeNota" data-ver="horas">ⓘ ${LG("En «A estas horas» esto cambia todas las horas; después haz clic en una hora para que esa sea distinta. También es lo que se marca primero en «Transmitir ahora».", "In «At these times» this changes every time; then click a time to make that one different. It's also what's preselected in «Transmit now».")}</small>
+      <small class="muted an-hint" id="anDondeNota" data-ver="horas">ⓘ ${LG("En «A estas horas» esto pone todas las horas igual; después cambia arriba la que deba ser distinta. También es lo que se marca primero en «Transmitir ahora».", "In «At these times» this sets every time the same; then change above the one that should be different. It's also what's preselected in «Transmit now».")}</small>
     </div>
     <p class="muted an-nota">ⓘ ${LG(`Si alguien está hablando, espera hasta ${d.espera_min} min a que se libere el canal; si no se libera, ese turno se salta y queda en la bitácora.`, `If someone is talking, it waits up to ${d.espera_min} min for the channel to clear; if it doesn't, that slot is skipped and logged.`)}</p>
     <div class="modal-actions"><button type="button" class="btn" id="anCancel">${LG("Cancelar", "Cancel")}</button><button class="btn primary" id="anSave">${LG("Guardar", "Save")}</button></div>
@@ -3981,9 +3981,13 @@ function anuncioEditor(a) {
     $$("#anModo button").forEach((b) => b.classList.toggle("active", b.dataset.modo === m));
     $$("#anForm [data-ver]").forEach((p) => p.classList.toggle("hidden", !p.dataset.ver.split(" ").includes(m)));
   };
+  // Cada hora en su renglón con dos casillas: 📻 RF (siempre: AllStar no puede mandar solo a los enlazados) y 🌐 Net
   const pintaHoras = () => {
-    $("#anHoras").innerHTML = ed.horas.length ? ed.horas.map((x) => `<span class="chip an-h ${x.red ? "red" : ""}" data-htog="${x.h}" title="${x.red ? LG("Sale por 📻 RF + 🌐 Net. Clic: solo RF", "Goes out on 📻 RF + 🌐 Net. Click: RF only") : LG("Sale solo por 📻 RF. Clic: también 🌐 Net", "Goes out on 📻 RF only. Click: also 🌐 Net")}">
-      <b>${x.h}</b> 📻${x.red ? "🌐" : ""} <button type="button" data-hdel="${x.h}" title="${LG("Quitar", "Remove")}">✕</button></span>`).join("")
+    $("#anHoras").innerHTML = ed.horas.length ? ed.horas.map((x) => `<div class="an-hrow ${x.red ? "red" : ""}">
+      <b>${x.h}</b>
+      <label class="an-cas rf" title="${LG("Siempre sale por el radio de este nodo: AllStar no puede mandar un audio solo a los nodos enlazados", "It always goes out on this node's radio: AllStar can't send audio only to the linked nodes")}"><input type="checkbox" checked disabled> 📻 RF</label>
+      <label class="an-cas net" title="${LG("Marcada: también sale a los nodos enlazados", "Checked: also goes out to the linked nodes")}"><input type="checkbox" data-hnet="${x.h}" ${x.red ? "checked" : ""}> 🌐 Net</label>
+      <button type="button" class="an-hdel" data-hdel="${x.h}" title="${LG("Quitar", "Remove")} ${x.h}">✕</button></div>`).join("")
       : `<span class="muted">${LG("Agrega al menos una hora", "Add at least one time")}</span>`;
   };
   const pintaAntes = () => {
@@ -4008,11 +4012,13 @@ function anuncioEditor(a) {
     if (b.dataset.diasrap) $$("#anForm [data-dia]").forEach((x) => x.classList.toggle("on", b.dataset.diasrap.includes(x.dataset.dia)));
     else b.classList.toggle("on");
   };
+  $("#anHoras").onchange = (e) => {
+    const net = e.target.closest("[data-hnet]");
+    if (net) { ed.horas.find((y) => y.h === net.dataset.hnet).red = net.checked; pintaHoras(); }
+  };
   $("#anHoras").onclick = (e) => {
     const del = e.target.closest("[data-hdel]");
     if (del) { ed.horas = ed.horas.filter((x) => x.h !== del.dataset.hdel); return pintaHoras(); }
-    const tog = e.target.closest("[data-htog]");
-    if (tog) { const x = ed.horas.find((y) => y.h === tog.dataset.htog); x.red = !x.red; pintaHoras(); }
   };
   $("#anHoraAdd").onclick = () => {
     const v = $("#anHoraNueva").value;
