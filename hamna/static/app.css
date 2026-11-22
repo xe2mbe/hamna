@@ -307,7 +307,7 @@ main > .view { max-width: 1180px; margin: 0 auto; }
   background: var(--surface2); color: var(--text); font: inherit; transition: transform .12s, border-color .12s, box-shadow .12s; }
 .favc:hover { transform: translateY(-1px); border-color: var(--accent); box-shadow: var(--shadow); }
 .favc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.favc .n { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.favc .n { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 6px; min-width: 0; }
 .favc .n > span:first-child { font-size: 1.12rem; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 .favc .st { font-size: .7rem; color: var(--text3); white-space: nowrap; }
 .favc small { color: var(--text2); font-size: .78rem; line-height: 1.3; overflow: hidden; display: -webkit-box;
@@ -346,7 +346,7 @@ body.rol-lectura .bus-row [data-buscon] { display: none; }
 .pres.wait { color: var(--text3); letter-spacing: .1em; }
 :root[data-theme="light"] .pres.warn { color: #a16207; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .pres.warn { color: #a16207; } }
-.favc .pres { font-size: .66rem; padding: 0 6px; }
+.favc .pres { font-size: .66rem; padding: 0 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 body.rol-lectura .favc .pres { pointer-events: auto; }
 @media (max-width: 640px) {
   .bus-row { grid-template-columns: auto 1fr auto; }
