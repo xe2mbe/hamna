@@ -2708,6 +2708,7 @@ function renderSesiones() {
         <div class="av">${ICON_NODE}</div>
         <div class="who"><b>${esc(e.indicativo || "Nodo " + e.nodo)}</b><span class="num">${esc(e.nodo)}</span>
           <small>${esc(desc || e.ip || "")}</small></div>
+        ${s.sistema === "asl" ? `<div class="grp" data-grp="${esc(e.nodo)}"></div>` : ""}
         <div class="tags">
           ${e.transmitiendo ? '<span class="chip ok talk">Hablando</span>' : ""}
           ${e.modo ? `<span class="chip ${e.modo === "monitor" ? "warn" : ""}">${esc(e.modo[0].toUpperCase() + e.modo.slice(1))}</span>` : ""}
@@ -2717,6 +2718,7 @@ function renderSesiones() {
         <div class="row gap"><div class="time">${e.segundos != null ? `<span data-secs="${e.segundos}">${fmtUp(e.segundos)}</span>` : ""}<small>${esc(e.ip || "")}</small></div>${disc}</div>
       </div>`;
     }).join("");
+    marcarGrupos(s);
   }
   const red = s.red || [];
   $("#sesRedWrap").classList.toggle("hidden", !red.length);
@@ -2758,7 +2760,29 @@ $("#sesConnect").onsubmit = async (e) => {
 // Favoritos como mini tarjetas: el número grande a la izquierda y la descripción abajo.
 // Con más de una categoría, arriba van pestañas (Todos + una por categoría); la elegida se recuerda.
 const FAV_TODOS = "__todos__";
-const FAV_COLORES = 6;                  // --g0 … --g5 en app.css        // valor de la pestaña «Todos» (no choca con un nombre real)
+const FAV_COLORES = 6;                  // --g0 … --g5 en app.css
+/* [[categoría, favoritos]] en orden, sin categorías vacías; los sin categoría van en «Generales» */
+function favGrupos(favs, cats) {
+  const grupos = (cats || []).map((c) => [c, favs.filter((f) => f.categoria === c)]).filter(([, fs]) => fs.length);
+  const sueltos = favs.filter((f) => !(cats || []).includes(f.categoria));
+  if (sueltos.length) grupos.push(["Generales", sueltos]);
+  return grupos;
+}
+/* Columna «Grupo» de los enlaces directos: la categoría de favoritos de cada nodo conectado */
+function marcarGrupos(s) {
+  if (!s || s.sistema !== "asl") return;
+  const favs = (S.aslFavs || {})[s.nodo];
+  if (!favs) return;
+  const grupos = favGrupos(favs, (S.aslCats || {})[s.nodo] || []), de = {};
+  grupos.forEach(([c, fs], i) => fs.forEach((f) => { de[f.nodo] = [c, i]; }));
+  $$("#sesList [data-grp]").forEach((el) => {
+    const g = de[el.dataset.grp];
+    const html = !g ? `<span class="grp-none" title="${LG("No está en tus favoritos", "Not in your favorites")}">—</span>`
+      : grupos.length < 2 ? `<span class="grp-chip" title="${LG("Está en tus favoritos", "It's in your favorites")}">⭐ ${LG("Favorito", "Favorite")}</span>`
+      : `<span class="grp-chip" style="--gc:var(--g${g[1] % FAV_COLORES})" title="${LG("Grupo de favoritos", "Favorites group")}" translate="no"><i class="gdot"></i>${esc(g[0])}</span>`;
+    if (el.innerHTML !== html) el.innerHTML = html;
+  });
+}        // valor de la pestaña «Todos» (no choca con un nombre real)
 function favTab(tipo, cats) {
   S.favTab = S.favTab || {};
   if (S.favTab[tipo] === undefined) { try { S.favTab[tipo] = localStorage.getItem("hamna.favtab." + tipo) || FAV_TODOS; } catch { S.favTab[tipo] = FAV_TODOS; } }
@@ -2773,9 +2797,7 @@ function favCards(favs, conectado, attr, titulo, editar, estado, cats) {
       <span class="n"><span>${esc(f.nodo)}</span>${on ? '<span class="st">● Conectado</span>' : (estado && estado(f.nodo)) || '<span class="st">⭐</span>'}</span>
       <small>${esc(f.nombre || "Sin descripción")}</small></button>`;
   };
-  const grupos = (cats || []).map((c) => [c, favs.filter((f) => f.categoria === c)]).filter(([, fs]) => fs.length);
-  const sueltos = favs.filter((f) => !(cats || []).includes(f.categoria));
-  if (sueltos.length) grupos.push(["Generales", sueltos]);
+  const grupos = favGrupos(favs, cats);
   if (grupos.length < 2) return head + `<div class="fav-grid">${favs.map(tarjeta).join("")}</div>`;
   const tab = favTab(editar, grupos.map(([c]) => c));
   // Cada categoría con su color (por su lugar en la lista: no cambia al elegir otra pestaña)
@@ -3107,6 +3129,7 @@ async function renderAslFavs(s) {
   box.classList.toggle("hidden", s.sistema !== "asl" || (!favs.length && !isAdmin()));
   const con = new Set((s.enlaces || []).map((e) => e.nodo));
   setHtml(box, favCards(favs, (n) => con.has(n), "data-aslfav", "Favoritos", "asl", presChip, (S.aslCats || {})[s.nodo] || []));
+  marcarGrupos(s);
   presenciaCargar(favs.map((f) => f.nodo).filter((n) => !con.has(n) && n !== s.nodo));
   $("#sesAll").classList.toggle("hidden", !(s.enlaces || []).length);
 }
