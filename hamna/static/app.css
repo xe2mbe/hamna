@@ -1031,3 +1031,15 @@ body.rol-lectura .fav-tab { pointer-events: auto; }
 .via.net.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .via.net:not(.on) { text-decoration: line-through; }
 .an-form label.check .via { margin-right: 2px; }
+
+/* Horas con su destino y «antes de un evento» */
+.an-horas .an-h { cursor: pointer; gap: 6px; border: 1px solid color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, transparent); color: var(--text); }
+.an-horas .an-h.red { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.an-horas .an-h b { font-variant-numeric: tabular-nums; }
+.an-hint { display: block; margin-top: 6px; font-size: .8rem; }
+.an-ev select { margin-bottom: 8px; }
+.an-ev input[type=number] { width: 80px; margin: 0; }
+.an-elegir { display: grid; gap: 8px; margin: 12px 0; }
+.an-elegir .btn { justify-content: flex-start; gap: 8px; padding: 12px 14px; height: auto; }
+.an-elegir .btn.primary .via { background: #fff; }

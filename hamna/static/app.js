@@ -3773,11 +3773,15 @@ function anDiasTxt(d) {
   return d.split("").map((i) => AN_DIAS_LARGO()[+i]).join(", ");
 }
 /* Por dónde sale: RF (el radio de este nodo) siempre; Net (los nodos enlazados) solo con destino «red» */
-const anVia = (destino) => {
-  const net = destino === "red";
+const anVia = (a) => {
+  // En «A estas horas» cada hora tiene su destino: Net puede ser «siempre», «solo a ciertas horas» o «nunca»
+  const rojas = a.modo === "horas" ? a.horas.filter((x) => x.red).map((x) => x.h) : null;
+  const net = rojas ? rojas.length > 0 : a.destino === "red";
+  const solo = rojas && net && rojas.length < a.horas.length;
   return `<span class="via rf on" title="${LG("Sale por el radio de este nodo", "Goes out on this node's radio")}">📻 RF</span>` +
-    `<span class="via net ${net ? "on" : ""}" title="${net ? LG("También sale a los nodos enlazados", "Also goes out to the linked nodes") : LG("No sale a los nodos enlazados", "Doesn't go out to the linked nodes")}">🌐 Net</span>`;
+    `<span class="via net ${net ? "on" : ""}" title="${net ? LG("También sale a los nodos enlazados", "Also goes out to the linked nodes") : LG("No sale a los nodos enlazados", "Doesn't go out to the linked nodes")}">🌐 Net${solo ? " " + LG("solo", "only") + " " + rojas.join(", ") : ""}</span>`;
 };
+const anHoraTxt = (x) => x.h + (x.red ? " 🌐" : "");
 const anY = (l) => l.length < 2 ? l.join("") : l.slice(0, -1).join(", ") + LG(" y ", " and ") + l[l.length - 1];
 function anCuandoTxt(a) {
   let t;
@@ -3785,7 +3789,10 @@ function anCuandoTxt(a) {
   else if (a.modo === "cada") {
     const m = a.cada_min, c = m % 60 === 0 ? `${m / 60} h` : `${m} min`;
     t = anDiasTxt(a.dias) + " · " + LG(`Cada ${c} de ${a.desde_h} a ${a.hasta_h}`, `Every ${c} from ${a.desde_h} to ${a.hasta_h}`);
-  } else t = anDiasTxt(a.dias) + " · " + anY(a.horas);
+  } else if (a.modo === "evento") {
+    const m = anY(a.antes.map(String));
+    return LG(`${m} min antes de «${a.evento_nombre || "evento borrado"}»`, `${m} min before «${a.evento_nombre || "deleted event"}»`);
+  } else t = anDiasTxt(a.dias) + " · " + anY(a.horas.map(anHoraTxt));
   if (a.vig_desde || a.vig_hasta) t += " · " + (a.vig_desde && a.vig_hasta ? LG(`del ${anFecha(a.vig_desde)} al ${anFecha(a.vig_hasta)}`, `from ${anFecha(a.vig_desde)} to ${anFecha(a.vig_hasta)}`)
     : a.vig_desde ? LG("desde el ", "from ") + anFecha(a.vig_desde) : LG("hasta el ", "until ") + anFecha(a.vig_hasta));
   return t;
@@ -3798,7 +3805,7 @@ function renderAnuncios() {
     : !d.voz.lista ? `<div class="note warn">${LG("La voz no está configurada", "The voice isn't set up")} (${esc(d.voz.nombre || "")}). ${isAdmin() ? LG("Revisa Ajustes → Voz. Mientras, puedes subir o grabar el audio.", "Check Settings → Voice. Meanwhile you can upload or record the audio.") : LG("Pídele al administrador que la configure; mientras, puedes subir o grabar el audio.", "Ask the administrator to set it up; meanwhile you can upload or record the audio.")}</div>` : "";
   const sig = d.siguiente;
   $("#anNext").innerHTML = act ? `<div class="an-next live"><span class="lbl">${act.estado === "al_aire" ? "📡 " + LG("Al aire", "On air") : "⏳ " + LG("Esperando a que se libere el canal", "Waiting for the channel to clear")}</span><b translate="no">${esc(act.nombre)}</b></div>`
-    : sig ? `<div class="an-next"><span class="lbl">${LG("Próximo", "Next")}</span><b translate="no">📢 ${esc(sig.nombre)}</b><span>${anFecha(sig.cuando)} · ${LG("en", "in")} ${fmtLeft(anMinutos(d.ahora, sig.cuando) * 60)}</span></div>` : "";
+    : sig ? `<div class="an-next"><span class="lbl">${LG("Próximo", "Next")}</span><b translate="no">📢 ${esc(sig.nombre)}</b><span>${anFecha(sig.cuando)} · ${LG("en", "in")} ${fmtLeft(anMinutos(d.ahora, sig.cuando) * 60)} · ${sig.red ? "📻 RF + 🌐 Net" : "📻 RF"}</span></div>` : "";
   if (!lst.length) {
     $("#anList").innerHTML = `<p class="empty">${LG("Todavía no hay anuncios.", "No announcements yet.")}${puede && d.asl ? " " + LG("Crea el primero con «＋ Nuevo anuncio».", "Create the first one with «＋ New announcement».") : ""}</p>`;
   } else $("#anList").innerHTML = lst.map((a) => {
@@ -3808,11 +3815,11 @@ function renderAnuncios() {
       <div class="an-top"><h3 translate="no">📢 ${esc(a.nombre)}</h3>
         ${puede ? `<label class="switch" title="${a.activo ? LG("Activo: clic para pausarlo", "Active: click to pause it") : LG("Pausado: clic para activarlo", "Paused: click to activate it")}"><input type="checkbox" data-anon="${a.id}" ${a.activo ? "checked" : ""}><span></span></label>`
           : `<span class="chip ${a.activo ? "ok" : ""}">${a.activo ? LG("Activo", "Active") : LG("Pausado", "Paused")}</span>`}</div>
-      <div class="an-via">${anVia(a.destino)}</div>
+      <div class="an-via">${anVia(a)}</div>
       <div class="an-que">${a.tipo === "tts" ? `🗣 <span translate="no">«${esc(a.texto.length > 140 ? a.texto.slice(0, 140) + "…" : a.texto)}»</span>` : `🎵 <span translate="no">${esc(a.archivo_nombre || "audio.wav")}</span>`}<span class="an-dur">${fmt(a.duracion)}</span></div>
       <div class="meta">${esc(anCuandoTxt(a))}</div>
       <div class="meta">${enCola === "al_aire" ? "📡 " + LG("Al aire ahora", "On air now") : enCola ? "⏳ " + LG("Esperando canal libre", "Waiting for a clear channel")
-        : a.activo && a.proximo ? LG("Próximo", "Next") + ": " + anFecha(a.proximo) : a.activo ? LG("Sin próximos turnos", "No upcoming slots") : ""}${a.creado_por ? ` · <span class="muted">${LG("creado por", "created by")} ${esc(a.creado_por)}</span>` : ""}</div>
+        : a.activo && a.proximo ? LG("Próximo", "Next") + ": " + anFecha(a.proximo) + (a.proximo_red ? " · 📻🌐 RF + Net" : " · 📻 RF") : a.activo ? LG("Sin próximos turnos", "No upcoming slots") : ""}${a.creado_por ? ` · <span class="muted">${LG("creado por", "created by")} ${esc(a.creado_por)}</span>` : ""}</div>
       <div class="meta muted">${ult}</div>
       <div class="actions">
         <button type="button" class="btn sm ro" data-anplay="${a.id}" data-v="${esc(a.modificado)}">▶ ${LG("Escuchar", "Listen")}</button>
@@ -3850,10 +3857,9 @@ $("#anList").addEventListener("click", async (e) => {
     return loadAnuncios();
   }
   if (b.dataset.anaire) {
-    const red = a.destino === "red";
-    if (!(await confirmBox(LG(`¿Transmitir «${a.nombre}» ahora${red ? " en este nodo y en todos los enlazados" : " por el radio de este nodo"}? Si alguien está hablando, espera a que se libere el canal.`,
-      `Transmit «${a.nombre}» now${red ? " on this node and every linked node" : " on this node's radio"}? If someone is talking, it waits for the channel to clear.`), "📡 " + LG("Transmitir", "Transmit"), false))) return;
-    await run(() => api(`api/anuncios/${id}/ahora`, { method: "POST" }), LG("En camino al aire", "On its way to air")).catch(() => {});
+    const destino = await anElegirVia(a);
+    if (!destino) return;
+    await run(() => api(`api/anuncios/${id}/ahora`, { method: "POST", json: { destino } }), LG("En camino al aire", "On its way to air")).catch(() => {});
     return loadAnuncios();
   }
 });
@@ -3864,6 +3870,24 @@ $("#anList").addEventListener("change", async (e) => {
   loadAnuncios();
 });
 $("#btnNewAnuncio").onclick = () => anuncioEditor(null);
+/* «Transmitir ahora»: por dónde sale esta vez (marcado el destino de siempre del anuncio) */
+function anElegirVia(a) {
+  return new Promise((res) => {
+    const red = a.destino === "red";
+    openModal(LG("Transmitir ahora", "Transmit now"), `<p translate="no"><b>📢 ${esc(a.nombre)}</b></p>
+      <p class="muted">${LG("¿Por dónde sale esta vez? Si alguien está hablando, espera a que se libere el canal.", "Where should it go out this time? If someone is talking, it waits for the channel to clear.")}</p>
+      <div class="an-elegir">
+        <button type="button" class="btn ${red ? "" : "primary"}" data-via="local"><span class="via rf on">📻 RF</span> ${LG("Solo este nodo", "This node only")}</button>
+        <button type="button" class="btn ${red ? "primary" : ""}" data-via="red"><span class="via rf on">📻 RF</span><span class="via net on">🌐 Net</span> ${LG("Este nodo y los enlazados", "This node and the linked ones")}</button>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn" id="anViaNo">${LG("Cancelar", "Cancel")}</button></div>`);
+    $("#modalBody").onclick = (e) => {
+      const b = e.target.closest("[data-via]"), no = e.target.closest("#anViaNo");
+      if (!b && !no) return;
+      $("#modalBody").onclick = null; closeModal(); res(b ? b.dataset.via : null);
+    };
+  });
+}
 
 /* Audio del navegador → WAV 8 kHz mono 16 bits, con el pico a -1 dB */
 async function aWav8k(blob, nombre) {
@@ -3889,9 +3913,9 @@ async function aWav8k(blob, nombre) {
 
 function anuncioEditor(a) {
   const d = S.an, nuevo = !a;
-  a = a || { nombre: "", tipo: d.voz.lista ? "tts" : "audio", texto: "", dias: "0123456", modo: "horas", horas: ["09:00"], cada_min: 60,
+  a = a || { nombre: "", tipo: d.voz.lista ? "tts" : "audio", texto: "", dias: "0123456", modo: "horas", horas: [{ h: "09:00", red: false }], antes: [15, 5], evento_id: 0, cada_min: 60,
     desde_h: "08:00", hasta_h: "22:00", una_vez: "", vig_desde: "", vig_hasta: "", destino: "local", activo: true };
-  const ed = { tipo: a.tipo, horas: a.horas.slice(), archivo: null, archivoNombre: a.archivo_nombre || "", dur: a.duracion || 0 };
+  const ed = { tipo: a.tipo, horas: a.horas.map((x) => ({ h: x.h, red: !!x.red })), antes: (a.antes || []).slice(), archivo: null, archivoNombre: a.archivo_nombre || "", dur: a.duracion || 0 };
   const puedeGrabar = !!(window.isSecureContext && navigator.mediaDevices && window.MediaRecorder);
   const vars = (d.voz.variables || []).map(([v, t]) => `<button type="button" class="chip" data-anvar="${esc(v)}" title="${esc(LG(t, AN_VAR_EN[v] || t))}" translate="no">${esc(v)}</button>`).join("");
   openModal(nuevo ? LG("Nuevo anuncio", "New announcement") : LG("Editar anuncio", "Edit announcement"), `<form id="anForm" class="an-form" autocomplete="off">
@@ -3916,11 +3940,19 @@ function anuncioEditor(a) {
         <button type="button" data-modo="horas">${LG("A estas horas", "At these times")}</button>
         <button type="button" data-modo="cada">${LG("Cada cierto tiempo", "Every so often")}</button>
         <button type="button" data-modo="una">${LG("Una sola vez", "Just once")}</button>
+        ${d.eventos ? `<button type="button" data-modo="evento">${LG("Antes de un evento", "Before an event")}</button>` : ""}
       </div>
       <div class="an-dias" data-ver="horas cada">${AN_DIAS().map((t, i) => `<button type="button" data-dia="${i}" class="${a.dias.includes(String(i)) ? "on" : ""}">${t}</button>`).join("")}
         <button type="button" class="btn sm ghost" data-diasrap="0123456">${LG("Todos", "All")}</button><button type="button" class="btn sm ghost" data-diasrap="01234">${LG("Lun–Vie", "Mon–Fri")}</button></div>
       <div data-ver="horas"><div class="an-horas" id="anHoras"></div>
-        <div class="row gap"><input type="time" id="anHoraNueva" value="12:00"><button type="button" class="btn sm" id="anHoraAdd">＋ ${LG("Hora", "Time")}</button></div></div>
+        <div class="row gap"><input type="time" id="anHoraNueva" value="12:00"><button type="button" class="btn sm" id="anHoraAdd">＋ ${LG("Hora", "Time")}</button></div>
+        <small class="muted an-hint">ⓘ ${LG("Haz clic en una hora para cambiar entre 📻 RF y 📻 RF + 🌐 Net.", "Click a time to switch between 📻 RF and 📻 RF + 🌐 Net.")}</small></div>
+      ${d.eventos ? `<div data-ver="evento" class="an-ev">
+        <label>${LG("Evento", "Event")}<select name="evento_id"><option value="">— ${LG("Elige el evento", "Choose the event")} —</option>${d.eventos.map((e) => `<option value="${e.id}" ${+a.evento_id === e.id ? "selected" : ""}>${esc(e.nombre)}${e.programado ? "" : " · " + LG("sin programar", "not scheduled")}</option>`).join("")}</select></label>
+        <div class="an-horas" id="anAntes"></div>
+        <div class="row gap"><input type="number" id="anAntesNuevo" min="1" max="720" value="10"> ${LG("min antes", "min before")} <button type="button" class="btn sm" id="anAntesAdd">＋</button></div>
+        <small class="muted an-hint">ⓘ ${LG("Sigue al evento: si cambias su hora, su zona horaria o lo pausas, el anuncio se mueve o se pausa solo.", "It follows the event: if you change its time or time zone, or pause it, the announcement moves or pauses with it.")}</small>
+      </div>` : ""}
       <div data-ver="cada" class="row gap wrap an-cada">${LG("Cada", "Every")} <select name="cada_min">${[15, 30, 60, 90, 120, 180, 240, 360].map((m) => `<option value="${m}" ${+a.cada_min === m ? "selected" : ""}>${m % 60 ? m + " min" : m / 60 + " h"}</option>`).join("")}</select>
         ${LG("de", "from")} <input type="time" name="desde_h" value="${esc(a.desde_h)}"> ${LG("a", "to")} <input type="time" name="hasta_h" value="${esc(a.hasta_h)}"></div>
       <div data-ver="una"><input type="datetime-local" name="una_vez" value="${esc((a.una_vez || "").replace(" ", "T"))}"></div>
@@ -3931,6 +3963,7 @@ function anuncioEditor(a) {
       <label class="check"><input type="radio" name="destino" value="local" ${a.destino !== "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span> ${LG("Solo este nodo (el radio local)", "This node only (the local radio)")}</label>
       <label class="check"><input type="radio" name="destino" value="red" ${a.destino === "red" ? "checked" : ""}> <span class="via rf on">📻 RF</span><span class="via net on">🌐 Net</span> ${LG("Este nodo y los nodos enlazados", "This node and the linked nodes")}</label>
       <small class="muted hidden" id="anRedAviso">⚠ ${LG("Se oye en todos los nodos conectados en ese momento.", "It's heard on every node connected at that moment.")}</small>
+      <small class="muted an-hint" id="anDondeNota" data-ver="horas">ⓘ ${LG("En «A estas horas» esto cambia todas las horas; después haz clic en una hora para que esa sea distinta. También es lo que se marca primero en «Transmitir ahora».", "In «At these times» this changes every time; then click a time to make that one different. It's also what's preselected in «Transmit now».")}</small>
     </div>
     <p class="muted an-nota">ⓘ ${LG(`Si alguien está hablando, espera hasta ${d.espera_min} min a que se libere el canal; si no se libera, ese turno se salta y queda en la bitácora.`, `If someone is talking, it waits up to ${d.espera_min} min for the channel to clear; if it doesn't, that slot is skipped and logged.`)}</p>
     <div class="modal-actions"><button type="button" class="btn" id="anCancel">${LG("Cancelar", "Cancel")}</button><button class="btn primary" id="anSave">${LG("Guardar", "Save")}</button></div>
@@ -3942,26 +3975,56 @@ function anuncioEditor(a) {
     $$("#anForm [data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== t));
   };
   const setModo = (m) => {
+    // Un anuncio nuevo «antes de un evento» casi siempre es para toda la red
+    if (m === "evento" && nuevo && !ed.dondeTocado) { f.destino.value = "red"; red(); }
     ed.modo = m;
     $$("#anModo button").forEach((b) => b.classList.toggle("active", b.dataset.modo === m));
     $$("#anForm [data-ver]").forEach((p) => p.classList.toggle("hidden", !p.dataset.ver.split(" ").includes(m)));
   };
-  const pintaHoras = () => { $("#anHoras").innerHTML = ed.horas.length ? ed.horas.map((h) => `<span class="chip">${h} <button type="button" data-hdel="${h}" title="${LG("Quitar", "Remove")}">✕</button></span>`).join("") : `<span class="muted">${LG("Agrega al menos una hora", "Add at least one time")}</span>`; };
+  const pintaHoras = () => {
+    $("#anHoras").innerHTML = ed.horas.length ? ed.horas.map((x) => `<span class="chip an-h ${x.red ? "red" : ""}" data-htog="${x.h}" title="${x.red ? LG("Sale por 📻 RF + 🌐 Net. Clic: solo RF", "Goes out on 📻 RF + 🌐 Net. Click: RF only") : LG("Sale solo por 📻 RF. Clic: también 🌐 Net", "Goes out on 📻 RF only. Click: also 🌐 Net")}">
+      <b>${x.h}</b> 📻${x.red ? "🌐" : ""} <button type="button" data-hdel="${x.h}" title="${LG("Quitar", "Remove")}">✕</button></span>`).join("")
+      : `<span class="muted">${LG("Agrega al menos una hora", "Add at least one time")}</span>`;
+  };
+  const pintaAntes = () => {
+    const box = $("#anAntes"); if (!box) return;
+    box.innerHTML = ed.antes.length ? ed.antes.map((m) => `<span class="chip">${m} min <button type="button" data-adel="${m}" title="${LG("Quitar", "Remove")}">✕</button></span>`).join("")
+      : `<span class="muted">${LG("Agrega cuántos minutos antes", "Add how many minutes before")}</span>`;
+  };
   const oye = (url) => { prev.src = url; prev.classList.remove("hidden"); prev.play().catch(() => {}); };
   const red = () => $("#anRedAviso").classList.toggle("hidden", f.destino.value !== "red");
-  setTipo(a.tipo === "audio" ? "audio" : "tts"); setModo(a.modo); pintaHoras(); red();
+  setTipo(a.tipo === "audio" ? "audio" : "tts"); setModo(a.modo); pintaHoras(); pintaAntes(); red();
   if (!nuevo && a.tipo === "audio") oyeGuardado();
   function oyeGuardado() { prev.src = `api/anuncios/${a.id}/audio?v=${encodeURIComponent(a.modificado)}`; prev.classList.remove("hidden"); }
   $("#anTipo").onclick = (e) => { const b = e.target.closest("[data-tipo]"); if (b) setTipo(b.dataset.tipo); };
   $("#anModo").onclick = (e) => { const b = e.target.closest("[data-modo]"); if (b) setModo(b.dataset.modo); };
-  f.addEventListener("change", (e) => { if (e.target.name === "destino") red(); });
+  f.addEventListener("change", (e) => {
+    if (e.target.name !== "destino") return;
+    ed.dondeTocado = true; red();
+    if (ed.modo === "horas") { ed.horas.forEach((x) => (x.red = f.destino.value === "red")); pintaHoras(); }
+  });
   f.querySelector(".an-dias").onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.diasrap) $$("#anForm [data-dia]").forEach((x) => x.classList.toggle("on", b.dataset.diasrap.includes(x.dataset.dia)));
     else b.classList.toggle("on");
   };
-  $("#anHoras").onclick = (e) => { const b = e.target.closest("[data-hdel]"); if (b) { ed.horas = ed.horas.filter((h) => h !== b.dataset.hdel); pintaHoras(); } };
-  $("#anHoraAdd").onclick = () => { const v = $("#anHoraNueva").value; if (v && !ed.horas.includes(v)) { ed.horas.push(v); ed.horas.sort(); pintaHoras(); } };
+  $("#anHoras").onclick = (e) => {
+    const del = e.target.closest("[data-hdel]");
+    if (del) { ed.horas = ed.horas.filter((x) => x.h !== del.dataset.hdel); return pintaHoras(); }
+    const tog = e.target.closest("[data-htog]");
+    if (tog) { const x = ed.horas.find((y) => y.h === tog.dataset.htog); x.red = !x.red; pintaHoras(); }
+  };
+  $("#anHoraAdd").onclick = () => {
+    const v = $("#anHoraNueva").value;
+    if (v && !ed.horas.some((x) => x.h === v)) { ed.horas.push({ h: v, red: f.destino.value === "red" }); ed.horas.sort((p, q) => p.h.localeCompare(q.h)); pintaHoras(); }
+  };
+  if ($("#anAntes")) {
+    $("#anAntes").onclick = (e) => { const b = e.target.closest("[data-adel]"); if (b) { ed.antes = ed.antes.filter((m) => m !== +b.dataset.adel); pintaAntes(); } };
+    $("#anAntesAdd").onclick = () => {
+      const v = Math.round(+$("#anAntesNuevo").value);
+      if (v >= 1 && v <= 720 && !ed.antes.includes(v)) { ed.antes.push(v); ed.antes.sort((p, q) => q - p); pintaAntes(); }
+    };
+  }
   f.querySelector(".an-vars").onclick = (e) => {
     const b = e.target.closest("[data-anvar]"); if (!b) return;
     const t = f.texto, p = t.selectionStart ?? t.value.length;
@@ -4019,6 +4082,7 @@ function anuncioEditor(a) {
       dias: $$("#anForm [data-dia].on").map((x) => x.dataset.dia).join(""), horas: ed.horas,
       cada_min: f.cada_min.value, desde_h: f.desde_h.value, hasta_h: f.hasta_h.value, una_vez: f.una_vez.value,
       vig_desde: f.vig_desde.value, vig_hasta: f.vig_hasta.value, destino: f.destino.value, activo: a.activo,
+      evento_id: f.evento_id ? f.evento_id.value : 0, antes: ed.antes,
     };
     const fd = new FormData();
     fd.append("datos", JSON.stringify(datos));

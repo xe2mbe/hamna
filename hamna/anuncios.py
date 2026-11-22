@@ -39,7 +39,6 @@ MAX_SEG = 60                 # duración máxima de un anuncio
 ESPERA_MAX = 300             # s que se espera a que el canal se libere
 SILENCIO = 3                 # s seguidos sin actividad para considerar el canal libre
 BITACORA_MAX = 300
-MODOS = ("horas", "cada", "una")
 HORA_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 FECHA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 VARS = ("{hora}", "{dia}", "{fecha}", "{fecha_larga}", "{saludo}", "{despedida}", "{nodo}")
@@ -104,6 +103,11 @@ def init():
         c.execute("""CREATE TABLE IF NOT EXISTS anuncios_bitacora (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             anuncio_id INTEGER, nombre TEXT, cuando TEXT, estado TEXT, detalle TEXT)""")
+        cols = {r[1] for r in c.execute("PRAGMA table_info(anuncios)").fetchall()}
+        if "evento_id" not in cols:                 # «antes de un evento» (HAMNA)
+            c.execute("ALTER TABLE anuncios ADD COLUMN evento_id INTEGER NOT NULL DEFAULT 0")
+        if "antes" not in cols:
+            c.execute("ALTER TABLE anuncios ADD COLUMN antes TEXT NOT NULL DEFAULT '[]'")
 
 
 def _ahora():
@@ -119,14 +123,74 @@ def _min(hhmm):
     return int(h) * 60 + int(m)
 
 
+# ── Antes de un evento ───────────────────────────────────────────────────────
+EVENTOS = True
+
+
+def _turnos_evento(a, dia):
+    """Minutos antes de cada fecha en que sale el evento (las mismas que calcula el
+    programador: zona horaria, recurrencia y pausas incluidas)."""
+    from .engine import Engine
+    antes = [m for m in (a.get("antes") or []) if 0 < m <= 720]
+    if not antes or not a.get("evento_id"):
+        return []
+    ini = dt.datetime.combine(dia, dt.time(0, 0))
+    fin = ini + dt.timedelta(days=1, minutes=max(antes))
+    out = set()
+    for r in db.get_programacion(solo_activos=True):
+        if r["evento_id"] != a["evento_id"]:
+            continue
+        for occ in Engine.occurrences(r, ini, fin):
+            for m in antes:
+                t = occ - dt.timedelta(minutes=m)
+                if t.date() == dia:
+                    out.add(t.hour * 60 + t.minute)
+    red = a["destino"] == "red"
+    return [(m, red) for m in sorted(out)]
+
+
+def _evento_valido(d):
+    try:
+        eid = int(d.get("evento_id") or 0)
+    except (TypeError, ValueError):
+        eid = 0
+    if not eid or not db.get_evento(eid):
+        raise ValueError("Elige el evento")
+    antes = set()
+    for x in d.get("antes") or []:
+        try:
+            x = int(x)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= x <= 720:
+            antes.add(x)
+    if not antes:
+        raise ValueError("Agrega cuántos minutos antes del evento (de 1 a 720)")
+    return eid, sorted(antes, reverse=True)
+
+
+def _eventos_resumen():
+    prog = {r["evento_id"] for r in db.get_programacion(solo_activos=True)}
+    return [{"id": e["id"], "nombre": e["nombre"], "programado": e["id"] in prog} for e in db.get_eventos()]
+# ── fin eventos ──
+
+
+MODOS = ("horas", "cada", "una") + (("evento",) if EVENTOS else ())
+
+
 # ── Cuándo toca ──────────────────────────────────────────────────────────────
 def _vigente(a, fecha):
     f = fecha.strftime("%Y-%m-%d")
     return (not a["vig_desde"] or f >= a["vig_desde"]) and (not a["vig_hasta"] or f <= a["vig_hasta"])
 
 
-def _minutos_del_dia(a, dia):
-    """Minutos (desde medianoche) en que toca el anuncio ese día, en orden."""
+def _turnos_del_dia(a, dia):
+    """[(minuto desde medianoche, red)] en que toca el anuncio ese día, en orden.
+    red = también sale a los nodos enlazados (RF + Net). En «A estas horas» cada
+    hora tiene su propio destino; en los demás modos vale el del anuncio."""
+    red = a["destino"] == "red"
+    if a["modo"] == "evento":
+        return _turnos_evento(a, dia)
     if not _vigente(a, dia):
         return []
     if a["modo"] == "una":
@@ -134,39 +198,75 @@ def _minutos_del_dia(a, dia):
             t = dt.datetime.strptime(a["una_vez"], "%Y-%m-%d %H:%M")
         except ValueError:
             return []
-        return [t.hour * 60 + t.minute] if t.date() == dia else []
+        return [(t.hour * 60 + t.minute, red)] if t.date() == dia else []
     if str(dia.weekday()) not in a["dias"]:
         return []
     if a["modo"] == "horas":
-        return sorted({_min(h) for h in a["horas"] if HORA_RE.match(h)})
+        d = {}
+        for x in a["horas"]:
+            if HORA_RE.match(x["h"]):
+                d[_min(x["h"])] = d.get(_min(x["h"]), False) or x["red"]
+        return sorted(d.items())
     ini, fin, paso = _min(a["desde_h"]), _min(a["hasta_h"]), max(5, int(a["cada_min"] or 60))
-    return list(range(ini, fin + 1, paso)) if fin >= ini else []
+    return [(m, red) for m in range(ini, fin + 1, paso)] if fin >= ini else []
+
+
+def _minutos_del_dia(a, dia):
+    return [m for m, _r in _turnos_del_dia(a, dia)]
+
+
+def turno(a, t):
+    """None si a esa hora no toca; si toca, el destino de ese turno: "red" o "local"."""
+    if not a["activo"]:
+        return None
+    m = t.hour * 60 + t.minute
+    for x, red in _turnos_del_dia(a, t.date()):
+        if x == m:
+            return "red" if red else "local"
+    return None
 
 
 def toca(a, t):
-    return bool(a["activo"]) and (t.hour * 60 + t.minute) in _minutos_del_dia(a, t.date())
+    return turno(a, t) is not None
 
 
-def proximo(a, desde=None, dias=8):
+def proximo_turno(a, desde=None, dias=8):
+    """(fecha-hora, red) del siguiente turno, o (None, None)."""
     if not a["activo"]:
-        return None
+        return None, None
     desde = desde or _ahora()
     for d in range(dias):
         dia = desde.date() + dt.timedelta(days=d)
-        for m in _minutos_del_dia(a, dia):
+        for m, red in _turnos_del_dia(a, dia):
             t = dt.datetime.combine(dia, dt.time(m // 60, m % 60))
             if t > desde:
-                return t
-    return None
+                return t, red
+    return None, None
+
+
+def proximo(a, desde=None, dias=8):
+    return proximo_turno(a, desde, dias)[0]
 
 
 # ── Datos ────────────────────────────────────────────────────────────────────
 def _fila(r):
     a = dict(r)
+    # horas: [{"h": "HH:MM", "red": bool}]; las de antes eran solo "HH:MM" con el destino del anuncio
+    red = a.get("destino") == "red"
     try:
-        a["horas"] = [h for h in json.loads(a["horas"] or "[]") if isinstance(h, str)]
+        crudo = json.loads(a["horas"] or "[]")
     except ValueError:
-        a["horas"] = []
+        crudo = []
+    a["horas"] = []
+    for x in crudo:
+        if isinstance(x, str):
+            a["horas"].append({"h": x, "red": red})
+        elif isinstance(x, dict) and isinstance(x.get("h"), str):
+            a["horas"].append({"h": x["h"], "red": bool(x.get("red"))})
+    try:
+        a["antes"] = [int(x) for x in json.loads(a.get("antes") or "[]")]
+    except (TypeError, ValueError):
+        a["antes"] = []
     a["activo"] = bool(a["activo"])
     return a
 
@@ -200,9 +300,15 @@ def _limpio(d, actual=None):
     a["modo"] = d.get("modo") if d.get("modo") in MODOS else "horas"
     dias = "".join(sorted({c for c in str(d.get("dias") or "") if c in "0123456"}))
     a["dias"] = dias
-    if a["modo"] != "una" and not dias:
+    if a["modo"] in ("horas", "cada") and not dias:
         raise ValueError("Elige al menos un día")
-    horas = sorted({h for h in (d.get("horas") or []) if isinstance(h, str) and HORA_RE.match(h)})
+    red_def = d.get("destino") == "red"
+    hs = {}
+    for x in d.get("horas") or []:
+        h, r = (x, red_def) if isinstance(x, str) else ((x or {}).get("h"), bool((x or {}).get("red")))
+        if isinstance(h, str) and HORA_RE.match(h):
+            hs[h] = hs.get(h, False) or r
+    horas = [{"h": h, "red": hs[h]} for h in sorted(hs)]
     a["horas"] = json.dumps(horas)
     if a["modo"] == "horas" and not horas:
         raise ValueError("Agrega al menos una hora")
@@ -225,6 +331,10 @@ def _limpio(d, actual=None):
             dt.datetime.strptime(a["una_vez"], "%Y-%m-%d %H:%M")
         except ValueError:
             raise ValueError("Elige la fecha y la hora")
+    a["evento_id"], a["antes"] = 0, "[]"
+    if a["modo"] == "evento":
+        a["evento_id"], antes = _evento_valido(d)
+        a["antes"] = json.dumps(antes)
     for k in ("vig_desde", "vig_hasta"):
         v = str(d.get(k) or "")
         if v and not FECHA_RE.match(v):
@@ -359,7 +469,7 @@ class Emisor:
     """Una sola cola: los anuncios salen uno tras otro, cuando el canal está libre."""
 
     def __init__(self):
-        self.cola = []                 # [(id, motivo)]
+        self.cola = []                 # [(id, motivo, destino)]; destino None = el del anuncio
         self.lock = threading.Lock()
         self.evento = threading.Event()
         self.actual = None             # {"id", "nombre", "estado": esperando|al_aire, "desde"}
@@ -370,17 +480,17 @@ class Emisor:
             self.hilo = threading.Thread(target=self._loop, daemon=True, name="hamna-anuncios")
             self.hilo.start()
 
-    def encolar(self, aid, motivo="programado"):
+    def encolar(self, aid, motivo="programado", destino=None):
         with self.lock:
-            if any(x == aid for x, _ in self.cola) or (self.actual and self.actual["id"] == aid):
+            if any(x[0] == aid for x in self.cola) or (self.actual and self.actual["id"] == aid):
                 return False
-            self.cola.append((aid, motivo))
+            self.cola.append((aid, motivo, destino))
         self.evento.set()
         return True
 
     def estado(self):
         with self.lock:
-            return {"actual": dict(self.actual) if self.actual else None, "en_cola": [x for x, _ in self.cola]}
+            return {"actual": dict(self.actual) if self.actual else None, "en_cola": [x[0] for x in self.cola]}
 
     def al_aire(self):
         with self.lock:
@@ -400,11 +510,11 @@ class Emisor:
                 with self.lock:
                     if not self.cola:
                         break
-                    aid, motivo = self.cola.pop(0)
+                    aid, motivo, destino = self.cola.pop(0)
                     # Ya cuenta como «en curso»: que no se pueda encolar otra vez mientras arranca
                     self.actual = {"id": aid, "nombre": "", "estado": "esperando", "desde": time.time(), "motivo": motivo}
                 try:
-                    self._uno(aid, motivo)
+                    self._uno(aid, motivo, destino)
                 except Exception as e:
                     log.exception("Anuncio %s", aid)
                     try:
@@ -415,18 +525,20 @@ class Emisor:
                     with self.lock:
                         self.actual = None
 
-    def _uno(self, aid, motivo):
+    def _uno(self, aid, motivo, destino=None):
         try:
             a = uno(aid)
         except ValueError:
             return
+        destino = destino if destino in ("local", "red") else a["destino"]
         cfg = settings.load()
-        be = _backend(cfg, a["destino"])
+        be = _backend(cfg, destino)
         if be.name == "asl" and not be.node:
             _anotar(a, "error", "Falta el número de nodo (Ajustes → Nodo)")
             return
         with self.lock:
-            self.actual = {"id": aid, "nombre": a["nombre"], "estado": "esperando", "desde": time.time(), "motivo": motivo}
+            self.actual = {"id": aid, "nombre": a["nombre"], "estado": "esperando", "desde": time.time(), "motivo": motivo,
+                           "destino": destino}
         if not self._esperar_libre(be, cfg):
             log.info("Anuncio «%s» saltado: el canal no se liberó en %d min", a["nombre"], ESPERA_MAX // 60)
             _anotar(a, "saltado", "El canal estuvo ocupado {} min".format(ESPERA_MAX // 60))
@@ -451,7 +563,7 @@ class Emisor:
             log.info("Anuncio «%s» al aire (%s, %.1f s, %s)", a["nombre"], be.name, dur, motivo)
             be.play(str(wav), dur, lambda: False)
             _anotar(a, "ok", ("manual · " if motivo != "programado" else "") +
-                    ("nodo y enlaces" if a["destino"] == "red" else "solo este nodo"))
+                    ("nodo y enlaces" if destino == "red" else "solo este nodo"))
         finally:
             if temporal:
                 # Asterisk ya lo leyó; se borra un poco después por si va retrasado
@@ -510,11 +622,14 @@ def tick(now=None):
     t = (now or dt.datetime.now()).replace(second=0, microsecond=0)
     clave = _fmt(t)
     for a in lista():
-        if a["ultima_clave"] == clave or not toca(a, t):
+        if a["ultima_clave"] == clave:
+            continue
+        destino = turno(a, t)
+        if not destino:
             continue
         db.execute("UPDATE anuncios SET ultima_clave=? WHERE id=?", (clave, a["id"]))
         emisor.start()
-        emisor.encolar(a["id"])
+        emisor.encolar(a["id"], "programado", destino)
         log.info("Toca el anuncio «%s» (%s)", a["nombre"], clave)
 
 
@@ -522,14 +637,20 @@ def resumen():
     """Lo que necesita la página: anuncios con su próximo turno, el siguiente, la cola y la bitácora."""
     ahora = _ahora()
     out = []
+    eventos = _eventos_resumen()
+    nombres = {e["id"]: e["nombre"] for e in eventos or []}
     for a in lista():
-        p = proximo(a, ahora)
+        p, red = proximo_turno(a, ahora)
         a["proximo"] = _fmt(p) if p else ""
+        a["proximo_red"] = bool(red)
+        if a["modo"] == "evento":
+            a["evento_nombre"] = nombres.get(a["evento_id"], "")
         out.append(a)
     sig = min((a for a in out if a["proximo"]), key=lambda a: a["proximo"], default=None)
     cfg = settings.load()
     eng = cfg.get("tts_engine") or "azure"
-    return {"anuncios": out, "siguiente": {"id": sig["id"], "nombre": sig["nombre"], "cuando": sig["proximo"]} if sig else None,
+    return {"anuncios": out, "siguiente": {"id": sig["id"], "nombre": sig["nombre"], "cuando": sig["proximo"], "red": sig["proximo_red"]} if sig else None,
+            "eventos": eventos,
             "emisor": emisor.estado(), "bitacora": bitacora(30), "max_seg": MAX_SEG, "espera_min": ESPERA_MAX // 60,
             "voz": {"motor": eng, "nombre": tts.NOMBRES.get(eng, eng), "lista": tts.configurado(eng, cfg),
                     "variables": [v for v in tts.VARIABLES if v[0] in VARS]},

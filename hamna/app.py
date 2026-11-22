@@ -935,7 +935,10 @@ def anuncios_activo(req, aid):
 @app.route("/api/anuncios/<int:aid>/ahora", ("POST",), rol="operador")
 def anuncios_ahora(req, aid):
     a = anuncios.uno(aid)
-    if not anuncios.emisor.encolar(aid, "manual:" + req.user["usuario"]):
+    destino = (req.json() or {}).get("destino")
+    if destino not in (None, "local", "red"):
+        raise ValueError("Destino inválido")
+    if not anuncios.emisor.encolar(aid, "manual:" + req.user["usuario"], destino):
         raise ValueError("Ese anuncio ya está en espera o al aire")
     log.info("%s mandó al aire el anuncio «%s»", req.user["usuario"], a["nombre"])
     return ok()

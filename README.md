@@ -183,7 +183,8 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 **Schedule → Announcements** (next to **Events**): short announcements (up to 60 s) that the node transmits on its own.
 
 - **What it says**: text read by the voice of Settings → Voice (with `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; if the text has variables the voice is generated again right before it goes out), an uploaded audio file, or a recording made from the page (needs https). Uploads and recordings are converted in the browser.
-- **When**: at given times on the chosen days, every N minutes within a time window, or just once; optionally only between two dates.
+- **When**: at given times on the chosen days, every N minutes within a time window, just once, or **N minutes before an event** (it follows the event's time, time zone and pauses); optionally only between two dates.
+- **RF or RF + Net per time slot**: in «At these times» each time is a chip; click it to switch between 📻 RF and 📻 RF + 🌐 Net (e.g. 09:00 and 13:00 RF only, 20:50 to the whole network). The card shows it at a glance: *🌐 Net only 20:50*. «Transmit now» asks where it goes this time.
 - **Where**: only this node's radio (`localplay`, or IRLP local) or also the linked nodes / reflector (`playback`, or IRLP network).
 - **It never interrupts**: it waits for the channel to be quiet (nobody receiving, transmitting or talking through a link, and no HAMNA event on the air) for 3 s; if the channel doesn't clear in 5 min, that slot is skipped and logged. An event that starts while an announcement is playing waits for it to finish.
 - Each card has ▶ Listen, 📡 Transmit now, pause/activate, edit and delete, plus the next slot and the last result; the **announcement log** shows what went out, what was skipped and why. Administrators and operators create them; read-only users see them.
@@ -644,7 +645,8 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 **Programación → Anuncios** (junto a **Eventos**): anuncios cortos (hasta 60 s) que el nodo transmite solo.
 
 - **Qué dice**: un texto que lee la voz de Ajustes → Voz (con `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; si el texto lleva variables la voz se genera otra vez justo antes de salir), un audio subido o una grabación hecha desde la página (requiere https). Lo subido y lo grabado se convierte en el navegador.
-- **Cuándo**: a ciertas horas los días elegidos, cada N minutos dentro de un horario, o una sola vez; si quieres, solo entre dos fechas.
+- **Cuándo**: a ciertas horas los días elegidos, cada N minutos dentro de un horario, una sola vez o **N minutos antes de un evento** (sigue la hora, la zona horaria y las pausas del evento); si quieres, solo entre dos fechas.
+- **RF o RF + Net en cada horario**: en «A estas horas» cada hora es un chip; haz clic para cambiar entre 📻 RF y 📻 RF + 🌐 Net (p. ej. 09:00 y 13:00 solo RF, 20:50 a toda la red). La tarjeta lo dice de un vistazo: *🌐 Net solo 20:50*. «Transmitir ahora» pregunta por dónde sale esa vez.
 - **Dónde**: solo el radio de este nodo (`localplay`, o IRLP local) o también los nodos enlazados / el reflector (`playback`, o IRLP con la red).
 - **Nunca interrumpe**: espera a que el canal esté en silencio 3 s (nadie recibiendo, transmitiendo ni hablando por un enlace, y ningún evento de HAMNA al aire); si en 5 min no se libera, ese turno se salta y queda en la bitácora. Un evento que empieza mientras suena un anuncio espera a que termine.
 - Cada tarjeta tiene ▶ Escuchar, 📡 Transmitir ahora, pausar/activar, editar y borrar, con el próximo turno y el último resultado; la **bitácora de anuncios** dice qué salió, qué se saltó y por qué. Los crean el administrador y los operadores; solo lectura los ve.
