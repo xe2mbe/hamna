@@ -3180,8 +3180,8 @@ function presChip(n) {
   const p = S.pres[n];
   if (!p || !p.estado) return p && p.cargando ? `<span class="pres wait" title="${LG("Revisando si está en línea…", "Checking whether it's online…")}">···</span>` : "";
   if (p.estado === "responde") return `<span class="pres ok" title="${LG(`Registrado en AllStar y responde (${p.ms} ms): se le puede conectar.`, `Registered with AllStar and answering (${p.ms} ms): it can be connected.`)}">● ${LG("En línea", "Online")}</span>`;
-  if (p.estado === "registrado") return `<span class="pres warn" title="${LG("Está prendido y registrado en AllStar, pero no contesta conexiones de fuera (casi siempre falta reenviar el puerto UDP " + (p.puerto || 4569) + " en su router). Él sí puede conectarse a ti.", "It's on and registered with AllStar, but doesn't answer incoming connections (usually UDP port " + (p.puerto || 4569) + " isn't forwarded on its router). It can still connect to you.")}">● ${LG("No responde", "Not answering")}</span>`;
-  return `<span class="pres off" title="${LG("No está registrado en AllStar: apagado o sin internet.", "Not registered with AllStar: off or without internet.")}">○ ${LG("Fuera de línea", "Offline")}</span>`;
+  if (p.estado === "registrado") return `<span class="pres warn" title="${LG("Está prendido y registrado en AllStar, pero no contesta conexiones de fuera (casi siempre falta reenviar el puerto UDP " + (p.puerto || 4569) + " en su router). Él sí puede conectarse a ti.", "It's on and registered with AllStar, but doesn't answer incoming connections (usually UDP port " + (p.puerto || 4569) + " isn't forwarded on its router). It can still connect to you.")}">● ${LG("Sin resp.", "No reply")}</span>`;
+  return `<span class="pres off" title="${LG("No está registrado en AllStar: apagado o sin internet.", "Not registered with AllStar: off or without internet.")}">○ ${LG("Apagado", "Offline")}</span>`;
 }
 function presenciaCargar(nodos) {
   const ahora = Date.now();
