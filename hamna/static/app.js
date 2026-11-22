@@ -2757,7 +2757,8 @@ $("#sesConnect").onsubmit = async (e) => {
 
 // Favoritos como mini tarjetas: el número grande a la izquierda y la descripción abajo.
 // Con más de una categoría, arriba van pestañas (Todos + una por categoría); la elegida se recuerda.
-const FAV_TODOS = "__todos__";        // valor de la pestaña «Todos» (no choca con un nombre real)
+const FAV_TODOS = "__todos__";
+const FAV_COLORES = 6;                  // --g0 … --g5 en app.css        // valor de la pestaña «Todos» (no choca con un nombre real)
 function favTab(tipo, cats) {
   S.favTab = S.favTab || {};
   if (S.favTab[tipo] === undefined) { try { S.favTab[tipo] = localStorage.getItem("hamna.favtab." + tipo) || FAV_TODOS; } catch { S.favTab[tipo] = FAV_TODOS; } }
@@ -2777,12 +2778,16 @@ function favCards(favs, conectado, attr, titulo, editar, estado, cats) {
   if (sueltos.length) grupos.push(["Generales", sueltos]);
   if (grupos.length < 2) return head + `<div class="fav-grid">${favs.map(tarjeta).join("")}</div>`;
   const tab = favTab(editar, grupos.map(([c]) => c));
+  // Cada categoría con su color (por su lugar en la lista: no cambia al elegir otra pestaña)
+  const color = (c) => "--gc:var(--g" + (grupos.findIndex(([x]) => x === c) % FAV_COLORES) + ")";
   const tabs = `<div class="fav-tabs" role="tablist" translate="no">` +
     [[FAV_TODOS, LG("Todos", "All"), favs.length]].concat(grupos.map(([c, fs]) => [c, c, fs.length])).map(([k, txt, n]) =>
-      `<button type="button" role="tab" class="fav-tab ${k === tab ? "active" : ""}" aria-selected="${k === tab}" data-favtab="${editar}" data-cat="${esc(k)}">${esc(txt)}<span class="cnt">${n}</span></button>`).join("") + `</div>`;
-  const cuerpo = tab === FAV_TODOS
-    ? grupos.map(([c, fs]) => `<div class="fav-cat"><div class="fav-cat-h" translate="no">${esc(c)}</div><div class="fav-grid">${fs.map(tarjeta).join("")}</div></div>`).join("")
-    : `<div class="fav-grid">${grupos.find(([c]) => c === tab)[1].map(tarjeta).join("")}</div>`;
+      `<button type="button" role="tab" class="fav-tab ${k === tab ? "active" : ""}" aria-selected="${k === tab}" data-favtab="${editar}" data-cat="${esc(k)}"${k === FAV_TODOS ? "" : ` style="${color(k)}"`}>${k === FAV_TODOS ? "" : '<i class="gdot"></i>'}${esc(txt)}<span class="cnt">${n}</span></button>`).join("") + `</div>`;
+  const conectados = (fs) => fs.filter((f) => conectado(f.nodo)).length;
+  const grupo = ([c, fs]) => `<section class="fav-cat" style="${color(c)}"><div class="fav-cat-h" translate="no"><i class="gdot"></i><b>${esc(c)}</b>
+      <span class="cnt">${fs.length}</span>${conectados(fs) ? `<span class="fav-cat-on">● ${conectados(fs)} ${LG("conectado" + (conectados(fs) > 1 ? "s" : ""), "connected")}</span>` : ""}</div>
+      <div class="fav-grid">${fs.map(tarjeta).join("")}</div></section>`;
+  const cuerpo = tab === FAV_TODOS ? grupos.map(grupo).join("") : grupo(grupos.find(([c]) => c === tab));
   return head + tabs + cuerpo;
 }
 document.addEventListener("click", (e) => {
