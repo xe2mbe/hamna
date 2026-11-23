@@ -42,7 +42,7 @@ ZONAS = [
 ]
 
 try:                                    # Python 3.9+
-    from zoneinfo import ZoneInfo
+    from zoneinfo import ZoneInfo  # novm (sin zoneinfo se leen los archivos TZif)
 except ImportError:                     # HamVOIP (3.5)
     ZoneInfo = None
 

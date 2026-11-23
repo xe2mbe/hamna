@@ -14,7 +14,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, anuncios, audio, auth, pronuncia, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, anuncios, audio, auth, horas, pronuncia, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -965,6 +965,12 @@ def anuncios_voz(req):
         cfg = dict(cfg, pron_dict=pronuncia.normalizar(b["diccionario"]))
     nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:2000], cfg)
     return ok(url="api/archivo/tmp/" + nombre, texto=dicho, duracion=round(dur, 1), max_seg=anuncios.MAX_SEG)
+
+
+# ── Variables de hora con zona ({hora 21:00 America/Chicago}, {hora_evento …}) ──
+@app.route("/api/horas/probar", ("POST",), rol="colaborador")
+def horas_probar(req):
+    return ok(items=horas.revisar(str(req.json().get("texto") or "")[:4000]))
 
 
 # ── Diccionario de pronunciación ────────────────────────────────────────────

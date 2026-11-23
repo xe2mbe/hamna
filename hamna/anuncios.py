@@ -45,7 +45,8 @@ VARS = ("{hora}", "{dia}", "{fecha}", "{fecha_larga}", "{saludo}", "{despedida}"
 
 
 def _tiene_variables(t):
-    return any(v in (t or "") for v in VARS)
+    from . import horas
+    return any(v in (t or "") for v in VARS) or horas.tiene(t)
 
 
 def _nivel(cfg):

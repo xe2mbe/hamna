@@ -28,7 +28,7 @@ import urllib.request
 import wave
 from pathlib import Path
 
-from . import paths, pronuncia
+from . import horas, paths, pronuncia
 
 log = logging.getLogger("hamna.tts")
 
@@ -80,6 +80,7 @@ def saludo(now):
 
 def resolve_variables(text, cfg, ctx=None):
     now = datetime.datetime.now()
+    text = horas.resolver(text, cfg, now)        # {hora 21:00 America/Chicago}, {hora_evento …}
     ctx = ctx or {}
     rep = {
         "{fecha}": now.strftime("%d/%m/%Y"),

@@ -1167,6 +1167,7 @@ async function seccionForm(s) {
         <label>Texto<textarea name="texto_tts" rows="6">${esc(s.texto_tts || "")}</textarea></label>
         <div class="an-dic hidden" id="sfDic"></div>
         <div class="vars">${info.variables.map(([v, d]) => `<button type="button" title="${esc(d)}">${v}</button>`).join("")}</div>
+        <div class="hz-box" id="sfHz"></div>
         <label class="check"><input type="checkbox" name="regenerar_antes" ${s.regenerar_antes ? "checked" : ""}> 🔄 Regenerar justo antes de transmitir (para {hora}, {fecha}, etc.)</label>
         <div class="row gap"><button type="button" class="btn" id="sfPrev">▶ Escuchar prueba</button><audio id="sfAudio" controls class="hidden" style="flex:1"></audio></div>
         <p class="muted" id="sfResolved" style="font-size:.85rem"></p>
@@ -1197,12 +1198,15 @@ async function seccionForm(s) {
     tipo = b.dataset.t; $$("#sfTipo button").forEach((x) => x.classList.toggle("active", x === b)); apply();
   };
   const needRegen = () => {
-    if (!f.regenerar_antes.checked && /\{(numero|emision|emision_anio|anio)\}/.test(f.texto_tts.value)) {
+    const t = f.texto_tts.value, hz = /\{hora(_evento)?\s/.test(t);
+    if (!f.regenerar_antes.checked && (hz || /\{(numero|emision|emision_anio|anio)\}/.test(t))) {
       f.regenerar_antes.checked = true;
-      $("#sfResolved").textContent = "🔄 Activé «Regenerar justo antes de transmitir»: el número de emisión cambia cada vez.";
+      $("#sfResolved").textContent = hz ? LG("🔄 Activé «Regenerar justo antes de transmitir»: la hora cambia con el horario de verano.", "🔄 I turned on «Regenerate right before transmitting»: the time changes with daylight saving.")
+        : "🔄 Activé «Regenerar justo antes de transmitir»: el número de emisión cambia cada vez.";
     }
   };
   f.texto_tts.addEventListener("input", needRegen);
+  horaPanel($("#sfHz"), f.texto_tts, () => { repinta(); needRegen(); }, true);
   $(".vars", f).onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     const ta = f.texto_tts, p = ta.selectionStart ?? ta.value.length;
@@ -3934,6 +3938,7 @@ function anuncioEditor(a) {
       <div data-pane="tts"><textarea name="texto" rows="3" maxlength="2000" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
         <div class="an-dic hidden" id="anDic"></div>
         <div class="an-vars"><span class="muted">${LG("Variables", "Variables")}:</span> ${vars}</div>
+        <div class="hz-box" id="anHz"></div>
         <div class="row gap wrap"><button type="button" class="btn sm" id="anVozPlay">▶ ${LG("Escuchar", "Listen")}</button><span class="muted" id="anVozMsg">${esc(d.voz.nombre || "")}${d.voz.lista ? "" : " · ⚠ " + LG("sin configurar", "not set up")}</span></div></div>
       <div data-pane="audio" class="hidden"><label class="btn sm" style="margin:0">📁 ${LG("Elegir archivo", "Choose file")}<input type="file" id="anFile" accept="audio/*" hidden></label>
         <span class="muted" id="anFileMsg">${ed.archivoNombre ? esc(ed.archivoNombre) + " · " + fmt(ed.dur) : LG("MP3, WAV, M4A u OGG", "MP3, WAV, M4A or OGG")}</span></div>
@@ -3976,6 +3981,7 @@ function anuncioEditor(a) {
   </form>`);
   const f = $("#anForm"), prev = $("#anPrev");
   const repinta = pronResaltar(f.texto, d.pronuncia || [], $("#anDic"));
+  horaPanel($("#anHz"), f.texto, repinta, !!d.eventos);
   const setTipo = (t) => {
     ed.tipo = t === "tts" ? "tts" : "audio"; ed.pane = t;
     $$("#anTipo button").forEach((b) => b.classList.toggle("active", b.dataset.tipo === t));
@@ -4294,7 +4300,9 @@ function pronMarcas(texto, lista) {
   }
   return out;
 }
-/* Capa detrás del cuadro de texto que pinta las mismas letras y resalta las del diccionario */
+/* Capa detrás del cuadro de texto que pinta las mismas letras y resalta las palabras del
+   diccionario (azul) y las horas con zona {hora 21:00 America/Chicago} (verde, con lo que dirán hoy) */
+const HZ_RX = /\{hora(_evento)?\s+[^{}|]+?\s*(?:\|\s*(?:palabras|24h|12h)\s*)?\}/g;
 function pronResaltar(ta, lista, resumen) {
   const caja = document.createElement("div"); caja.className = "pron-caja";
   const capa = document.createElement("div"); capa.className = "pron-capa"; capa.setAttribute("aria-hidden", "true");
@@ -4304,21 +4312,129 @@ function pronResaltar(ta, lista, resumen) {
     "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderRadius", "boxSizing", "textIndent", "tabSize"]) capa.style[p] = cs[p];
   capa.style.backgroundColor = cs.backgroundColor;
   ta.classList.add("pron-ta");
+  let horasHtml = "", dicHtml = "", tHz = null, ultimo = null;
+  const muestra = () => {
+    if (!resumen) return;
+    resumen.innerHTML = [horasHtml, dicHtml].filter(Boolean).join("<br>");
+    resumen.classList.toggle("hidden", !horasHtml && !dicHtml);
+  };
+  const horas = (t) => {
+    const toks = t.match(HZ_RX) || [];
+    const clave = toks.join("\n");
+    if (clave === ultimo) return;
+    ultimo = clave; clearTimeout(tHz);
+    if (!toks.length) { horasHtml = ""; return muestra(); }
+    tHz = setTimeout(async () => {
+      try {
+        const r = await api("api/horas/probar", { method: "POST", json: { texto: toks.join(" ") } });
+        horasHtml = `🕗 ${LG("Hoy dirá", "Today it says")}: ` + r.items.map((x) => x.ok
+          ? `<span class="pron-par" translate="no"><mark class="hz">${esc(x.detalle)}</mark> → «${esc(x.dice)}»</span>`
+          : `<span class="pron-par hz-mal" translate="no">⚠ <code>${esc(x.token)}</code>: ${esc(x.error)}</span>`).join(" ");
+      } catch (e) { horasHtml = "⚠ " + esc(e.message); }
+      muestra();
+    }, 350);
+  };
   const pinta = () => {
-    const t = ta.value, ms = pronMarcas(t, lista);
+    const t = ta.value, marcas = [];
+    let m; HZ_RX.lastIndex = 0;
+    while ((m = HZ_RX.exec(t))) marcas.push({ i: m.index, j: m.index + m[0].length, hz: true });
+    // Las palabras del diccionario dentro de un token de hora no cuentan (la hora se calcula antes)
+    const dentro = (x) => marcas.some((h) => x.i < h.j && x.j > h.i);
+    const dic = pronMarcas(t, lista).filter((x) => !dentro(x));
+    const todas = marcas.concat(dic).sort((a, b) => a.i - b.i);
     let h = "", k = 0;
-    for (const x of ms) { h += esc(t.slice(k, x.i)) + `<mark>${esc(t.slice(x.i, x.j))}</mark>`; k = x.j; }
+    for (const x of todas) { h += esc(t.slice(k, x.i)) + `<mark${x.hz ? ' class="hz"' : ""}>${esc(t.slice(x.i, x.j))}</mark>`; k = x.j; }
     capa.innerHTML = h + esc(t.slice(k)) + "\n";
     capa.scrollTop = ta.scrollTop;
-    if (resumen) {
-      const vistos = new Map(); ms.forEach((x) => vistos.set(x.e, x.d));
-      resumen.innerHTML = vistos.size ? `📖 ${LG("Del diccionario", "From the dictionary")}: ` + [...vistos].map(([e, d]) => `<span class="pron-par" translate="no"><mark>${esc(e)}</mark> → «${esc(d)}»</span>`).join(" ") : "";
-      resumen.classList.toggle("hidden", !vistos.size);
-    }
+    const vistos = new Map(); dic.forEach((x) => vistos.set(x.e, x.d));
+    dicHtml = vistos.size ? `📖 ${LG("Del diccionario", "From the dictionary")}: ` + [...vistos].map(([e, d]) => `<span class="pron-par" translate="no"><mark>${esc(e)}</mark> → «${esc(d)}»</span>`).join(" ") : "";
+    muestra(); horas(t);
   };
   ta.addEventListener("input", pinta);
   ta.addEventListener("scroll", () => { capa.scrollTop = ta.scrollTop; });
   if (window.ResizeObserver) new ResizeObserver(() => { capa.style.height = ta.offsetHeight + "px"; }).observe(ta);
   pinta();
   return pinta;
+}
+
+/* Botones «🕗 Hora de otra zona» y «📅 Hora de un evento»: arman el token y lo insertan en el texto */
+async function horaPanel(box, ta, despues, eventos) {
+  if (!box) return;
+  box.innerHTML = `<div class="row gap wrap hz-btns">
+      <button type="button" class="btn sm" data-hzabre="zona">🕗 ${LG("Hora de otra zona", "Time in another zone")}</button>
+      ${eventos ? `<button type="button" class="btn sm" data-hzabre="evento">📅 ${LG("Hora de un evento", "Time of an event")}</button>` : ""}
+    </div>
+    <div class="hz-panel hidden" data-hzp="zona">
+      <div class="row gap wrap"><label>${LG("Hora allá", "Time there")}<input type="time" data-hz="h" value="21:00"></label>
+        <label class="hz-zona">${LG("Zona", "Zone")}<select data-hz="z"><option>…</option></select></label></div>
+      ${hzFormatos("z")}
+      <p class="muted hz-prev" data-hzprev="zona"></p>
+      <div class="row gap"><button type="button" class="btn sm primary" data-hzins="zona">${LG("Insertar", "Insert")}</button><button type="button" class="btn sm ghost" data-hzcerrar>${LG("Cerrar", "Close")}</button></div>
+    </div>
+    ${eventos ? `<div class="hz-panel hidden" data-hzp="evento">
+      <label>${LG("Evento", "Event")}<select data-hz="ev"><option>…</option></select></label>
+      ${hzFormatos("e")}
+      <p class="muted hz-prev" data-hzprev="evento"></p>
+      <div class="row gap"><button type="button" class="btn sm primary" data-hzins="evento">${LG("Insertar", "Insert")}</button><button type="button" class="btn sm ghost" data-hzcerrar>${LG("Cerrar", "Close")}</button></div>
+    </div>` : ""}`;
+  const q = (s) => box.querySelector(s);
+  const token = (tipo) => {
+    const fmt = (box.querySelector(`[name=hzf_${tipo === "zona" ? "z" : "e"}]:checked`) || {}).value || "palabras";
+    if (tipo === "zona") return `{hora ${q("[data-hz=h]").value || "21:00"} ${q("[data-hz=z]").value}${fmt === "palabras" ? "" : " | " + fmt}}`;
+    const ev = q("[data-hz=ev]").value;
+    return ev ? `{hora_evento ${ev}${fmt === "palabras" ? "" : " | " + fmt}}` : "";
+  };
+  let tPrev = null;
+  const prev = (tipo) => {
+    clearTimeout(tPrev);
+    tPrev = setTimeout(async () => {
+      const t = token(tipo), out = q(`[data-hzprev=${tipo}]`); if (!out) return;
+      if (!t) { out.textContent = ""; return; }
+      try {
+        const r = await api("api/horas/probar", { method: "POST", json: { texto: t } }), x = r.items[0];
+        out.innerHTML = x && x.ok ? `${LG("Hoy aquí", "Today here")}: <b>${esc(anFecha(x.aqui))}</b> → ${LG("dirá", "it says")} «<b>${esc(x.dice)}</b>»`
+          : "⚠ " + esc(x ? x.error : "");
+      } catch (e) { out.textContent = "⚠ " + e.message; }
+    }, 250);
+  };
+  box.onclick = async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.hzabre) {
+      const tipo = b.dataset.hzabre;
+      box.querySelectorAll("[data-hzp]").forEach((p) => p.classList.toggle("hidden", p.dataset.hzp !== tipo || !p.classList.contains("hidden")));
+      if (tipo === "zona" && !S.hzZonas) {
+        try { S.hzZonas = await api("api/zonas"); } catch { S.hzZonas = { zonas: [] }; }
+      }
+      if (tipo === "zona") {
+        const sel = q("[data-hz=z]"), zs = S.hzZonas.zonas.filter((z) => z.id);
+        if (sel.options.length < 2) sel.innerHTML = zs.map((z) => `<option value="${esc(z.id)}" ${z.id === "America/Chicago" ? "selected" : ""}>${esc(z.nombre)}</option>`).join("");
+      }
+      if (tipo === "evento") {
+        const sel = q("[data-hz=ev]");
+        if (sel.options.length < 2) {
+          let evs = (S.an && S.an.eventos) || null;
+          if (!evs) { try { evs = (await api("api/eventos")).eventos; } catch { evs = []; } }
+          sel.innerHTML = `<option value="">— ${LG("Elige el evento", "Choose the event")} —</option>` + evs.map((x) => `<option value="${esc(x.nombre)}">${esc(x.nombre)}</option>`).join("");
+        }
+      }
+      return prev(tipo);
+    }
+    if (b.dataset.hzcerrar !== undefined) { box.querySelectorAll("[data-hzp]").forEach((p) => p.classList.add("hidden")); return; }
+    if (b.dataset.hzins) {
+      const t = token(b.dataset.hzins); if (!t) return toast(LG("Elige el evento", "Choose the event"), true);
+      const p = ta.selectionStart ?? ta.value.length;
+      ta.value = ta.value.slice(0, p) + t + ta.value.slice(ta.selectionEnd ?? p);
+      ta.focus(); ta.selectionStart = ta.selectionEnd = p + t.length;
+      box.querySelectorAll("[data-hzp]").forEach((x) => x.classList.add("hidden"));
+      if (despues) despues();
+    }
+  };
+  box.addEventListener("input", (e) => { const p = e.target.closest("[data-hzp]"); if (p) prev(p.dataset.hzp); });
+  box.addEventListener("change", (e) => { const p = e.target.closest("[data-hzp]"); if (p) prev(p.dataset.hzp); });
+}
+function hzFormatos(k) {
+  return `<div class="hz-fmt"><span class="muted">${LG("Decir", "Say")}:</span>
+    <label class="check"><input type="radio" name="hzf_${k}" value="palabras" checked> ${LG("9 de la noche", "9 de la noche (words)")}</label>
+    <label class="check"><input type="radio" name="hzf_${k}" value="24h"> 21:00</label>
+    <label class="check"><input type="radio" name="hzf_${k}" value="12h"> 9 pm</label></div>`;
 }

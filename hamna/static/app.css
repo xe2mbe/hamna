@@ -1095,3 +1095,17 @@ textarea.pron-ta { position: relative; background: transparent !important; displ
 .an-dic { font-size: .82rem; margin: 6px 0 10px; color: var(--text2); line-height: 1.7; }
 .an-dic .pron-par { white-space: nowrap; margin-right: 8px; }
 .an-dic mark { background: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--text); border-radius: 3px; padding: 0 3px; }
+
+/* Horas con zona: verde en el editor, y el panel para insertarlas */
+.pron-capa mark.hz { background: color-mix(in srgb, var(--ok) 26%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 50%, transparent); }
+.an-dic mark.hz { background: color-mix(in srgb, var(--ok) 26%, transparent); }
+.an-dic .hz-mal { color: var(--warn); white-space: normal; }
+.hz-box { margin: 6px 0 10px; }
+.hz-panel { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); }
+.hz-panel label { margin: 0 0 8px; }
+.hz-panel input[type=time] { width: auto; }
+.hz-zona { flex: 1; min-width: 200px; }
+.hz-fmt { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; margin: 2px 0 6px; font-size: .88rem; }
+.hz-fmt label.check { margin: 0; gap: 6px; font-size: .88rem; }
+.hz-fmt input { width: auto; margin: 0; }
+.hz-prev { margin: 4px 0 8px; font-size: .86rem; min-height: 1.2em; }

@@ -36,7 +36,7 @@ The same words it was born with still go on the air: *«Les recordamos que esta 
 
 HAMNA Web runs **inside the node** (AllStarLink 3, HamVOIP, ASL2 or IRLP) and automates bulletins, nets and programs: from the browser you upload audio or type text, build events, schedule them, and the node transmits them by itself, with automatic pauses to respect the repeaters' timeout timers. No PC needs to be on.
 
-**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Short announcements](#short-announcements) · [Pronunciation dictionary](#pronunciation-dictionary) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
+**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Short announcements](#short-announcements) · [Times from another time zone](#times-from-another-time-zone) · [Pronunciation dictionary](#pronunciation-dictionary) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
 
 ### Screenshots
 
@@ -189,6 +189,17 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 - **It never interrupts**: it waits for the channel to be quiet (nobody receiving, transmitting or talking through a link, and no HAMNA event on the air) for 3 s; if the channel doesn't clear in 5 min, that slot is skipped and logged. An event that starts while an announcement is playing waits for it to finish.
 - Each card has ▶ Listen, 📡 Transmit now, pause/activate, edit and delete, plus the next slot and the last result; the **announcement log** shows what went out, what was skipped and why. Administrators and operators create them; read-only users see them.
 - They're included in backups.
+
+### Times from another time zone
+
+A net at "9 pm Chicago time" is 9 pm here in winter and 8 pm in summer. Instead of writing the time, insert it with **🕗 Time in another zone** (next to the variables): choose the time there, the zone and how to say it. The text gets `{hora 21:00 America/Chicago}` and the voice says the right local time on the day it goes out: «9 de la noche» now, «8 de la noche» after the US changes to daylight saving time, without touching the text.
+
+- **📅 Time of an event**: `{hora_evento Red de los martes}` says the time of that event's next broadcast, taken from its schedule (with its time zone): if you change the event's time, the text follows.
+
+- Formats: words («9 de la noche», the default), `| 24h` («21:00») or `| 12h` («9 pm»).
+- In the editor these times are highlighted in green and below it says what they'll say today; a wrong one is flagged with ⚠ (and isn't read).
+- The voice is generated at air time: announcements already do it, and in sections using these times «Regenerate right before transmitting» is turned on by itself.
+- The pronunciation dictionary isn't applied inside the token (the time is calculated first).
 
 ### Pronunciation dictionary
 
@@ -508,7 +519,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Anuncios](#anuncios) · [Diccionario de pronunciación](#diccionario-de-pronunciación) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Anuncios](#anuncios) · [Horas de otra zona horaria](#horas-de-otra-zona-horaria) · [Diccionario de pronunciación](#diccionario-de-pronunciación) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Capturas
 
@@ -661,6 +672,17 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **Nunca interrumpe**: espera a que el canal esté en silencio 3 s (nadie recibiendo, transmitiendo ni hablando por un enlace, y ningún evento de HAMNA al aire); si en 5 min no se libera, ese turno se salta y queda en la bitácora. Un evento que empieza mientras suena un anuncio espera a que termine.
 - Cada tarjeta tiene ▶ Escuchar, 📡 Transmitir ahora, pausar/activar, editar y borrar, con el próximo turno y el último resultado; la **bitácora de anuncios** dice qué salió, qué se saltó y por qué. Los crean el administrador y los operadores; solo lectura los ve.
 - Entran en los respaldos.
+
+### Horas de otra zona horaria
+
+Una net «a las 9 pm de Chicago» es a las 9 pm aquí en invierno y a las 8 pm en verano. En lugar de escribir la hora, insértala con **🕗 Hora de otra zona** (junto a las variables): eliges la hora de allá, la zona y cómo decirla. En el texto queda `{hora 21:00 America/Chicago}` y la voz dice la hora correcta de aquí el día que sale: «9 de la noche» ahora, «8 de la noche» cuando EE. UU. cambie al horario de verano, sin tocar el texto.
+
+- **📅 Hora de un evento**: `{hora_evento Red de los martes}` dice la hora de la próxima salida de ese evento, tomada de su programación (con su zona horaria): si cambias la hora del evento, el texto la sigue.
+
+- Formatos: palabras («9 de la noche», el de siempre), `| 24h` («21:00») o `| 12h` («9 pm»).
+- En el editor estas horas se resaltan en verde y abajo dice qué dirán hoy; una mal escrita se marca con ⚠ (y no se lee).
+- La voz se genera al momento de salir: los anuncios ya lo hacen, y en las secciones que usan estas horas se marca solo «Regenerar justo antes de transmitir».
+- El diccionario de pronunciación no se aplica dentro del token (la hora se calcula antes).
 
 ### Diccionario de pronunciación
 
