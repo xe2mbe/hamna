@@ -1165,6 +1165,7 @@ async function seccionForm(s) {
           <label>Descripción<input name="descripcion" value="${esc(s.descripcion || "")}"><small>Se lee con {descripcion}</small></label>
         </div>
         <label>Texto<textarea name="texto_tts" rows="6">${esc(s.texto_tts || "")}</textarea></label>
+        <div class="an-dic hidden" id="sfDic"></div>
         <div class="vars">${info.variables.map(([v, d]) => `<button type="button" title="${esc(d)}">${v}</button>`).join("")}</div>
         <label class="check"><input type="checkbox" name="regenerar_antes" ${s.regenerar_antes ? "checked" : ""}> 🔄 Regenerar justo antes de transmitir (para {hora}, {fecha}, etc.)</label>
         <div class="row gap"><button type="button" class="btn" id="sfPrev">▶ Escuchar prueba</button><audio id="sfAudio" controls class="hidden" style="flex:1"></audio></div>
@@ -1184,6 +1185,7 @@ async function seccionForm(s) {
       </div>
     </form>`);
   const f = $("#sf");
+  const repinta = pronResaltar(f.texto_tts, info.pronuncia || [], $("#sfDic"));
   let tipo = s.tipo;
   const apply = () => {
     $$(".only-tts", f).forEach((x) => x.classList.toggle("hidden", tipo !== "TTS"));
@@ -1206,7 +1208,7 @@ async function seccionForm(s) {
     const ta = f.texto_tts, p = ta.selectionStart ?? ta.value.length;
     ta.value = ta.value.slice(0, p) + b.textContent + ta.value.slice(ta.selectionEnd ?? p);
     ta.focus(); ta.selectionStart = ta.selectionEnd = p + b.textContent.length;
-    needRegen();
+    needRegen(); repinta();
   };
   $("#sfPrev").onclick = async () => {
     const b = $("#sfPrev"); busy(b, true, "Generando…");
@@ -1273,6 +1275,7 @@ function showSet(k) {
   $$("#setForm fieldset").forEach((f) => f.classList.toggle("hidden", f.dataset.set !== k));
   $("#saveBar").classList.toggle("hidden", ["sistema", "usuarios"].includes(k) || (k === "respaldo" && S.bkSub === "manual"));
   if (k === "sistema") loadSistema();
+  if (k === "voz") loadPron();
   if (k === "respaldo") loadRespaldo();
   if (k === "usuarios") loadUsers();
   if (k === "avisos") loadBotSt();
@@ -1852,6 +1855,7 @@ async function loadCollab() {
       ${s.eventos.length ? `<p class="muted cb-ev">📡 ${s.eventos.map((e) => esc(e.nombre) + (e.proxima ? " · sale " + esc(fechaCorta(e.proxima)) : "")).join("<br>📡 ")}</p>` : ""}
       ${s.tiene_audio ? `<audio controls preload="none" src="api/mis-secciones/${s.id}/audio?t=${encodeURIComponent(s.actualizado || "")}"></audio>` : ""}
       ${s.tipo === "TTS" ? `<label>Texto que lee la voz<textarea rows="6" data-texto>${esc(s.texto_tts)}</textarea></label>
+        <div class="an-dic hidden" data-dic></div>
         <div class="row gap"><button type="button" class="btn primary" data-guardar>Guardar texto</button></div>`
       : `<div class="row gap wrap"><label class="btn primary cb-up">⬆ Subir audio nuevo<input type="file" accept="${r.formatos.join(",")},audio/*" hidden data-file></label>
           <span class="muted" style="font-size:.85rem">${r.formatos.map((f) => f.slice(1).toUpperCase()).join(", ")}</span></div>
@@ -1860,6 +1864,7 @@ async function loadCollab() {
         <audio controls preload="none" src="api/mis-secciones/${s.id}/anterior?t=${encodeURIComponent(s.anterior.fecha)}"></audio>
         <button type="button" class="btn sm" data-regresar>↩ Regresar a la anterior</button></div>` : ""}
     </div>`).join("");
+  $$("#cbList [data-texto]").forEach((ta) => pronResaltar(ta, r.pronuncia || [], ta.closest(".cb-sec").querySelector("[data-dic]")));
 }
 $("#cbList").addEventListener("change", async (e) => {
   const inp = e.target.closest("[data-file]"); if (!inp || !inp.files[0]) return;
@@ -3927,6 +3932,7 @@ function anuncioEditor(a) {
         ${puedeGrabar ? `<button type="button" data-tipo="grabar">🎙 ${LG("Grabar aquí", "Record here")}</button>` : ""}
       </div>
       <div data-pane="tts"><textarea name="texto" rows="3" maxlength="2000" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
+        <div class="an-dic hidden" id="anDic"></div>
         <div class="an-vars"><span class="muted">${LG("Variables", "Variables")}:</span> ${vars}</div>
         <div class="row gap wrap"><button type="button" class="btn sm" id="anVozPlay">▶ ${LG("Escuchar", "Listen")}</button><span class="muted" id="anVozMsg">${esc(d.voz.nombre || "")}${d.voz.lista ? "" : " · ⚠ " + LG("sin configurar", "not set up")}</span></div></div>
       <div data-pane="audio" class="hidden"><label class="btn sm" style="margin:0">📁 ${LG("Elegir archivo", "Choose file")}<input type="file" id="anFile" accept="audio/*" hidden></label>
@@ -3969,6 +3975,7 @@ function anuncioEditor(a) {
     <div class="modal-actions"><button type="button" class="btn" id="anCancel">${LG("Cancelar", "Cancel")}</button><button class="btn primary" id="anSave">${LG("Guardar", "Save")}</button></div>
   </form>`);
   const f = $("#anForm"), prev = $("#anPrev");
+  const repinta = pronResaltar(f.texto, d.pronuncia || [], $("#anDic"));
   const setTipo = (t) => {
     ed.tipo = t === "tts" ? "tts" : "audio"; ed.pane = t;
     $$("#anTipo button").forEach((b) => b.classList.toggle("active", b.dataset.tipo === t));
@@ -4034,7 +4041,7 @@ function anuncioEditor(a) {
   f.querySelector(".an-vars").onclick = (e) => {
     const b = e.target.closest("[data-anvar]"); if (!b) return;
     const t = f.texto, p = t.selectionStart ?? t.value.length;
-    t.value = t.value.slice(0, p) + b.dataset.anvar + t.value.slice(t.selectionEnd ?? p); t.focus();
+    t.value = t.value.slice(0, p) + b.dataset.anvar + t.value.slice(t.selectionEnd ?? p); t.focus(); repinta();
   };
   $("#anVozPlay").onclick = async () => {
     const b = $("#anVozPlay"); busy(b, true, LG("Generando…", "Generating…"));
@@ -4101,3 +4108,217 @@ function anuncioEditor(a) {
   };
 }
 
+const PRON_VOZ = "api/tts/preview";      // dónde se oye la prueba
+/* ── Ajustes → Voz: diccionario de pronunciación ─────────────────────────────
+   «Escrito» → «Cómo se dice». Se edita aquí y se guarda con su propio botón;
+   las pruebas usan la lista tal como está en pantalla, aunque no se haya guardado. */
+const pronLimpia = () => (S.pron ? S.pron.lista : []).map((x) => ({ e: (x.e || "").trim().replace(/\s+/g, " "), d: (x.d || "").trim().replace(/\s+/g, " "), i: !!x.i })).filter((x) => x.e || x.d);
+const pronSucio = () => S.pron && JSON.stringify(pronLimpia()) !== S.pron.guardada;
+async function loadPron() {
+  const box = $("#pronBox"); if (!box) return;
+  try {
+    const r = await api("api/pronuncia");
+    S.pron = { lista: r.lista.map((x) => ({ e: x.e, d: x.d, i: !!x.i })), guardada: JSON.stringify(r.lista), max: r.max };
+  } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+  box.innerHTML = `<h3>${LG("Diccionario de pronunciación", "Pronunciation dictionary")}</h3>
+    <p class="muted pron-ayuda">${LG("Cómo debe decir la voz las siglas y palabras difíciles. Se aplica a todo lo que dice la voz (secciones, anuncios y pruebas); lo escrito no cambia. Solo palabras completas y primero los términos más largos.",
+      "How the voice should say acronyms and tricky words. It applies to everything the voice says (sections, announcements and tests); what's written doesn't change. Whole words only, longest terms first.")}
+      <b>Aa</b> = ${LG("ignorar mayúsculas (si no está marcada, «WSPR» cambia pero «wspr» no)", "ignore case (unchecked: «WSPR» changes but «wspr» doesn't)")}.</p>
+    <div class="pron-head" aria-hidden="true"><span>${LG("Escrito", "Written")}</span><span>${LG("Cómo se dice", "How it's said")}</span><span title="${LG("Ignorar mayúsculas", "Ignore case")}">Aa</span><span></span></div>
+    <div id="pronRows"></div>
+    <div class="row gap wrap pron-acc">
+      <button type="button" class="btn sm" id="pronAdd">＋ ${LG("Agregar", "Add")}</button>
+      <button type="button" class="btn sm" id="pronPaste">📋 ${LG("Pegar lista", "Paste list")}</button>
+      <button type="button" class="btn sm" id="pronCopy">⧉ ${LG("Copiar lista", "Copy list")}</button>
+      <span class="muted" id="pronCnt"></span>
+    </div>
+    <label>${LG("Probar un texto", "Try a text")}<input id="pronTest" value="${esc(S.pronTest || LG("Esta noche escuchamos WSPR y FT8 desde ON4KST.", "Tonight we listen to WSPR and FT8 from ON4KST."))}" spellcheck="false"></label>
+    <div class="pron-out"><span class="muted">${LG("La voz recibe", "The voice gets")}:</span> <span id="pronOut" translate="no"></span></div>
+    <div class="row gap wrap"><button type="button" class="btn sm" id="pronPlay">▶ ${LG("Escuchar", "Listen")}</button><audio id="pronAudio" class="hidden" controls></audio></div>
+    <div class="row gap wrap pron-save"><button type="button" class="btn primary" id="pronSave">${LG("Guardar diccionario", "Save dictionary")}</button><span class="muted" id="pronMsg"></span></div>`;
+  S.pron.lista.sort((a, b) => a.e.localeCompare(b.e, undefined, { sensitivity: "base" }));
+  pronFilas(); pronProbar();
+}
+function pronFilas() {
+  const l = S.pron.lista;
+  $("#pronRows").innerHTML = l.length ? l.map((x, i) => `<div class="pron-row" data-i="${i}">
+      <input data-k="e" value="${esc(x.e)}" maxlength="80" spellcheck="false" placeholder="${LG("p. ej. WSPR", "e.g. WSPR")}" translate="no">
+      <input data-k="d" value="${esc(x.d)}" maxlength="200" spellcheck="false" placeholder="${LG("p. ej. uísper", "e.g. whisper")}" translate="no">
+      <label class="pron-aa" title="${LG("Ignorar mayúsculas", "Ignore case")}"><input type="checkbox" data-k="i" ${x.i ? "checked" : ""}><span class="pron-aa-t">Aa</span></label>
+      <span class="pron-btns"><button type="button" class="btn sm ghost" data-pplay="${i}" title="${LG("Escuchar este término", "Listen to this term")}">▶</button><button type="button" class="btn sm ghost" data-pdel="${i}" title="${LG("Quitar", "Remove")}">🗑</button></span>
+    </div>`).join("")
+    : `<p class="muted">${LG("Todavía no hay términos. Agrega uno o pega una lista.", "No terms yet. Add one or paste a list.")}</p>`;
+  pronEstado();
+}
+function pronEstado() {
+  const n = pronLimpia().length, sucio = pronSucio();
+  $("#pronCnt").textContent = LG(`${n} de ${S.pron.max} términos`, `${n} of ${S.pron.max} terms`);
+  $("#pronSave").disabled = !sucio;
+  $("#pronMsg").textContent = sucio ? LG("Cambios sin guardar", "Unsaved changes") : "";
+}
+let pronT = null;
+function pronProbar() {
+  clearTimeout(pronT);
+  pronT = setTimeout(async () => {
+    const t = $("#pronTest"); if (!t) return;
+    S.pronTest = t.value;
+    try {
+      const r = await api("api/pronuncia/probar", { method: "POST", json: { texto: t.value, diccionario: pronLimpia() } });
+      $("#pronOut").innerHTML = `«${esc(r.texto)}»` + (r.usados.length ? ` <span class="muted">· ${LG("cambió", "changed")}: ${r.usados.map(esc).join(", ")}</span>` : "");
+    } catch (e) { $("#pronOut").textContent = "⚠ " + e.message; }
+  }, 300);
+}
+async function pronOir(texto, btn) {
+  busy(btn, true, "…");
+  try {
+    const r = await api(PRON_VOZ, { method: "POST", json: { texto, diccionario: pronLimpia() } });
+    const a = $("#pronAudio"); a.src = r.url; a.classList.remove("hidden"); a.play().catch(() => {});
+  } catch (e) { toast(e.message, true); } finally { busy(btn, false); }
+}
+/* Lista en texto: «escrito = cómo se dice», y « | Aa» al final para ignorar mayúsculas */
+function pronTexto(l) { return l.map((x) => `${x.e} = ${x.d}${x.i ? " | Aa" : ""}`).join("\n"); }
+function pronLeer(txt) {
+  const ok = [], mal = [];
+  txt.split(/\r?\n/).forEach((linea, n) => {
+    const s = linea.trim(); if (!s || s.startsWith("#")) return;
+    let i = false, t = s;
+    const m = t.match(/\s*\|\s*aa\s*$/i); if (m) { i = true; t = t.slice(0, m.index); }
+    const p = t.match(/^(.+?)\s*(?:=|→|->|\t)\s*(.+)$/);
+    if (!p || !p[1].trim() || !p[2].trim()) mal.push(`${n + 1}: ${s}`);
+    else ok.push({ e: p[1].trim().replace(/\s+/g, " "), d: p[2].trim().replace(/\s+/g, " "), i });
+  });
+  return { ok, mal };
+}
+document.addEventListener("input", (e) => {
+  if (!e.target.closest("#pronBox")) return;
+  if (e.target.id === "pronTest") return pronProbar();
+  const row = e.target.closest(".pron-row"); if (!row) return;
+  const x = S.pron.lista[+row.dataset.i], k = e.target.dataset.k;
+  if (k === "i") x.i = e.target.checked; else if (k) x[k] = e.target.value;
+  pronEstado(); pronProbar();
+});
+document.addEventListener("change", (e) => {
+  const c = e.target.closest("#pronBox .pron-row [data-k=i]"); if (!c) return;
+  S.pron.lista[+c.closest(".pron-row").dataset.i].i = c.checked; pronEstado(); pronProbar();
+});
+// Enter en la tabla no debe mandar el formulario de Ajustes
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.closest("#pronBox") && e.target.tagName === "INPUT") e.preventDefault(); });
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("#pronBox button"); if (!b) return;
+  if (b.id === "pronAdd") {
+    if (pronLimpia().length >= S.pron.max) return toast(LG(`Máximo ${S.pron.max} términos`, `${S.pron.max} terms maximum`), true);
+    S.pron.lista.push({ e: "", d: "", i: false }); pronFilas();
+    const r = $$("#pronRows .pron-row"); r[r.length - 1].querySelector("input").focus();
+    return;
+  }
+  if (b.dataset.pdel) { S.pron.lista.splice(+b.dataset.pdel, 1); pronFilas(); pronProbar(); return; }
+  if (b.dataset.pplay) {
+    const x = S.pron.lista[+b.dataset.pplay];
+    if (!x.e.trim()) return;
+    return pronOir(x.e, b);
+  }
+  if (b.id === "pronPlay") return pronOir($("#pronTest").value, b);
+  if (b.id === "pronCopy") {
+    const t = pronTexto(pronLimpia());
+    try { await navigator.clipboard.writeText(t); toast(LG("Lista copiada", "List copied")); }
+    catch {
+      openModal(LG("Copiar lista", "Copy list"), `<textarea rows="12" readonly style="width:100%" id="pronCopiaTxt">${esc(t)}</textarea>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">${LG("Cerrar", "Close")}</button></div>`);
+      $("#pronCopiaTxt").select();
+    }
+    return;
+  }
+  if (b.id === "pronPaste") return pronPegar();
+  if (b.id === "pronSave") {
+    busy(b, true, LG("Guardando…", "Saving…"));
+    try {
+      const r = await api("api/pronuncia", { method: "PUT", json: { lista: pronLimpia() } });
+      S.pron.lista = r.lista.map((x) => ({ e: x.e, d: x.d, i: !!x.i })); S.pron.guardada = JSON.stringify(r.lista); S.info = null;
+      S.pron.lista.sort((p, q) => p.e.localeCompare(q.e, undefined, { sensitivity: "base" }));
+      pronFilas();
+      const rehace = r.secciones.length + r.anuncios.length;
+      toast(LG("Diccionario guardado", "Dictionary saved") + (rehace ? " · " + (rehace === 1 ? LG("se vuelve a generar 1 voz", "1 voice is being regenerated") : LG(`se vuelven a generar ${rehace} voces`, `${rehace} voices are being regenerated`)) : ""));
+      if (rehace) $("#pronMsg").textContent = LG("Volviendo a generar", "Regenerating") + ": " + r.secciones.concat(r.anuncios).join(", ");
+    } catch (err) { toast(err.message, true); } finally { busy(b, false); pronEstado(); }
+  }
+});
+function pronPegar() {
+  openModal(LG("Pegar lista", "Paste list"), `<p class="muted" style="margin-top:0">${LG("Un término por renglón:", "One term per line:")} <code>WSPR = uísper</code> · ${LG("agrega", "add")} <code>| Aa</code> ${LG("al final para ignorar mayúsculas. Si un término ya existe, se reemplaza.", "at the end to ignore case. If a term already exists, it's replaced.")}</p>
+    <textarea id="pronPegarTxt" rows="10" style="width:100%" spellcheck="false" placeholder="ON4KST = o ene cuatro ka ese te&#10;iGates = ai géits | Aa&#10;CTCSS = ce te ce ese ese"></textarea>
+    <p class="muted" id="pronPegarRes"></p>
+    <div class="modal-actions"><button type="button" class="btn" id="pronPegarNo">${LG("Cancelar", "Cancel")}</button><button type="button" class="btn primary" id="pronPegarSi" disabled>${LG("Agregar a la tabla", "Add to the table")}</button></div>`);
+  const ta = $("#pronPegarTxt"), res = $("#pronPegarRes"), si = $("#pronPegarSi");
+  let leido = { ok: [], mal: [] };
+  ta.oninput = () => {
+    leido = pronLeer(ta.value);
+    const clave = (x) => (x.i ? x.e.toLowerCase() : x.e);
+    const ya = new Map(pronLimpia().map((x) => [clave(x), x]));
+    const nuevos = leido.ok.filter((x) => !ya.has(clave(x))).length, cambian = leido.ok.filter((x) => ya.has(clave(x)) && ya.get(clave(x)).d !== x.d).length;
+    res.innerHTML = leido.ok.length || leido.mal.length ? `✅ ${LG(`${nuevos} nuevos`, `${nuevos} new`)} · ✏️ ${LG(`${cambian} cambian`, `${cambian} change`)}` +
+      (leido.mal.length ? `<br>⚠ ${LG("No entendí estos renglones", "I didn't understand these lines")}:<br><code>${leido.mal.map(esc).join("<br>")}</code>` : "") : "";
+    si.disabled = !leido.ok.length;
+  };
+  $("#pronPegarNo").onclick = closeModal;
+  si.onclick = () => {
+    const clave = (x) => (x.i ? x.e.toLowerCase() : x.e);
+    for (const x of leido.ok) {
+      const j = S.pron.lista.findIndex((y) => clave({ e: y.e.trim(), i: y.i }) === clave(x));
+      if (j >= 0) S.pron.lista[j] = x; else S.pron.lista.push(x);
+    }
+    S.pron.lista = S.pron.lista.filter((x) => x.e.trim() || x.d.trim());
+    if (S.pron.lista.length > S.pron.max) toast(LG(`Quedaron más de ${S.pron.max} términos: quita algunos antes de guardar`, `More than ${S.pron.max} terms: remove some before saving`), true);
+    S.pron.lista.sort((p, q) => p.e.localeCompare(q.e, undefined, { sensitivity: "base" }));
+    closeModal(); pronFilas(); pronProbar();
+    toast(LG("Agregados a la tabla: falta guardar", "Added to the table: remember to save"));
+  };
+  setTimeout(() => ta.focus(), 30);
+}
+
+/* Diccionario en el editor: mismas reglas que pronuncia.py (palabras completas, primero lo más
+   largo, mayúsculas exactas salvo «Aa»). Devuelve [{i, j, e, d}] con las posiciones en el texto. */
+function pronMarcas(texto, lista) {
+  if (!texto || !lista || !lista.length) return [];
+  const terms = lista.slice().sort((a, b) => b.e.length - a.e.length);
+  const mapa = new Map();
+  for (const t of terms) { const k = t.e.toLowerCase(); if (!mapa.has(k)) mapa.set(k, []); mapa.get(k).push(t); }
+  const esc_ = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let rx;
+  try { rx = new RegExp("(?<![\\p{L}\\p{N}_])(?:" + terms.map((t) => t.e.split(" ").map(esc_).join("\\s+")).join("|") + ")(?![\\p{L}\\p{N}_])", "giu"); }
+  catch { return []; }
+  const out = []; let m;
+  while ((m = rx.exec(texto))) {
+    const plano = m[0].replace(/\s+/g, " ");
+    const t = (mapa.get(plano.toLowerCase()) || []).find((x) => x.i || x.e === plano);
+    if (t) out.push({ i: m.index, j: m.index + m[0].length, e: t.e, d: t.d });
+    if (!m[0].length) rx.lastIndex++;
+  }
+  return out;
+}
+/* Capa detrás del cuadro de texto que pinta las mismas letras y resalta las del diccionario */
+function pronResaltar(ta, lista, resumen) {
+  const caja = document.createElement("div"); caja.className = "pron-caja";
+  const capa = document.createElement("div"); capa.className = "pron-capa"; capa.setAttribute("aria-hidden", "true");
+  ta.parentNode.insertBefore(caja, ta); caja.appendChild(capa); caja.appendChild(ta);
+  const cs = getComputedStyle(ta);
+  for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderRadius", "boxSizing", "textIndent", "tabSize"]) capa.style[p] = cs[p];
+  capa.style.backgroundColor = cs.backgroundColor;
+  ta.classList.add("pron-ta");
+  const pinta = () => {
+    const t = ta.value, ms = pronMarcas(t, lista);
+    let h = "", k = 0;
+    for (const x of ms) { h += esc(t.slice(k, x.i)) + `<mark>${esc(t.slice(x.i, x.j))}</mark>`; k = x.j; }
+    capa.innerHTML = h + esc(t.slice(k)) + "\n";
+    capa.scrollTop = ta.scrollTop;
+    if (resumen) {
+      const vistos = new Map(); ms.forEach((x) => vistos.set(x.e, x.d));
+      resumen.innerHTML = vistos.size ? `📖 ${LG("Del diccionario", "From the dictionary")}: ` + [...vistos].map(([e, d]) => `<span class="pron-par" translate="no"><mark>${esc(e)}</mark> → «${esc(d)}»</span>`).join(" ") : "";
+      resumen.classList.toggle("hidden", !vistos.size);
+    }
+  };
+  ta.addEventListener("input", pinta);
+  ta.addEventListener("scroll", () => { capa.scrollTop = ta.scrollTop; });
+  if (window.ResizeObserver) new ResizeObserver(() => { capa.style.height = ta.offsetHeight + "px"; }).observe(ta);
+  pinta();
+  return pinta;
+}

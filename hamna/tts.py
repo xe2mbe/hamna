@@ -28,7 +28,7 @@ import urllib.request
 import wave
 from pathlib import Path
 
-from . import paths
+from . import paths, pronuncia
 
 log = logging.getLogger("hamna.tts")
 
@@ -462,7 +462,8 @@ def synthesize(text, cfg, out, ctx=None, respaldo=True):
     la extensión depende del motor. Con el respaldo automático activado, si el
     motor elegido falla se prueban los demás configurados (respaldo=False para
     la prueba de voz de Ajustes, que debe oír exactamente el motor elegido)."""
-    resolved = resolve_variables(text, cfg, ctx)
+    # Variables y después el diccionario de pronunciación (Ajustes → Voz)
+    resolved = pronuncia.para_voz(resolve_variables(text, cfg, ctx), cfg)
     out = Path(out)
     orden = cadena(cfg) if respaldo else [cfg.get("tts_engine") or "azure"]
     errores = []

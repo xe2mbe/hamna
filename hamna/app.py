@@ -14,7 +14,7 @@ import urllib.parse
 import uuid
 from pathlib import Path
 
-from . import VERSION, anuncios, audio, auth, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
+from . import VERSION, anuncios, audio, auth, pronuncia, autobackup, backends, backup, diagnose, health, cron, db, export, links, notify, numeracion, paths, sessions, settings, share, sync, sysmon, tts, tz, updates
 from .engine import engine
 from .live import live
 from .web import App, HTTPError, Response, jsonr, send_file
@@ -399,6 +399,7 @@ def info(req):
         "herramientas": audio.tools(), "formatos": audio.formats(),
         "sistemas": links.detect_systems(), "cron": cron.available(),
         "motores_tts": tts.engines(), "variables": tts.VARIABLES,
+        "pronuncia": settings.get("pron_dict") or [],     # para resaltar en el editor de secciones
         "historial": db.get_historial(15),
     })
 
@@ -635,7 +636,8 @@ def mis_secciones(req):
     eids = _mis_eventos(req)
     from . import bot
     tg = db.row("SELECT tg_id FROM usuarios WHERE id=?", (req.user["id"],)) or {}
-    return jsonr({"secciones": out, "formatos": audio.formats(), "programacion": _prog_rows(eids),
+    return jsonr({"secciones": out, "formatos": audio.formats(), "pronuncia": settings.get("pron_dict") or [],
+                  "programacion": _prog_rows(eids),
                   "ahora": now.strftime("%Y-%m-%d %H:%M:%S"),
                   "telegram": {"disponible": bot.activo(), "vinculado": bool(tg.get("tg_id")),
                                "bot": ("@" + bot.estado()["bot"]) if bot.estado()["bot"] else ""}})
@@ -884,6 +886,8 @@ def tts_preview(req):
     if not text:
         raise ValueError("Escribe algún texto")
     cfg = settings.load()
+    if isinstance(b.get("diccionario"), list):         # probar el diccionario antes de guardarlo
+        cfg = dict(cfg, pron_dict=pronuncia.normalizar(b["diccionario"]))
     ctx = {"titulo": b.get("titulo") or "", "descripcion": b.get("descripcion") or "",
            "evento": "Evento de prueba", "numero": "92", "emision": "92", "emision_anio": "46"}
     # La prueba de Ajustes → Voz oye exactamente el motor elegido (sin respaldo)
@@ -892,7 +896,7 @@ def tts_preview(req):
     if not audio.can_play_in_browser(src):
         src = audio.prepare(src, None)
     return ok(url="api/archivo/" + src.parent.name + "/" + src.name,
-              texto=tts.resolve_variables(text, cfg, ctx))
+              texto=pronuncia.para_voz(tts.resolve_variables(text, cfg, ctx), cfg))
 
 
 # ── Programación → Anuncios ──────────────────────────────────────────────────
@@ -956,8 +960,50 @@ def anuncios_audio(req, aid):
 def anuncios_voz(req):
     """Escuchar el texto con la voz configurada antes de guardar."""
     b = req.json()
-    nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:2000], settings.load())
+    cfg = settings.load()
+    if isinstance(b.get("diccionario"), list):
+        cfg = dict(cfg, pron_dict=pronuncia.normalizar(b["diccionario"]))
+    nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:2000], cfg)
     return ok(url="api/archivo/tmp/" + nombre, texto=dicho, duracion=round(dur, 1), max_seg=anuncios.MAX_SEG)
+
+
+# ── Diccionario de pronunciación ────────────────────────────────────────────
+@app.route("/api/pronuncia", rol="admin")
+def pronuncia_ver(req):
+    return jsonr({"lista": settings.get("pron_dict") or [], "max": pronuncia.MAX})
+
+
+@app.route("/api/pronuncia/probar", ("POST",), rol="admin")
+def pronuncia_probar(req):
+    b = req.json()
+    lista = pronuncia.normalizar(b.get("diccionario")) if isinstance(b.get("diccionario"), list) else settings.get("pron_dict") or []
+    texto, usados = pronuncia.aplicar(str(b.get("texto") or "")[:2000], lista)
+    return ok(texto=texto, usados=usados)
+
+
+@app.route("/api/pronuncia", ("PUT",), rol="admin")
+def pronuncia_guardar(req):
+    nueva = pronuncia.normalizar(req.json().get("lista"))
+    vieja = settings.get("pron_dict") or []
+    settings.save({"pron_dict": nueva})
+    cambios = pronuncia.cambiados(vieja, nueva)
+    log.info("%s guardó el diccionario de pronunciación (%d términos, %d cambios)", req.user["usuario"], len(nueva), len(cambios))
+    # Las voces ya generadas que usan un término cambiado se vuelven a generar (en segundo plano)
+    secs = [s for s in db.get_secciones() if s.get("tipo") == "TTS" and (s.get("texto_tts") or "").strip()
+            and pronuncia.toca(s["texto_tts"], cambios)] if cambios else []
+    ans = anuncios.usan(cambios) if cambios else []
+
+    def rehacer():
+        for s in secs:
+            try:
+                _generate_tts(s["id"])
+            except Exception as e:
+                log.warning("No pude volver a generar la voz de «%s»: %s", s.get("nombre"), e)
+        if ans:
+            anuncios.rehacer_voces(cambios)
+    if secs or ans:
+        threading.Thread(target=rehacer, daemon=True, name="hamna-pronuncia").start()
+    return ok(lista=nueva, secciones=[s["nombre"] for s in secs], anuncios=ans)
 
 
 @app.route("/api/archivo/<carpeta>/<name>")

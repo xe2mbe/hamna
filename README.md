@@ -36,7 +36,7 @@ The same words it was born with still go on the air: *«Les recordamos que esta 
 
 HAMNA Web runs **inside the node** (AllStarLink 3, HamVOIP, ASL2 or IRLP) and automates bulletins, nets and programs: from the browser you upload audio or type text, build events, schedule them, and the node transmits them by itself, with automatic pauses to respect the repeaters' timeout timers. No PC needs to be on.
 
-**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Short announcements](#short-announcements) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
+**Contents:** [Screenshots](#screenshots) · [What it does](#what-it-does) · [Requirements](#requirements) · [Installation](#installation) · [Updating](#updating) · [First steps](#first-steps) · [The page](#the-page) · [Scheduling and time zones](#scheduling-and-time-zones) · [Short announcements](#short-announcements) · [Pronunciation dictionary](#pronunciation-dictionary) · [Sections and audio](#sections-and-audio) · [How it goes on the air](#how-it-goes-on-the-air) · [Automatic pauses](#automatic-pauses) · [Node dashboard](#node-dashboard) · [Live listening](#live-listening) · [Recordings](#recordings) · [Syncing events between nodes](#syncing-events-between-nodes) · [Nodes panel](#nodes-panel) · [Telegram alerts](#telegram-alerts) · [Telegram bot](#telegram-bot) · [Backups](#backups) · [Equipment health and diagnostics](#equipment-health-and-diagnostics) · [Users and security](#users-and-security) · [Cron](#cron) · [Files](#files) · [Common problems](#common-problems) · [Development](#development)
 
 ### Screenshots
 
@@ -189,6 +189,16 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 - **It never interrupts**: it waits for the channel to be quiet (nobody receiving, transmitting or talking through a link, and no HAMNA event on the air) for 3 s; if the channel doesn't clear in 5 min, that slot is skipped and logged. An event that starts while an announcement is playing waits for it to finish.
 - Each card has ▶ Listen, 📡 Transmit now, pause/activate, edit and delete, plus the next slot and the last result; the **announcement log** shows what went out, what was skipped and why. Administrators and operators create them; read-only users see them.
 - They're included in backups.
+
+### Pronunciation dictionary
+
+**Settings → Voice → Pronunciation dictionary**: a table of *Written* → *How it's said* (e.g. `WSPR → uísper`, `ON4KST → o ene cuatro ka ese te`). It's applied to everything the voice says (sections, announcements and tests), with any voice engine, right before the text goes to the engine and after the variables; what's written doesn't change.
+
+- Whole words only (`FT8` changes in "(FT8)," but not inside `FT8CALL`); longest terms first (`FT8 DX` before `FT8`); one single pass.
+- Exact case by default; tick **Aa** on a term to ignore case.
+- ▶ on each row plays just that term; **Try a text** shows what the voice gets and plays it, even before saving.
+- **Paste list** takes one term per line (`WSPR = uísper`, add `| Aa` to ignore case) and shows what's new, what changes and which lines it didn't understand; **Copy list** gives the same format to share it.
+- When you save, the stored voices that use a changed term (TTS sections and announcements) are generated again in the background. Up to 500 terms; it's included in backups.
 
 ### Sections and audio
 
@@ -498,7 +508,7 @@ Las mismas palabras con las que nació siguen saliendo al aire: *«Les recordamo
 
 HAMNA Web corre **dentro del nodo** (AllStarLink 3, HamVOIP, ASL2 o IRLP) y automatiza boletines, nets y programas: desde el navegador se suben los audios o se escriben los textos, se arman los eventos, se programan, y el nodo los transmite solo, con pausas automáticas para respetar el temporizador de los repetidores. No necesita una PC encendida.
 
-**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Anuncios](#anuncios) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
+**Contenido:** [Capturas](#capturas) · [Qué hace](#qué-hace) · [Requisitos](#requisitos) · [Instalación](#instalación) · [Actualizar](#actualizar) · [Primeros pasos](#primeros-pasos) · [La página](#la-página) · [Programación y zonas horarias](#programación-y-zonas-horarias) · [Anuncios](#anuncios) · [Diccionario de pronunciación](#diccionario-de-pronunciación) · [Secciones y audios](#secciones-y-audios) · [Cómo sale al aire](#cómo-sale-al-aire) · [Pausas automáticas](#pausas-automáticas) · [Dashboard del nodo](#dashboard-del-nodo) · [Escuchar en vivo](#escuchar-en-vivo) · [Grabaciones](#grabaciones) · [Sincronizar eventos entre nodos](#sincronizar-eventos-entre-nodos) · [Panel de nodos](#panel-de-nodos) · [Avisos por Telegram](#avisos-por-telegram) · [Bot de Telegram](#bot-de-telegram) · [Respaldos](#respaldos) · [Salud del equipo y diagnóstico](#salud-del-equipo-y-diagnóstico) · [Usuarios y seguridad](#usuarios-y-seguridad) · [Cron](#cron-1) · [Archivos](#archivos) · [Problemas comunes](#problemas-comunes) · [Desarrollo](#desarrollo)
 
 ### Capturas
 
@@ -651,6 +661,16 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **Nunca interrumpe**: espera a que el canal esté en silencio 3 s (nadie recibiendo, transmitiendo ni hablando por un enlace, y ningún evento de HAMNA al aire); si en 5 min no se libera, ese turno se salta y queda en la bitácora. Un evento que empieza mientras suena un anuncio espera a que termine.
 - Cada tarjeta tiene ▶ Escuchar, 📡 Transmitir ahora, pausar/activar, editar y borrar, con el próximo turno y el último resultado; la **bitácora de anuncios** dice qué salió, qué se saltó y por qué. Los crean el administrador y los operadores; solo lectura los ve.
 - Entran en los respaldos.
+
+### Diccionario de pronunciación
+
+**Ajustes → Voz → Diccionario de pronunciación**: una tabla *Escrito* → *Cómo se dice* (p. ej. `WSPR → uísper`, `ON4KST → o ene cuatro ka ese te`). Se aplica a todo lo que dice la voz (secciones, anuncios y pruebas), con cualquier motor, justo antes de mandar el texto al motor y después de las variables; lo escrito no cambia.
+
+- Solo palabras completas (`FT8` cambia en «(FT8),» pero no dentro de `FT8CALL`); primero los términos más largos (`FT8 DX` antes que `FT8`); una sola pasada.
+- Mayúsculas exactas por defecto; marca **Aa** en un término para ignorarlas.
+- ▶ en cada renglón oye solo ese término; **Probar un texto** muestra lo que recibe la voz y lo reproduce, aun antes de guardar.
+- **Pegar lista** acepta un término por renglón (`WSPR = uísper`, y `| Aa` para ignorar mayúsculas) y muestra qué es nuevo, qué cambia y qué renglones no entendió; **Copiar lista** da el mismo formato para compartirlo.
+- Al guardar, las voces ya generadas que usan un término cambiado (secciones TTS y anuncios) se vuelven a generar en segundo plano. Hasta 500 términos; entra en los respaldos.
 
 ### Secciones y audios
 

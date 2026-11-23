@@ -447,7 +447,8 @@ def vista_previa(texto, cfg):
         raise ValueError("Escribe el texto del anuncio")
     out = paths.tmp_dir() / "voz_{}.wav".format(uuid.uuid4().hex[:8])
     dur = _sintetizar(texto, cfg, out)
-    return out.name, tts.resolve_variables(texto, cfg), dur
+    from . import pronuncia
+    return out.name, pronuncia.para_voz(tts.resolve_variables(texto, cfg), cfg), dur
 
 
 def bitacora(limite=50):
@@ -654,4 +655,30 @@ def resumen():
             "emisor": emisor.estado(), "bitacora": bitacora(30), "max_seg": MAX_SEG, "espera_min": ESPERA_MAX // 60,
             "voz": {"motor": eng, "nombre": tts.NOMBRES.get(eng, eng), "lista": tts.configurado(eng, cfg),
                     "variables": [v for v in tts.VARIABLES if v[0] in VARS]},
+            "pronuncia": cfg.get("pron_dict") or [],
             "asl": True, "ahora": _fmt(ahora)}
+
+
+def rehacer_voces(terminos, cfg=None):
+    """El diccionario cambió: vuelve a generar la voz guardada de los anuncios que usan esos términos."""
+    from . import pronuncia
+    cfg = cfg or settings.load()
+    n = 0
+    for a in lista():
+        if a["tipo"] != "tts" or not pronuncia.toca(a["texto"], terminos):
+            continue
+        try:
+            nombre, dur = _voz(a["texto"], cfg)
+        except Exception as e:
+            log.warning("No pude rehacer la voz del anuncio «%s»: %s", a["nombre"], e)
+            continue
+        db.execute("UPDATE anuncios SET archivo=?, duracion=? WHERE id=?", (nombre, dur, a["id"]))
+        if a["archivo"]:
+            paths.rm(carpeta() / a["archivo"])
+        n += 1
+    return n
+
+
+def usan(terminos):
+    from . import pronuncia
+    return [a["nombre"] for a in lista() if a["tipo"] == "tts" and pronuncia.toca(a["texto"], terminos)]

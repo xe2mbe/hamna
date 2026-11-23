@@ -23,7 +23,8 @@ DEFAULTS = {
 
     # TTS
     "tts_engine": "azure",      # azure | google | elevenlabs | piper | espeak
-    "tts_fallback": False,      # si el motor falla, usar otro configurado (tts.RESPALDO)
+    "tts_fallback": False,
+    "pron_dict": [],            # diccionario de pronunciación (pronuncia.py)      # si el motor falla, usar otro configurado (tts.RESPALDO)
     "google_key": "",
     "google_voice": "es-US-Neural2-A",
     "google_rate": 100,         # % (25–400)
