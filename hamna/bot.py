@@ -562,6 +562,9 @@ def _boton(token, q):
     user = auth.user_by_tg((q.get("from") or {}).get("id"))
     if not user:
         return avisa("Primero vincula tu Telegram en HAMNA → Mi perfil.", True)
+    if data.startswith("r:"):                       # otros nodos (control desde el hub)
+        from . import bot_remoto
+        return bot_remoto.boton(token, q, user, data, avisa)
     if data.startswith("m:"):
         return _boton_menu(token, q, user, data, avisa)
     if data.split(":")[0] in ("up", "upx", "ant", "upl"):
@@ -1015,7 +1018,11 @@ def _pantalla(cual, user, arg=""):
             return "Esa opción no está disponible para tu usuario.", [[VOLVER]]
         filas = [[("🔄 Actualizar", "m:" + cual), VOLVER]]
         if cual == "nodos":
-            filas.insert(0, [("🔗 Conexiones de este nodo", "m:con")])
+            from . import bot_remoto
+            otros = bot_remoto.botones_nodos(user)
+            filas = otros + [[("🔗 Conexiones de este nodo", "m:con")]] + filas
+            if otros:
+                return _txt_nodos() + "\n\n🎛 Toca un nodo para verlo o controlarlo desde aquí.", filas
         return {"salud": _txt_salud, "hist": _txt_historial, "nodos": _txt_nodos}[cual](), filas
     if cual == "ayuda":
         return _ayuda(user), [[VOLVER]]
@@ -1519,6 +1526,9 @@ def _texto_recibido(token, m, user, texto, esp):
     chat, mid, tg = m["chat"]["id"], m.get("message_id"), (m.get("from") or {}).get("id")
     if esp["modo"] == "nodo":
         return _nodo_recibido(token, chat, mid, user, texto, tg)
+    if esp["modo"] == "rnodo":                      # número para conectar en otro nodo
+        from . import bot_remoto
+        return bot_remoto.texto(token, m, user, texto, esp)
     cancelar = [[("Cancelar", "m:colx:{}:{}".format(esp.get("sid") or 0, esp.get("eid") or 0))]]
     if esp["modo"] == "audio":
         return _responder(token, chat, "📤 Estoy esperando un <b>audio</b> (MP3 o nota de voz). Mándamelo o toca Cancelar.",

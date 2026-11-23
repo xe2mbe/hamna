@@ -336,6 +336,8 @@ Each HAMNA can report to a **hub** (the club's central node) every 60 s; the hub
 
 To report, on the node: **Settings → Node → Nodes panel**, check "Report this node's status to a hub" and enter the hub's address and code (if left empty, the ones for backing up to another node are used). Each node's own tab shows only its card and those of the nodes reporting to it; the full panel is on the hub. If a node stops reporting for more than 10 min (adjustable), the hub sends a Telegram alert, and another when it comes back. "🗑 Remove from panel" deletes the card.
 
+**Control other nodes from the hub's bot.** One bot is enough for every node: on each node, **Settings → Node → Nodes panel**, also check "Let the hub control this node". The node then keeps asking the hub for orders (it always calls out, so it works behind any router). In the hub's bot, **🗺 Nodes** lists the nodes you may use; tap one for 🩺 status and health, 🔗 connections (connect from favourites or by number, change mode, disconnect), 📢 announcements (transmit now on RF or RF + Net, pause), 🌤 weather and alerts (ASLSCAN) and 📡 broadcasts (HAMNA: transmit an event, stop, record). Permissions are per node: on the hub, **Nodes → 🎛 Bot** on each card — administrators control everything; each other user gets "View" or "Control" node by node. Each node is bound to the access code it first used, so another code can't pose as it.
+
 ### Telegram alerts
 
 In **Settings → Alerts** (administrators) HAMNA can send you a Telegram message when something goes wrong:
@@ -818,6 +820,8 @@ Cada HAMNA puede reportarse a un **hub** (el nodo central del club) cada 60 s; e
 - **Editar** (administrador): la dirección del dashboard del nodo en la red local y en internet. Clic en el nombre lo abre: la local si entraste al hub desde la red local, la de internet si no. Solo se usan las direcciones guardadas en el hub, nunca las que mande el nodo.
 
 Para reportar, en el nodo: **Ajustes → Nodo → Panel de nodos**, marcar "Reportar el estado de este nodo a un hub" y poner la dirección y el código del hub (si se dejan vacíos, se usan los del respaldo a otro nodo). Cada nodo ve en su propia pestaña solo su tarjeta y las de quienes le reportan; el panel completo está en el hub. Si un nodo deja de reportar más de 10 min (ajustable), el hub manda aviso por Telegram y otro cuando vuelve. "🗑 Quitar del panel" borra la tarjeta.
+
+**Controlar otros nodos desde el bot del hub.** Basta un bot para todos: en cada nodo, **Ajustes → Nodo → Panel de nodos**, marca también "Permitir que el hub controle este nodo". El nodo le pregunta al hub todo el tiempo si hay órdenes (siempre llama él, así funciona detrás de cualquier router). En el bot del hub, **🗺 Nodos** muestra los nodos que puedes usar; toca uno para 🩺 estado y salud, 🔗 conexiones (conectar con tus favoritos o por número, cambiar el modo, desconectar), 📢 anuncios (transmitir ya por RF o RF + Net, pausar), 🌤 clima y alertas (ASLSCAN) y 📡 emisiones (HAMNA: transmitir un evento, detener, grabar). Los permisos son por nodo: en el hub, **Nodos → 🎛 Bot** en cada tarjeta — los administradores controlan todo; a cada usuario se le da "Ver" o "Controlar" nodo por nodo. Cada nodo queda ligado al código de acceso con que se presentó, así otro código no puede hacerse pasar por él.
 
 ### Avisos por Telegram
 

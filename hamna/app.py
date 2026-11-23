@@ -39,6 +39,8 @@ def init_app():
     anuncios.emisor.start()
     from . import hub
     hub.init()
+    from . import control
+    control.init()
     app.roles = auth.ROLES
     app.user_loader = lambda req: auth.user_for(req.token, req.ip)
     app.upload_limits["/api/respaldo/restaurar"] = 4 * 2**30
@@ -1687,7 +1689,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_
             "normalize_target": float, "pause_volume": int, "ab_keep": int, "ab_recv_keep": int,
             "tg_recordar_dias": int, "hub_alerta_min": int, "rec_silencio_min": int, "rec_max_min": int,
             "rec_dias": int}
-BOOL_KEYS = {"pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
+BOOL_KEYS = {"rc_on", "pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
              "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "tg_on_rec", "ab_enabled", "ab_node_on", "ab_cloud_on", "tts_fallback"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
@@ -1913,10 +1915,52 @@ def remoto_latido(req):
     return ok(estacion=cfg.get("station_name") or "", nodo=cfg.get("node") or "", version=VERSION)
 
 
+@app.route("/api/remoto/control", ("POST",), auth=False)
+def remoto_control(req):
+    """Un nodo pregunta si hay órdenes para él (y trae los resultados de las anteriores)."""
+    from . import control
+    fila = autobackup.code_check(req.headers.get("X-HAMNA-Backup", ""))
+    if not fila:
+        raise HTTPError(401, "Código de acceso inválido")
+    try:
+        return ok(ordenes=control.atender(fila, req.json(), req.ip), espera=control.ESPERA)
+    except PermissionError as e:
+        raise HTTPError(403, str(e))
+
+
+@app.route("/api/nodos/<nodo>/control", rol="admin")
+def nodos_control_ver(req, nodo):
+    from . import control
+    nodo = str(nodo)                 # el enrutador convierte a número lo que es solo dígitos
+    info = control.nodos().get(nodo)
+    usuarios = [{"id": u["id"], "usuario": u["usuario"], "nombre": u.get("nombre") or "", "rol": u["rol"],
+                 "telegram": bool(u.get("tg"))} for u in auth.users() if u.get("activo", 1)]
+    return jsonr({"nodo": nodo, "control": info, "permisos": control.permisos(nodo), "usuarios": usuarios})
+
+
+@app.route("/api/nodos/<nodo>/control", ("PUT",), rol="admin")
+def nodos_control_guardar(req, nodo):
+    from . import control
+    nodo = str(nodo)
+    b = req.json()
+    p = control.guardar_permisos(nodo, {int(k): int(v) for k, v in (b.get("permisos") or {}).items()})
+    log.info("%s cambió quién controla el nodo %s desde el bot", req.user["usuario"], nodo)
+    return ok(permisos=p)
+
+
+@app.route("/api/nodos/<nodo>/control", ("DELETE",), rol="admin")
+def nodos_control_olvidar(req, nodo):
+    from . import control
+    control.olvidar(str(nodo))
+    return ok()
+
+
 @app.route("/api/nodos")
 def nodos_panel(req):
-    from . import hub
-    return jsonr(hub.panel())
+    from . import control, hub
+    p = hub.panel()
+    p["control"] = control.nodos()
+    return jsonr(p)
 
 
 @app.route("/api/nodos/<nodo>", ("DELETE",), rol="admin")

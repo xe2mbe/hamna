@@ -1745,7 +1745,8 @@ function nodoCard(d, p) {
     ${chips.length ? `<div class="nodo-chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>` : ""}
     <div class="meta">${sal === "grave" ? "❌" : sal === "aviso" ? "⚠️" : sal === "ok" ? "✅" : "➖"} ${salud}</div>
     <div class="meta">💾 ${resp}</div>
-    ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm accent-soft" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
+    ${!d.propio && (p.control || {})[d.nodo] ? `<div class="meta">${p.control[d.nodo].en_linea ? "🎛 " + LG("Se puede controlar desde el bot", "Can be controlled from the bot") : "⚪ " + LG("Control desde el bot: no escucha ahora", "Bot control: not listening now")}</div>` : ""}
+    ${isAdmin() ? `<div class="actions"><button type="button" class="btn sm accent-soft" data-editurl="${esc(clave)}" data-int="${esc(d.url_int || "")}" data-ext="${esc(d.url_ext || "")}" data-nombre="${esc(titulo)}">✏️ ${LG("Editar", "Edit")}</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm" data-control="${esc(d.nodo)}" title="${LG("Quién puede ver o controlar este nodo desde el bot", "Who can view or control this node from the bot")}">🎛 Bot</button>` : ""}${!d.propio && isAdmin() ? `<button type="button" class="btn sm danger-soft" data-quitar="${esc(d.nodo)}" title="${LG("Si el nodo sigue reportando, vuelve a aparecer en un minuto", "If the node keeps reporting, it comes back within a minute")}">🗑 ${LG("Quitar del panel", "Remove from panel")}</button>` : ""}${isAdmin() ? "</div>" : ""}
   </div>`;
 }
 // Solo enlaces http(s): nunca javascript:, data:…
@@ -1775,6 +1776,41 @@ document.addEventListener("click", (e) => {
       await api("api/nodos/" + encodeURIComponent(b.dataset.editurl) + "/urls", { method: "PUT", json: { url_int: f.url_int.value, url_ext: f.url_ext.value } });
       closeModal(); toast(LG("Direcciones guardadas", "Addresses saved")); loadNodos();
     } catch (err) { toast(err.message, true); }
+  };
+});
+/* ── Nodos → 🎛 Bot: quién puede ver o controlar cada nodo desde el bot del hub ── */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-control]"); if (!b) return;
+  const n = b.dataset.control;
+  let r;
+  try { r = await api("api/nodos/" + encodeURIComponent(n) + "/control"); } catch (err) { return toast(err.message, true); }
+  const c = r.control;
+  const estado = !c ? LG("Este nodo todavía no se ha conectado al control. En ese nodo: Ajustes → Panel de nodos → marca «Permitir que el hub controle este nodo».", "This node hasn't connected to the control yet. On that node: Settings → Node panel → tick “Let the hub control this node”.")
+    : c.en_linea ? LG(`🟢 Escuchando órdenes · ${c.app} v${c.version}`, `🟢 Listening for orders · ${c.app} v${c.version}`)
+    : LG(`⚪ No está escuchando ahora (última vez ${haceTxt(c.edad)})`, `⚪ Not listening now (last time ${haceTxt(c.edad)})`);
+  const filas = r.usuarios.map((u) => {
+    const v = u.rol === "admin" ? 2 : (r.permisos[u.id] || 0);
+    return `<div class="rc-fila"><div><b>${esc(u.usuario)}</b> <span class="muted">${esc(u.nombre || "")} · ${esc(trTxt(u.rol))}${u.telegram ? " · 📱 Telegram" : ""}</span></div>
+      ${u.rol === "admin" ? `<span class="chip ok">${LG("Controla todo (administrador)", "Controls everything (administrator)")}</span>`
+      : `<select data-rcu="${u.id}"><option value="0" ${v === 0 ? "selected" : ""}>${LG("— Nada", "— Nothing")}</option><option value="1" ${v === 1 ? "selected" : ""}>👁 ${LG("Ver", "View")}</option><option value="2" ${v === 2 ? "selected" : ""}>🎛 ${LG("Controlar", "Control")}</option></select>`}</div>`;
+  }).join("");
+  openModal(LG("Bot: nodo ", "Bot: node ") + n, `<form id="rcForm" translate="no">
+    <p class="muted">${esc(estado)}</p>
+    <p class="muted" style="font-size:.86rem">${LG("En el bot de este hub, 🗺 Nodos → el nodo. «Ver» deja ver conexiones, anuncios, clima, emisiones y salud; «Controlar» además conectar, desconectar, transmitir y grabar. Hace falta tener el Telegram vinculado.", "In this hub's bot, 🗺 Nodes → the node. “View” shows connections, announcements, weather, broadcasts and health; “Control” also connects, disconnects, transmits and records. Telegram must be linked.")}</p>
+    <div class="rc-lista">${filas}</div>
+    <div class="modal-actions">${c ? `<button type="button" class="btn ghost" id="rcOlvidar" title="${LG("Si reinstalaste el nodo con otro código de acceso", "If you reinstalled the node with a different access code")}">${LG("Soltar código", "Release code")}</button>` : ""}
+      <button type="button" class="btn" id="rcNo">${LG("Cancelar", "Cancel")}</button><button class="btn primary">${LG("Guardar", "Save")}</button></div></form>`);
+  $("#rcNo").onclick = closeModal;
+  if ($("#rcOlvidar")) $("#rcOlvidar").onclick = async () => {
+    if (!(await confirmBox(LG(`¿Soltar el nodo ${n} de su código de acceso? La próxima vez que pregunte quedará ligado al código que use.`, `Release node ${n} from its access code? Next time it asks it will be bound to the code it uses.`), LG("Soltar", "Release")))) return;
+    try { await api("api/nodos/" + encodeURIComponent(n) + "/control", { method: "DELETE" }); toast(LG("Listo", "Done")); loadNodos(); } catch (err) { toast(err.message, true); }
+  };
+  $("#rcForm").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const permisos = {};
+    $$("#rcForm [data-rcu]").forEach((s) => { if (+s.value) permisos[s.dataset.rcu] = +s.value; });
+    try { await api("api/nodos/" + encodeURIComponent(n) + "/control", { method: "PUT", json: { permisos } }); closeModal(); toast(LG("Permisos guardados", "Permissions saved")); loadNodos(); }
+    catch (err) { toast(err.message, true); }
   };
 });
 async function loadNodos() {

@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="static/icon-180.png">
 <link rel="manifest" href="static/manifest.webmanifest">
 <meta name="theme-color" content="#0f1a33">
-<link rel="stylesheet" href="static/app.css?v=1.49.0">
+<link rel="stylesheet" href="static/app.css?v=1.50.0">
 </head>
 <body>
 
@@ -309,6 +309,7 @@
             <button type="button" class="btn danger-soft" id="btnTestAir">📡 Transmitir prueba</button>
             <h3>Panel de nodos</h3>
             <label class="check"><input type="checkbox" name="hub_on"> 🗺 Reportar el estado de este nodo a un hub cada minuto (al aire, próximo evento, salud, versión, respaldo)</label>
+            <label class="check"><input type="checkbox" name="rc_on"> 🎛 Permitir que el hub controle este nodo desde su bot de Telegram (conexiones, anuncios, salud…). Quién puede hacerlo lo decide el administrador del hub, nodo por nodo.</label>
             <div class="grid2">
               <label>Dirección del hub<input name="hub_url" placeholder="Vacío = la del respaldo a otro nodo" autocomplete="off"></label>
               <label>Código de acceso<input type="password" name="hub_token" data-secret autocomplete="new-password" placeholder="Vacío = el del respaldo"></label>
@@ -684,7 +685,7 @@
 </div>
 <div class="toast hidden" id="toast"></div>
 
-<script src="static/i18n.js?v=1.49.0"></script>
-<script src="static/app.js?v=1.49.0"></script>
+<script src="static/i18n.js?v=1.50.0"></script>
+<script src="static/app.js?v=1.50.0"></script>
 </body>
 </html>

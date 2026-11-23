@@ -1109,3 +1109,8 @@ textarea.pron-ta { position: relative; background: transparent !important; displ
 .hz-fmt label.check { margin: 0; gap: 6px; font-size: .88rem; }
 .hz-fmt input { width: auto; margin: 0; }
 .hz-prev { margin: 4px 0 8px; font-size: .86rem; min-height: 1.2em; }
+
+/* Nodos → 🎛 Bot (permisos por nodo) */
+.rc-lista { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; margin: 8px 0; }
+.rc-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.rc-fila select { width: auto; }

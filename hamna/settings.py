@@ -117,6 +117,8 @@ DEFAULTS = {
 }
 
 # Claves que nunca se mandan al navegador
+DEFAULTS_RC = {"rc_on": False}      # permitir que el hub controle este nodo desde su bot (remoto.py)
+DEFAULTS.update(DEFAULTS_RC)
 SECRET_KEYS = {"password_hash", "secret_key", "azure_key", "google_key", "eleven_key", "tg_token", "ab_node_token", "hub_token"}
 
 _lock = threading.Lock()

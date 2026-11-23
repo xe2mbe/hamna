@@ -25,6 +25,7 @@
     jueves: "Thursday", viernes: "Friday", "sábado": "Saturday" };
 
   const D = {
+    "🎛 Permitir que el hub controle este nodo desde su bot de Telegram (conexiones, anuncios, salud…). Quién puede hacerlo lo decide el administrador del hub, nodo por nodo.": "🎛 Let the hub control this node from its Telegram bot (connections, announcements, health…). Who can do it is decided by the hub's administrator, node by node.",
     // Programación → Eventos | Anuncios
     "📅 Eventos": "📅 Events", "📢 Anuncios": "📢 Announcements", "＋ Nuevo anuncio": "＋ New announcement",
     "Bitácora de anuncios": "Announcement log", "Anuncios cortos que el nodo transmite solo": "Short announcements the node transmits on its own",
