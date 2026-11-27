@@ -1114,3 +1114,29 @@ textarea.pron-ta { position: relative; background: transparent !important; displ
 .rc-lista { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; margin: 8px 0; }
 .rc-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px; }
 .rc-fila select { width: auto; }
+
+/* ── Historial de conexiones (línea de tiempo) ─────────────────────────────── */
+.hist-list { display: flex; flex-direction: column; padding: 4px 0 8px; max-height: 560px; overflow-y: auto; }
+.hday { position: sticky; top: 0; z-index: 1; padding: 10px 18px 6px; background: var(--surface);
+  font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.hev { display: grid; grid-template-columns: 64px 14px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+  padding: 8px 18px; position: relative; }
+.hev:hover { background: var(--surface2); }
+.hev time { font-variant-numeric: tabular-nums; color: var(--text2); font-size: .86rem; padding-top: 1px; }
+.hev .hdot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; background: var(--text3); position: relative; }
+.hev .hdot::after { content: ""; position: absolute; left: 4px; top: 12px; width: 2px; height: calc(100% + 26px);
+  background: var(--border); }
+.hev:last-child .hdot::after, .hev:has(+ .hday) .hdot::after { display: none; }
+.hev.on .hdot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.hev.off .hdot { background: var(--text3); }
+.hev.bad .hdot { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent); }
+.hev.bad .htit { color: var(--danger); }
+.hev .htit { font-weight: 600; }
+.hev .htit .hcall { font-weight: 700; color: var(--accent); }
+.hev .htit small { color: var(--text2); font-weight: 400; margin-left: 4px; }
+.hev .hmeta { color: var(--text2); font-size: .84rem; margin-top: 2px; }
+.hev .hext { padding-top: 1px; }
+@media (max-width: 640px) {
+  .hev { grid-template-columns: 52px 12px minmax(0, 1fr); }
+  .hev .hext { grid-column: 3; }
+}

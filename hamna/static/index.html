@@ -209,6 +209,16 @@
         <div id="sesList" class="links-list"><p class="empty">Cargando…</p></div>
         <div class="irlp-favs asl-favs hidden" id="aslFavs"></div>
       </div>
+      <div class="panel" id="histWrap">
+        <div class="panel-head">
+          <h2>Historial de conexiones</h2>
+          <div class="row gap">
+            <select id="histDias" title="Periodo"><option value="1">Últimas 24 horas</option><option value="7">Últimos 7 días</option><option value="30">Últimos 30 días</option></select>
+            <select id="histFiltro" title="Mostrar"><option value="">Todo</option><option value="fallida">Solo intentos fallidos</option><option value="IN">Solo entrantes</option><option value="OUT">Solo salientes</option></select>
+          </div>
+        </div>
+        <div id="histList" class="hist-list"><p class="empty">Cargando…</p></div>
+      </div>
       <div class="panel hidden" id="aslBuscar">
         <div class="panel-head">
           <h2>Buscar nodos</h2>

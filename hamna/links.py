@@ -90,7 +90,7 @@ def describe(a):
     return "{} {}".format(a["sistema"].upper(), txt)
 
 
-def _asl(a, node):
+def _asl(a, node, origen="Programación"):
     if not node:
         raise RuntimeError("Falta el número de nodo ASL (Ajustes → Nodo)")
     # Probado en ASL3 (app_rpt 3.9.3) con el 299081 → 58788:
@@ -98,8 +98,11 @@ def _asl(a, node):
     #   enlace permanente   ilink 1 se IGNORA; ilink 11 lo desconecta y se queda así
     #                       (los del startup_macro quedan permanentes)
     # Por eso: ilink 1 y, si el nodo sigue enlazado a los pocos segundos, ilink 11.
+    from . import historial
     if a["accion"] == "conectar":
+        historial.intento(node, a["destino"], origen)
         return _asl_rx(node, "rpt cmd {} ilink {} {}".format(node, ASL_MODES[a["modo"] or "transceptor"], a["destino"]))
+    historial.cierre(node, a["destino"] if a["accion"] == "desconectar" else None, origen)
     if a["accion"] == "desconectar":
         cmd = _asl_rx(node, "rpt cmd {} ilink 1 {}".format(node, a["destino"]))
         if _sigue(node, {a["destino"]}):

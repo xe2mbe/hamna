@@ -210,7 +210,7 @@
       "IRLP's old web console (/irlpvcon/). Its password travels unencrypted and has no attempt limit; the HAMNA Dashboard does the same with your users. When turned off, Apache stops serving it; when turned on, it comes back exactly as it was.",
     "¿Apagar IRLPvCON? Nadie podrá abrir /irlpvcon/ hasta que lo vuelvas a encender aquí.": "Turn off IRLPvCON? Nobody will be able to open /irlpvcon/ until you turn it back on here.",
     "IRLPvCON no está instalado en este nodo": "IRLPvCON is not installed on this node",
-    "↻ Actualizar": "↻ Refresh", "↻ Recargar": "↻ Reload", "Enlaces directos": "Direct links", "Nodo": "Node",
+    "↻ Actualizar": "↻ Refresh", "↻ Recargar": "↻ Reload", "Enlaces directos": "Direct links", "Historial de conexiones": "Connection history", "Todo": "All", "Últimas 24 horas": "Last 24 hours", "Últimos 7 días": "Last 7 days", "Últimos 30 días": "Last 30 days", "Solo intentos fallidos": "Failed attempts only", "Solo entrantes": "Incoming only", "Solo salientes": "Outgoing only", "Periodo": "Period", "Mostrar": "Show", "Nodo": "Node",
     "Transceptor": "Transceive", "Solo monitor": "Monitor only", "Monitor local": "Local monitor", "monitor local": "local monitor", "Conectar": "Connect", "Cargando…": "Loading…",
     "Red completa": "Full network", "Nodos alcanzables a través de los enlaces": "Nodes reachable through the links",
     // Control del nodo IRLP

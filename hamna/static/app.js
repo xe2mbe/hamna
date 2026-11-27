@@ -2691,6 +2691,7 @@ async function loadSesiones() {
     const q = S.sesNodo ? "?nodo=" + encodeURIComponent(S.sesNodo) : "";
     S.ses = await api("api/sesiones" + q); S.sesAt = Date.now();
     renderSesiones();
+    loadHist();
   } catch (e) {
     $("#sesList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
   }
@@ -2800,6 +2801,90 @@ $("#sesList").onclick = async (e) => {
     setTimeout(loadSesiones, 1500);
   } catch {}
 };
+/* ── Historial de conexiones: línea de tiempo (historial.py lo registra en el nodo) ──
+   Cada conexión da hasta dos eventos: cuando se conectó y cuando se desconectó. */
+const HIST_EVERY = 15000;
+async function loadHist(force) {
+  if (!force && S.histAt && Date.now() - S.histAt < HIST_EVERY) return;
+  S.histAt = Date.now();
+  try {
+    const q = new URLSearchParams({ dias: $("#histDias").value });
+    if (S.ses && S.ses.sistema === "asl" && S.ses.nodo) q.set("nodo", S.ses.nodo);
+    S.hist = await api("api/sesiones/historial?" + q);
+    renderHist();
+  } catch (e) {
+    $("#histList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+  }
+}
+function renderHist() {
+  const d = S.hist; if (!d) return;
+  const filtro = $("#histFiltro").value;
+  const ev = [];
+  for (const c of d.conexiones) {
+    if (filtro === "fallida" && c.estado !== "fallida") continue;
+    if ((filtro === "IN" || filtro === "OUT") && c.direccion !== filtro) continue;
+    if (c.estado === "fallida") ev.push({ t: c.hora_inicio, k: "bad", c });
+    else {
+      ev.push({ t: c.hora_inicio, k: "on", c });
+      if (c.estado === "cerrada" && c.hora_fin) ev.push({ t: c.hora_fin, k: "off", c });
+    }
+  }
+  ev.sort((a, b) => (a.t < b.t ? 1 : a.t > b.t ? -1 : a.k === "off" ? -1 : 1));
+  if (!ev.length) {
+    $("#histList").innerHTML = `<p class="empty">${d.conexiones.length && filtro ? LG("Nada con este filtro.", "Nothing matches this filter.")
+      : LG("Aún no hay conexiones registradas en este periodo. Se anotan desde que se instaló esta versión.", "No connections recorded in this period yet. They are logged since this version was installed.")}</p>`;
+    return;
+  }
+  const hoy = d.ahora.slice(0, 10);
+  const ayer = new Date(Date.parse(hoy + "T12:00:00") - 86400000).toISOString().slice(0, 10);
+  const dia = (f) => {
+    if (f === hoy) return LG("Hoy", "Today");
+    if (f === ayer) return LG("Ayer", "Yesterday");
+    const x = new Date(f + "T12:00:00");
+    return isNaN(x) ? f : `${LG(DIAS[x.getDay()], DIAS_EN[x.getDay()])} ${pad2(x.getDate())}/${pad2(x.getMonth() + 1)}`;
+  };
+  const dirTxt = (x) => (x === "IN" ? LG("↘ Entrante", "↘ Incoming") : x === "OUT" ? LG("↗ Saliente", "↗ Outgoing") : "");
+  const modoTxt = (m) => (m ? LG(m[0].toUpperCase() + m.slice(1), { transceptor: "Transceiver", monitor: "Monitor", "monitor local": "Local monitor" }[m] || m) : "");
+  let html = "", ultDia = "";
+  for (const e of ev) {
+    const c = e.c, f = e.t.slice(0, 10);
+    if (f !== ultDia) { ultDia = f; html += `<div class="hday">${esc(dia(f))}</div>`; }
+    const quien = `<b>${esc(c.remoto)}</b>${c.indicativo ? ` <span class="hcall">${esc(c.indicativo)}</span>` : ""}`;
+    const lugar = [c.descripcion, c.ubicacion].filter(Boolean).join(" · ");
+    let tit, meta = [], extra = "";
+    if (e.k === "bad") {
+      tit = LG("No se pudo conectar", "Connection failed");
+      meta = [dirTxt(c.direccion), c.ip && "IP " + c.ip,
+        c.nota === "no respondió" ? LG("el nodo no respondió", "the node did not answer") : LG("no terminó de conectar", "did not finish connecting"),
+        c.origen && LG("pedido desde ", "requested from ") + c.origen];
+    } else if (e.k === "on") {
+      tit = LG("Conectado", "Connected");
+      meta = [dirTxt(c.direccion), modoTxt(c.modo), c.ip && "IP " + c.ip, c.origen && LG("desde ", "from ") + c.origen];
+      if (c.estado === "activa") extra = `<span class="chip ok">${LG("Sigue conectado", "Still connected")} · <span data-hsecs="${c.duracion}">${fmtUp(c.duracion)}</span></span>`;
+      else extra = `<span class="chip">${LG("Duró", "Lasted")} ${fmtUp(c.duracion)}</span>`;
+    } else {
+      tit = LG("Desconectado", "Disconnected");
+      meta = [`${LG("estuvo conectado", "was connected for")} ${fmtUp(c.duracion)} (${c.hora_inicio.slice(11, 16)} → ${c.hora_fin.slice(11, 16)})`,
+        c.cerro && LG("pedido desde ", "requested from ") + c.cerro,
+        c.nota === "reconectó" && LG("se cayó y volvió a conectar", "dropped and reconnected"),
+        c.aprox && LG("hora aproximada: HAMNA estaba detenido", "approximate time: HAMNA was stopped")];
+    }
+    html += `<div class="hev ${e.k}">
+      <time>${esc(e.t.slice(11, 19))}</time><span class="hdot"></span>
+      <div class="hbody"><div class="htit">${tit} · ${quien}${lugar ? ` <small>${esc(lugar)}</small>` : ""}</div>
+        <div class="hmeta">${meta.filter(Boolean).map(esc).join(" · ")}</div></div>
+      <div class="hext">${extra}</div></div>`;
+  }
+  $("#histList").innerHTML = html;
+  S.histShown = Date.now();
+}
+setInterval(() => {
+  if (!S.hist || document.hidden || S.tab !== "conexiones") return;
+  const add = Math.floor((Date.now() - S.histShown) / 1000);
+  $$("#histList [data-hsecs]").forEach((el) => (el.textContent = fmtUp(+el.dataset.hsecs + add)));
+}, 1000);
+$("#histDias").onchange = () => loadHist(true);
+$("#histFiltro").onchange = () => renderHist();
 $("#sesConnect").onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target, n = f.destino.value.trim();

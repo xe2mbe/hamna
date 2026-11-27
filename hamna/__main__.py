@@ -99,6 +99,8 @@ def main():
     bot.start()
     from . import hub
     hub.start()
+    from . import historial
+    historial.start()              # línea de tiempo de conexiones del Dashboard
     from . import remoto
     remoto.start()                 # control desde el bot del hub (si está permitido en Ajustes)
     from .live import live

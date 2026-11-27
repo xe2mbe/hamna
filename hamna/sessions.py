@@ -365,7 +365,7 @@ def status(cfg, node=None):
     return asl_status(node)
 
 
-def action(cfg, accion, destino="", modo="transceptor", node=None):
+def action(cfg, accion, destino="", modo="transceptor", node=None, origen="HAMNA"):
     """Conectar o desconectar desde la página. Reutiliza las reglas de links."""
     kind = cfg.get("backend") or "auto"
     if kind == "auto":
@@ -380,4 +380,4 @@ def action(cfg, accion, destino="", modo="transceptor", node=None):
     node = str(node or cfg.get("node") or backends.detect_asl_node())
     if node not in local_nodes():
         raise ValueError("El nodo {} no está en rpt.conf".format(node))
-    return links._asl(a, node)
+    return links._asl(a, node, origen)

@@ -111,7 +111,7 @@ def _conectar(a):
     modo = a.get("modo") if a.get("modo") in ("transceptor", "monitor", "monitor_local") else "transceptor"
     if not dest:
         return {"ok": False, "texto": "Falta el número del nodo"}
-    sessions.action(cfg, "conectar", dest, modo if kind == "asl" else "transceptor")
+    sessions.action(cfg, "conectar", dest, modo if kind == "asl" else "transceptor", origen="Bot del hub")
     log.info("Hub (%s): conectar %s como %s", a.get("quien"), dest, modo)
     time.sleep(4)
     r = _conexiones()
@@ -126,11 +126,11 @@ def _desconectar(a):
     cfg, kind = _cfg_kind()
     dest = str(a.get("destino") or "")
     if dest in ("all", ""):
-        sessions.action(cfg, "desconectar_todo")
+        sessions.action(cfg, "desconectar_todo", origen="Bot del hub")
         aviso = "⛔ Desconecté todos los enlaces." if kind == "asl" else "✖ Desconecté IRLP."
     else:
         dest = "".join(c for c in dest if c.isdigit())
-        sessions.action(cfg, "desconectar", dest)
+        sessions.action(cfg, "desconectar", dest, origen="Bot del hub")
         aviso = "✖ Desconecté el nodo {}.".format(dest)
     log.info("Hub (%s): desconectar %s", a.get("quien"), dest or "todo")
     time.sleep(2)

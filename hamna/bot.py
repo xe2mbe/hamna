@@ -1935,7 +1935,7 @@ def _con_hacer(token, chat, mid, user, accion, destino, modo="transceptor"):
     kind, cfg = _sistema()
     try:
         if accion == "conectar":
-            cmd = sessions.action(cfg, "conectar", destino, modo if kind == "asl" else "transceptor")
+            cmd = sessions.action(cfg, "conectar", destino, modo if kind == "asl" else "transceptor", origen="Telegram")
             que = "🔗 Conecté el nodo {} como {}".format(destino, links.ASL_MODO_NOMBRE.get(modo, modo)) if kind == "asl" \
                 else "🔗 Conecté a {}".format(destino)
         elif kind == "irlp" and destino in ("dis", "ena"):
@@ -1943,10 +1943,10 @@ def _con_hacer(token, chat, mid, user, accion, destino, modo="transceptor"):
             cmd = irlpctl.accion("deshabilitar" if destino == "dis" else "habilitar")
             que = "⛔ Deshabilité el nodo IRLP" if destino == "dis" else "✅ Habilité el nodo IRLP"
         elif destino in ("all", "end", ""):
-            cmd = sessions.action(cfg, "desconectar_todo")
+            cmd = sessions.action(cfg, "desconectar_todo", origen="Telegram")
             que = "⛔ Desconecté todos los enlaces" if kind == "asl" else "✖ Desconecté IRLP"
         else:
-            cmd = sessions.action(cfg, "desconectar", destino)
+            cmd = sessions.action(cfg, "desconectar", destino, origen="Telegram")
             que = "✖ Desconecté el nodo {}".format(destino)
         log.info("%s desde Telegram: %s", user["usuario"], cmd)
         time.sleep(4 if accion == "conectar" else 2)    # que la lista ya muestre el cambio
