@@ -88,6 +88,9 @@ DEFAULTS = {
     "tg_bot_on": True,
     "tg_collab_dm": True,
     "ab_tg_on": False,
+    "ab_sin_claves_nodo": False,   # respaldo automático sin claves: a otro nodo (tuyo) con claves de fábrica
+    "ab_sin_claves_nube": True,    # a la nube y por Telegram, sin claves de fábrica
+    "ab_sin_claves_tg": True,
     "hub_on": False,              # mandar el estado de este nodo a un hub cada minuto (hub.py)
     "hub_url": "",                # vacíos: se usan la dirección y el código del respaldo a otro nodo
     "hub_token": "",

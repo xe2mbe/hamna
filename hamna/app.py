@@ -1861,7 +1861,7 @@ NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "anuncio_max_seg": int, "anun
             "rec_dias": int}
 BOOL_KEYS = {"rc_on", "pause_enabled", "retroceso_enabled", "section_normalize", "keep_originals", "keep_previous",
              "tg_enabled", "tg_on_error", "tg_on_preflight", "tg_on_sync", "tg_on_start", "tg_on_end",
-             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "tg_on_rec", "ab_enabled", "ab_node_on", "ab_cloud_on", "tts_fallback"}
+             "tg_on_upcoming", "tg_on_section", "tg_on_backup", "tg_on_health", "tg_on_collab", "tg_bot_on", "tg_collab_dm", "ab_tg_on", "hub_on", "tg_on_nodes", "rec_tg", "tg_on_rec", "ab_enabled", "ab_node_on", "ab_cloud_on", "ab_sin_claves_nodo", "ab_sin_claves_nube", "ab_sin_claves_tg", "tts_fallback"}
 STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_key_cmd",
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
@@ -1979,8 +1979,11 @@ def respaldo_info(req):
 @app.route("/api/respaldo/descargar", rol="admin")
 def respaldo_descargar(req):
     con = truthy(req.query.get("audios", "0"))
+    sin = truthy(req.query.get("sin_claves", "0"))
     nombre = backup.filename(con)
-    gen = backup.stream(con, req.user["usuario"])
+    if sin:
+        nombre = nombre.replace(".tar.gz", "-sin-claves.tar.gz")
+    gen = backup.stream(con, req.user["usuario"], sin_claves=sin)
     return Response(stream=gen, ctype="application/gzip",
                     headers={"Content-Disposition": 'attachment; filename="{}"'.format(nombre)})
 

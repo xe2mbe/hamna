@@ -400,7 +400,7 @@ With **"The bot answers commands"** turned on (Settings → Alerts) (on only one
 1. Install with `--no-cron` if nobody needs to edit the cron from the page (the Cron tab runs commands as root).
 2. Long, unique passwords for administrators; **operator** users for day-to-day use.
 3. Always https (the node's Apache) or an SSH tunnel; never forward 8090 on the router. With `--listen-all` or on IRLP the installer opens 8090 only to the local network (10.x, 172.16–31.x, 192.168.x), and the page warns when it's opened over plain http.
-4. Treat every backup as a secret: it carries all the keys.
+4. Treat every backup as a secret: it carries all the keys. Or make it **🔑 without keys** (Settings → Backup: a checkbox on the download, and one per destination of the automatic backup, on by default for the cloud and Telegram): it leaves out the service keys and the cloud access, and when it's restored the node keeps its own. The node's `secret_key` never goes in a backup.
 5. Download the release tag, check its SHA-256 (in the release notes) and read `install.sh` instead of `curl | sudo bash`.
 6. Asterisk's **AMI (port 5038)** must not be reachable from the internet: **Health** warns if it listens beyond 127.0.0.1.
 
@@ -908,7 +908,7 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 1. Instala con `--no-cron` si nadie necesita editar el cron desde la página (la pestaña Cron corre comandos como root).
 2. Contraseñas largas y únicas para los administradores; usuarios **operador** para el día a día.
 3. Siempre por https (el Apache del nodo) o por túnel SSH; nunca reenvíes el 8090 en el router. Con `--listen-all` o en IRLP el instalador abre el 8090 solo a la red local (10.x, 172.16–31.x, 192.168.x), y la página avisa si entras por http sin cifrar.
-4. Trata cada respaldo como secreto: lleva todas las claves.
+4. Trata cada respaldo como secreto: lleva todas las claves. O hazlo **🔑 sin claves** (Ajustes → Respaldo: una casilla en la descarga y una por destino del respaldo automático, marcada de fábrica para la nube y Telegram): no lleva las claves de los servicios ni el acceso a la nube, y al restaurarlo el nodo conserva las suyas. La `secret_key` del nodo nunca va en un respaldo.
 5. Baja la etiqueta del release, revisa su SHA-256 (en las notas del release) y lee `install.sh` en lugar de `curl | sudo bash`.
 6. El **AMI de Asterisk (puerto 5038)** no debe verse desde internet: **Salud** avisa si escucha fuera de 127.0.0.1.
 

@@ -462,35 +462,44 @@ def run(origen="manual", audios="auto"):
         name = backup.filename(con)
         tmp = str(paths.tmp_dir() / ("autorespaldo_" + name))
         t0 = time.time()
-        with open(tmp, "wb") as f:
-            for chunk in backup.stream(con, "automático"):
-                f.write(chunk)
-        size = os.path.getsize(tmp)
+        # Cada destino puede ir con o sin claves (Ajustes → Respaldo); cada variante se arma una sola vez
+        armados = {}
+
+        def armar(con_a, sin):
+            k = (con_a, sin)
+            if k not in armados:
+                nm = backup.filename(con_a)
+                p = str(paths.tmp_dir() / ("autorespaldo_{}{}".format("sc_" if sin else "", nm)))
+                armados[k] = (p, nm)
+                with open(p, "wb") as fo:
+                    for chunk in backup.stream(con_a, "automático", sin_claves=sin):
+                        fo.write(chunk)
+            return armados[k]
+        sin = {"nodo": bool(cfg.get("ab_sin_claves_nodo")), "nube": cfg.get("ab_sin_claves_nube", True) is not False,
+               "telegram": cfg.get("ab_sin_claves_tg", True) is not False}
+        size = 0
         res = {}
-        for d in dests:
-            try:
-                if d == "nodo":
-                    where = send_to_node(tmp, cfg, con)
-                elif d == "nube":
-                    where = send_to_cloud(tmp, name, cfg)
-                else:
-                    # A Telegram siempre sin audios (límite de 50 MB): si este lleva audios, se arma otro
-                    if con:
-                        name_tg = backup.filename(False)
-                        tmp_tg = str(paths.tmp_dir() / ("autorespaldo_tg_" + name_tg))
-                        try:
-                            with open(tmp_tg, "wb") as f:
-                                for chunk in backup.stream(False, "automático"):
-                                    f.write(chunk)
-                            where = send_to_telegram(tmp_tg, name_tg, cfg)
-                        finally:
-                            paths.rm(tmp_tg)
+        try:
+            for d in dests:
+                try:
+                    if d == "nodo":
+                        p, _nm = armar(con, sin["nodo"])
+                        where = send_to_node(p, cfg, con)
+                    elif d == "nube":
+                        p, nm = armar(con, sin["nube"])
+                        where = send_to_cloud(p, nm, cfg)
                     else:
-                        where = send_to_telegram(tmp, name, cfg)
-                res[d] = {"ok": True, "detalle": where}
-            except Exception as e:
-                log.warning("Respaldo a %s falló: %s", d, e)
-                res[d] = {"ok": False, "detalle": str(e)}
+                        # A Telegram siempre sin audios (límite de 50 MB)
+                        p, nm = armar(False, sin["telegram"])
+                        where = send_to_telegram(p, nm, cfg)
+                    size = max(size, os.path.getsize(p))
+                    res[d] = {"ok": True, "detalle": where + (" · sin claves" if sin[d] else "")}
+                except Exception as e:
+                    log.warning("Respaldo a %s falló: %s", d, e)
+                    res[d] = {"ok": False, "detalle": str(e)}
+        finally:
+            for p, _nm in armados.values():
+                paths.rm(p)
         all_ok = all(r["ok"] for r in res.values())
         if con and all_ok:
             st["fp_audios"] = fp

@@ -2077,11 +2077,12 @@ async function loadRespaldo() {
   try { d = await api("api/respaldo"); } catch (e) { $("#bkSize").textContent = e.message; return; }
   const upd = () => {
     const con = $("#bkAudios").checked;
-    $("#btnBackup").href = "api/respaldo/descargar?audios=" + (con ? 1 : 0);
+    $("#btnBackup").href = "api/respaldo/descargar?audios=" + (con ? 1 : 0) + ($("#bkSinClaves").checked ? "&sin_claves=1" : "");
     $("#bkSize").textContent = `Tamaño aproximado: ${mb(d.base + (con ? d.audios : 0))}`;
   };
   $("#bkAudInfo").textContent = `(${d.n_audios} ${d.n_audios === 1 ? "archivo" : "archivos"}, ${mb(d.audios)})`;
   $("#bkAudios").onchange = upd;
+  $("#bkSinClaves").onchange = upd;
   upd();
 }
 $("#btnBackup").onclick = () => toast("Preparando el respaldo; la descarga empieza en unos segundos…");
@@ -2109,7 +2110,7 @@ $("#btnRestore").onclick = async () => {
       toast((r && r.error) || `Error ${xhr.status}`, true); return;
     }
     const aud = r.audios == null ? "audios de secciones sin cambio" : `${r.audios} audios`;
-    msg.textContent = `✅ Restaurado (nodo ${r.nodo || "?"}, ${r.fecha}, ${aud}). Reiniciando HAMNA…`;
+    msg.textContent = `✅ Restaurado (nodo ${r.nodo || "?"}, ${r.fecha}, ${aud}). Reiniciando HAMNA…` + (r.sin_claves ? ` · 🔑 ${LG("El respaldo venía sin claves", "The backup came without keys")}${r.claves_conservadas ? LG(`: se conservaron ${r.claves_conservadas} de este nodo`, `: ${r.claves_conservadas} kept from this node`) : LG(": ponlas en Ajustes", ": set them in Settings")}` : "");
     setTimeout(() => location.reload(), 9000);
   };
   xhr.onerror = () => { busy(btn, false); msg.textContent = ""; toast("Se cortó la conexión al subir el respaldo", true); };
