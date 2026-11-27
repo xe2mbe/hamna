@@ -1164,3 +1164,7 @@ textarea.pron-ta { position: relative; background: transparent !important; displ
 .an-urlaj summary { cursor: pointer; }
 .sec-url { margin: 8px 0; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
 .sec-url summary { cursor: pointer; }
+
+/* ── Biblioteca de voz ──────────────────────────────────────────────────── */
+.bi-bar { margin: 4px 0 12px; }
+.bi-bar input[type=search] { flex: 1; min-width: 180px; }

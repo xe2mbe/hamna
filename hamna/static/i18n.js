@@ -27,7 +27,7 @@
   const D = {
     "🎛 Permitir que el hub controle este nodo desde su bot de Telegram (conexiones, anuncios, salud…). Quién puede hacerlo lo decide el administrador del hub, nodo por nodo.": "🎛 Let the hub control this node from its Telegram bot (connections, announcements, health…). Who can do it is decided by the hub's administrator, node by node.",
     // Programación → Eventos | Anuncios
-    "📅 Eventos": "📅 Events", "📢 Anuncios": "📢 Announcements", "＋ Nuevo anuncio": "＋ New announcement",
+    "📅 Eventos": "📅 Events", "📢 Anuncios": "📢 Announcements", "📚 Biblioteca": "📚 Library", "Buscar por nombre, notas o texto": "Search by name, notes or text", "Más recientes": "Most recent", "Por nombre": "By name", "＋ Agregar": "＋ Add", "📄 Cargar varios .txt": "📄 Load several .txt", "Una entrada por archivo, con el nombre del archivo": "One entry per file, named after the file", "Ordenar": "Sort", "＋ Nuevo anuncio": "＋ New announcement",
     "Bitácora de anuncios": "Announcement log", "Anuncios cortos que el nodo transmite solo": "Short announcements the node transmits on its own",
     // Bot de Telegram apagado (perfil, sin ser administrador)
     "El bot de Telegram no está activo en este nodo. Pídele al administrador que lo active.":

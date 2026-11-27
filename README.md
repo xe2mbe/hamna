@@ -196,6 +196,10 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 - **Limits** in Settings → Voice: maximum length (30–170 s, default 60) and maximum characters (200–4000, default 2000). It shows the node's TOT (`totime` in rpt.conf) and warns if an announcement that long would be cut; check the TOT of the linked nodes too.
 - They're included in backups.
 
+### Voice library
+
+**Schedule → 📚 Library**: audio kept without a schedule, to use later. Add it as text → voice (with **📄 Load .txt** and its own voice, like an announcement), by uploading an audio file or recording it on the page; **📄 Load several .txt** creates one entry per file, named after the file (up to 20 at once). Each one has a name, optional notes, ▶ Listen, ⬇ Download (8 kHz WAV), ✏️ Edit (changing the text or the voice makes the audio again), ⧉ Duplicate and 🗑 Delete; search by name, notes or text, sorted by date or name. **📡 Transmit now** sends it once through the announcements queue (it waits for a clear channel and never interrupts an event); **📢 Schedule as announcement** opens a new announcement with it; and in an **audio section** of an event, **📚 Or an audio from the library** uses it as the section's audio. In every case the audio is **copied**, so editing or deleting the library entry changes nothing already made. If the text has variables, the voice is made again when it's transmitted. Up to 10 min each (an announcement keeps its own limit). It's included in backups.
+
 ### Times from another time zone
 
 A net at "9 pm Chicago time" is 9 pm here in winter and 8 pm in summer. Instead of writing the time, insert it with **🕗 Time in another zone** (next to the variables): choose the time there, the zone and how to say it. The text gets `{hora 21:00 America/Chicago}` and the voice says the right local time on the day it goes out: «9 de la noche» now, «8 de la noche» after the US changes to daylight saving time, without touching the text.
@@ -699,6 +703,10 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **⬇ Descargar** el audio de cada anuncio (el WAV de 8 kHz que sale al aire).
 - **Topes** en Ajustes → Voz: duración máxima (30–170 s, de fábrica 60) y caracteres máximos (200–4000, de fábrica 2000). Muestra el TOT del nodo (`totime` de rpt.conf) y avisa si un anuncio tan largo lo cortaría; revisa también el TOT de los nodos enlazados.
 - Entran en los respaldos.
+
+### Biblioteca de voz
+
+**Programación → 📚 Biblioteca**: audios guardados sin horario, para usarlos después. Se agregan como texto → voz (con **📄 Cargar .txt** y voz propia, como un anuncio), subiendo un audio o grabándolo en la página; **📄 Cargar varios .txt** crea una entrada por archivo, con el nombre del archivo (hasta 20 a la vez). Cada uno tiene nombre, notas opcionales, ▶ Escuchar, ⬇ Descargar (WAV 8 kHz), ✏️ Editar (cambiar el texto o la voz rehace el audio), ⧉ Duplicar y 🗑 Borrar; se busca por nombre, notas o texto y se ordena por fecha o nombre. **📡 Transmitir ahora** lo manda una vez por la cola de los anuncios (espera canal libre y nunca interrumpe un evento); **📢 Programar como anuncio** abre un anuncio nuevo con él; y en una **sección de audio** de un evento, **📚 O un audio de la biblioteca** lo usa como audio de la sección. En todos los casos el audio se **copia**: corregir o borrar el de la biblioteca no cambia nada de lo ya hecho. Si el texto lleva variables, la voz se hace otra vez al transmitirse. Hasta 10 min cada uno (un anuncio conserva su propio tope). Entra en los respaldos.
 
 ### Horas de otra zona horaria
 

@@ -10,6 +10,7 @@ El respaldo es un .tar.gz con:
   sonidos/              audios de pausa (alerta, pausa, continuamos)
   audios/               audios de las secciones (opcional)
   anuncios/             audios de los anuncios programados (siempre: son cortos)
+  biblioteca/           audios de la biblioteca de voz
 
 Se arma mientras se descarga (no ocupa espacio en la tarjeta SD salvo una
 copia de la base de datos) y se comprime con nivel 1: los audios casi no se
@@ -39,7 +40,7 @@ log = logging.getLogger("hamna.respaldo")
 MANIFEST = "hamna-respaldo.json"
 FORMATO = 1
 LOGO_RE = re.compile(r"^logo_[A-Za-z0-9]+\.(png|jpg|webp|gif)$")
-CARPETAS = ("sonidos", "audios", "fotos", "anuncios")
+CARPETAS = ("sonidos", "audios", "fotos", "anuncios", "biblioteca")
 # Ajustes que describen a ESTE nodo; se conservan al restaurar un respaldo
 # de otro nodo si así se pide. secret_key nunca se toma del respaldo.
 NODE_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "station_name", "logo_file"}

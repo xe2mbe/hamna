@@ -527,9 +527,22 @@ def _voz(texto, cfg, voz=""):
     return nombre, dur
 
 
+def _de_biblioteca(bib):
+    """Copia el audio de la biblioteca a anuncios/ (no se comparte: cada uno queda con el suyo)."""
+    from . import biblioteca
+    tope = max_seg()
+    if bib["duracion"] > tope + 0.5:
+        raise ValueError("Ese audio dura {:.0f} s; el máximo de un anuncio es {} s (Ajustes → Voz)".format(bib["duracion"], tope))
+    return biblioteca.copiar_a(bib, carpeta()), bib["duracion"]
+
+
 def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
     actual = uno(aid) if aid else {}
     a = _limpio(datos, actual)
+    bib = None
+    if datos.get("biblioteca_id") and not aid:
+        from . import biblioteca
+        bib = biblioteca.uno(int(datos["biblioteca_id"]))
     viejo = actual.get("archivo") or ""
     nuevo = None
     if a["tipo"] == "audio":
@@ -538,6 +551,9 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
             a["archivo_nombre"] = (nombre_subido or "audio.wav")[:80]
         elif actual.get("tipo") == "audio" and viejo:
             a["duracion"], a["archivo_nombre"] = actual["duracion"], actual["archivo_nombre"]
+        elif bib and bib["tipo"] == "audio":
+            nuevo, a["duracion"] = _de_biblioteca(bib)
+            a["archivo_nombre"] = (bib["archivo_nombre"] or bib["nombre"] + ".wav")[:80]
         else:
             raise ValueError("Sube o graba el audio del anuncio")
     elif a["tipo"] == "url":
@@ -549,6 +565,8 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
                 (actual.get("voz") or "") == a["voz"] and \
                 (carpeta() / viejo).is_file() and not datos.get("rehacer_voz"):
             a["duracion"] = actual["duracion"]
+        elif bib and bib["tipo"] == "tts" and bib["texto"] == a["texto"] and (bib["voz"] or "") == a["voz"]:
+            nuevo, a["duracion"] = _de_biblioteca(bib)
         else:
             nuevo, a["duracion"] = _voz(a["texto"], settings.load(), a["voz"])
     if nuevo:
@@ -731,6 +749,7 @@ class Emisor:
 
     def __init__(self):
         self.cola = []                 # [(id, motivo, destino)]; destino None = el del anuncio
+                                       # id puede ser un dict: un audio de la biblioteca (encolar_audio)
         self.lock = threading.Lock()
         self.evento = threading.Event()
         self.actual = None             # {"id", "nombre", "estado": esperando|al_aire, "desde"}
@@ -749,9 +768,21 @@ class Emisor:
         self.evento.set()
         return True
 
+    def encolar_audio(self, item, motivo, destino):
+        """Un audio que no es anuncio (biblioteca): {clave, nombre, wav | texto, voz}. Va al final de la cola."""
+        with self.lock:
+            if any(isinstance(x[0], dict) and x[0]["clave"] == item["clave"] for x in self.cola) or \
+                    (self.actual and self.actual.get("clave") == item["clave"]):
+                return False
+            self.cola.append((item, motivo, destino))
+        self.evento.set()
+        return True
+
     def estado(self):
         with self.lock:
-            return {"actual": dict(self.actual) if self.actual else None, "en_cola": [x[0] for x in self.cola]}
+            return {"actual": dict(self.actual) if self.actual else None,
+                    "en_cola": [x[0] for x in self.cola if not isinstance(x[0], dict)],
+                    "otros_en_cola": [x[0]["nombre"] for x in self.cola if isinstance(x[0], dict)]}
 
     def al_aire(self):
         with self.lock:
@@ -772,14 +803,19 @@ class Emisor:
                     if not self.cola:
                         break
                     aid, motivo, destino = self.cola.pop(0)
+                    otro = aid if isinstance(aid, dict) else None
                     # Ya cuenta como «en curso»: que no se pueda encolar otra vez mientras arranca
-                    self.actual = {"id": aid, "nombre": "", "estado": "esperando", "desde": time.time(), "motivo": motivo}
+                    self.actual = {"id": 0 if otro else aid, "nombre": otro["nombre"] if otro else "", "estado": "esperando",
+                                   "desde": time.time(), "motivo": motivo, "clave": otro["clave"] if otro else None}
                 try:
-                    self._uno(aid, motivo, destino)
+                    if otro:
+                        self._audio(otro, motivo, destino)
+                    else:
+                        self._uno(aid, motivo, destino)
                 except Exception as e:
                     log.exception("Anuncio %s", aid)
                     try:
-                        _anotar(uno(aid), "error", str(e))
+                        _anotar({"id": 0, "nombre": otro["nombre"]} if otro else uno(aid), "error", str(e))
                     except Exception:
                         pass
                 finally:
@@ -869,6 +905,40 @@ class Emisor:
         finally:
             for wav, _d in partes:
                 threading.Timer(30, paths.rm, (wav,)).start()
+
+    def _audio(self, it, motivo, destino):
+        """Un audio de la biblioteca: ya hecho (wav) o un texto con variables que se dice al momento."""
+        a = {"id": 0, "nombre": it["nombre"]}
+        cfg = settings.load()
+        be = _backend(cfg, destino)
+        if be.name == "asl" and not be.node:
+            _anotar(a, "error", "Falta el número de nodo (Ajustes → Nodo)")
+            return
+        with self.lock:
+            self.actual.update(nombre=it["nombre"], destino=destino)
+        if not self._esperar_libre(be, cfg):
+            _anotar(a, "saltado", "El canal estuvo ocupado {} min".format(ESPERA_MAX // 60))
+            return
+        wav, aviso = paths.tmp_dir() / "bib_aire_{}.wav".format(uuid.uuid4().hex[:8]), ""
+        try:
+            if it.get("wav"):
+                shutil.copyfile(it["wav"], str(wav))
+            else:
+                _dur, aviso = sintetizar_voz(it["texto"], cfg, it.get("voz"), wav)
+        except Exception as e:
+            paths.rm(wav)
+            _anotar(a, "error", "No pude preparar el audio: {}".format(e))
+            return
+        dur = audio.wav_duration(wav)
+        try:
+            with self.lock:
+                self.actual.update(estado="al_aire", desde=time.time(), dur=dur)
+            log.info("«%s» al aire (%s, %.1f s, %s)", it["nombre"], be.name, dur, motivo)
+            be.play(str(wav), dur, lambda: False)
+            _anotar(a, "ok", motivo + " · " + ("nodo y enlaces" if destino == "red" else "solo este nodo") +
+                    (" · " + aviso if aviso else ""))
+        finally:
+            threading.Timer(30, paths.rm, (wav,)).start()
 
     def _esperar_libre(self, be, cfg):
         fin = time.time() + ESPERA_MAX

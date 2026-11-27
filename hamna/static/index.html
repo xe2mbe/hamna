@@ -103,6 +103,7 @@
       <div class="prog-tabs" id="progTabs" role="tablist">
         <button type="button" class="active" role="tab" data-prog="eventos">📅 Eventos <span class="cnt" id="evCnt"></span></button>
         <button type="button" role="tab" data-prog="anuncios">📢 Anuncios <span class="cnt" id="anCnt"></span></button>
+        <button type="button" role="tab" data-prog="biblioteca">📚 Biblioteca <span class="cnt" id="biCnt"></span></button>
       </div>
       <div data-progpane="eventos">
         <div id="nextCard" class="next-card hidden"></div>
@@ -113,6 +114,15 @@
         <div id="anNext"></div>
         <div id="anList" class="cards"><p class="muted">Cargando…</p></div>
         <details class="an-logwrap hidden" id="anLogWrap"><summary>Bitácora de anuncios</summary><div id="anLog"></div></details>
+      </div>
+      <div data-progpane="biblioteca" class="hidden">
+        <div class="row gap wrap bi-bar">
+          <input type="search" id="biQ" placeholder="Buscar por nombre, notas o texto" maxlength="60">
+          <select id="biOrden" title="Ordenar"><option value="fecha">Más recientes</option><option value="nombre">Por nombre</option></select>
+          <button type="button" class="btn primary hidden" id="biNew">＋ Agregar</button>
+          <label class="btn hidden" id="biTxtLbl" style="margin:0" title="Una entrada por archivo, con el nombre del archivo">📄 Cargar varios .txt<input type="file" id="biTxtMany" accept=".txt,text/plain" multiple hidden></label>
+        </div>
+        <div id="biList" class="cards"><p class="muted">Cargando…</p></div>
       </div>
     </section>
 
