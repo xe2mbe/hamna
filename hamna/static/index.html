@@ -400,6 +400,10 @@
               <label>Duración máxima de un anuncio (s)<input name="anuncio_max_seg" type="number" min="30" max="170" step="1"><small id="anTotHint">De 30 a 170 s. Por omisión 60.</small></label>
               <label>Caracteres máximos del texto<input name="anuncio_max_chars" type="number" min="200" max="4000" step="100"><small>De 200 a 4000. Por omisión 2000.</small></label>
             </div>
+            <details class="an-urlaj"><summary>Anuncios desde una dirección (opcional)</summary>
+              <label>Solo estos dominios<input name="url_dominios" placeholder="ejemplo.net, otro.org" spellcheck="false" autocapitalize="off"><small>Separados por comas; también valen sus subdominios. Vacío = cualquier dirección pública por https.</small></label>
+              <label>Archivo de certificados<input name="url_cafile" placeholder="/etc/ssl/certs/ca-certificates.crt" spellcheck="false" autocapitalize="off"><small>Solo si el equipo es viejo y no reconoce el certificado del servidor. Vacío = el del sistema.</small></label>
+            </details>
             <label>Probar voz<textarea id="ttsTestText" rows="2">Buenas noches colegas, bienvenidos a la red del {dia}.</textarea></label>
             <div class="row gap"><button type="button" class="btn" id="btnTtsTest">▶ Escuchar</button><audio id="ttsTestAudio" controls class="hidden"></audio></div>
             <div class="pron" id="pronBox"></div>

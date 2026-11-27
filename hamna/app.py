@@ -596,6 +596,20 @@ def _apply_section(req, sid, tipo, is_new):
         fields["renovar"] = 1 if truthy(form["renovar"]) else 0
     if "nombre" in fields and not fields["nombre"]:
         raise ValueError("La sección necesita un nombre")
+    if tipo == "TTS" and "url" in form:
+        # Texto desde una dirección: solo el administrador la pone o la cambia
+        antes = db.get_seccion(sid) or {}
+        u = (form.get("url") or "").strip()
+        if req.user["rol"] != "admin":
+            if u != (antes.get("url") or "") or (u and form.get("url_falla") not in (None, antes.get("url_falla"))):
+                raise HTTPError(403, "Solo un administrador puede poner o cambiar la dirección del texto")
+        else:
+            from . import textourl
+            fields["url"] = textourl.validar(u) if u else ""
+            fields["url_falla"] = "saltar" if form.get("url_falla") == "saltar" else "respaldo"
+            texto = fields.get("texto_tts", antes.get("texto_tts") or "")
+            if fields["url"] and fields["url_falla"] == "respaldo" and not (texto or "").strip():
+                raise ValueError("Escribe el texto de respaldo, o elige «omitir la sección» si la dirección falla")
     up = req.files.get("archivo")
     if up:
         fields.update(_reemplazar_audio(sid, up))
@@ -782,7 +796,7 @@ def seccion_new(req):
         raise ValueError("La sección necesita un nombre")
     if tipo != "TTS" and "archivo" not in req.files:
         raise ValueError("Sube un archivo de audio")
-    if tipo == "TTS" and not (f.get("texto_tts") or "").strip():
+    if tipo == "TTS" and not (f.get("texto_tts") or "").strip() and not (f.get("url") or "").strip():
         raise ValueError("Escribe el texto a sintetizar")
     sid = db.insert_seccion(nombre, tipo)
     try:
@@ -910,6 +924,13 @@ def _anuncio_req(req, aid=None):
     except ValueError:
         raise ValueError("Datos del anuncio inválidos")
     up = req.files.get("archivo")
+    actual = anuncios.uno(aid) if aid else {}
+    # «Texto desde una dirección»: es una petición que sale del nodo; solo el administrador pone o cambia la dirección
+    if req.user["rol"] != "admin":
+        if datos.get("tipo") == "url" and actual.get("tipo") != "url":
+            raise HTTPError(403, "Solo un administrador puede crear un anuncio desde una dirección")
+        if actual.get("tipo") == "url":
+            datos["url"] = actual.get("url", "")
     return anuncios.guardar(datos, up.path if up else None, up.filename if up else "",
                             req.user["usuario"], aid)
 
@@ -991,6 +1012,18 @@ def anuncios_voces(req):
     if _voces_cache["key"] != marca or time.time() - _voces_cache["t"] > 3600 or not _voces_cache["voces"]:
         _voces_cache.update(voces=tts.azure_voices(key, region), key=marca, t=time.time())
     return jsonr({"voces": _voces_cache["voces"]})
+
+
+@app.route("/api/anuncios/url/probar", ("POST",), rol="admin")
+def anuncios_url_probar(req):
+    """Baja el texto de la dirección y muestra cómo llegó y cómo se dirá; con voz=1 también lo hace voz."""
+    b = req.json()
+    cfg = settings.load()
+    r = anuncios.probar_url(b.get("url"), cfg, anuncios.voz_limpia(b.get("voz") or {}), truthy(b.get("con_voz")),
+                            str(b.get("respaldo") or "")[:anuncios.max_chars(cfg)], tramos_de=not truthy(b.get("seccion")))
+    if r.get("url_audio"):
+        r["url_audio"] = "api/archivo/tmp/" + r["url_audio"]
+    return ok(**r)
 
 
 @app.route("/api/anuncios/voz", ("POST",), rol="operador")
@@ -1743,7 +1776,8 @@ STR_KEYS = {"backend", "node", "asl_mode", "asl_flush_cmd", "irlp_env", "irlp_ke
             "irlp_unkey_cmd", "irlp_player", "irlp_mode", "station_name", "tts_engine", "azure_region",
             "azure_voice", "azure_style", "espeak_voice", "tg_chat", "tg_upcoming_mins",
             "google_voice", "eleven_voice", "eleven_voice_name", "eleven_model",
-            "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder", "hub_url", "hub_pin", "rec_auto", "rec_titulo"}
+            "ab_hora", "ab_node_url", "ab_node_pin", "ab_cloud_folder", "hub_url", "hub_pin", "rec_auto", "rec_titulo",
+            "url_dominios", "url_cafile"}
 
 
 @app.route("/api/ajustes")
@@ -1800,6 +1834,10 @@ def ajustes_save(req):
         raise ValueError("Modo IRLP inválido")
     if upd.get("backend") not in (None, "auto", "asl", "irlp", "simulado"):
         raise ValueError("Tipo de nodo inválido")
+    if upd.get("url_cafile") and not upd["url_cafile"].startswith("/"):
+        raise ValueError("El archivo de certificados va con su ruta completa (p. ej. /etc/ssl/certs/ca-certificates.crt)")
+    if "url_dominios" in upd:
+        upd["url_dominios"] = ", ".join(x for x in re.split(r"[,\s]+", upd["url_dominios"].lower()) if x)[:400]
     lo, hi = anuncios.MAX_SEG_RANGO
     if "anuncio_max_seg" in upd and not lo <= upd["anuncio_max_seg"] <= hi:
         raise ValueError("Duración máxima de un anuncio: de {} a {} s".format(lo, hi))

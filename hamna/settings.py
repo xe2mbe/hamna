@@ -44,6 +44,8 @@ DEFAULTS = {
     "azure_pitch": 0,
     "anuncio_max_seg": 60,      # duración máxima de un anuncio (30–170 s)
     "anuncio_max_chars": 2000,  # caracteres máximos del texto (200–4000)
+    "url_dominios": "",         # textos desde una dirección: solo estos dominios (vacío = cualquiera público)
+    "url_cafile": "",           # archivo de certificados propio para esas direcciones (equipos viejos)
     "espeak_voice": "es-419",
     "espeak_speed": 150,
     "espeak_pitch": 50,

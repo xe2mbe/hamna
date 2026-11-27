@@ -718,7 +718,7 @@ async function loadEvento(id) {
     <div id="evSecs">${secs.length ? secs.map((s, i) => `
       <div class="sec-row" data-idx="${i}" data-id="${s.id}">
         <span class="n">${i + 1}</span>
-        <span class="name"><span class="chip ${s.tipo}">${s.tipo}</span> ${esc(s.nombre)}${s.regenerar_antes ? " 🔄" : ""}
+        <span class="name"><span class="chip ${s.tipo}">${s.tipo}</span> ${esc(s.nombre)}${s.regenerar_antes ? " 🔄" : ""}${s.url ? ' <span title="' + LG("Texto desde una dirección", "Text from an address") + '">🌐</span>' : ""}
           <small>${fmt(s.duracion)}${s.tiene_audio ? "" : " · ⚠ sin audio"}</small></span>
         <label class="check" title="Cuenta para {num_secciones}" style="margin:0"><input type="checkbox" data-cont ${s.contabilizable ? "checked" : ""}></label>
         <span class="mini">
@@ -1076,7 +1076,7 @@ function secFila(s, opt = {}) {
   else if (s.renovar) act = `<span title="Se renueva en cada emisión">🔁 ${esc(fechaDM(s.actualizado)) || "—"}</span>`;
   return `<div class="trow ${opt.fresca === false ? "vieja" : ""}" data-id="${s.id}">
       <span class="chipcol"><span class="chip ${s.tipo}">${s.tipo}</span></span>
-      <span class="name"><b>${opt.n ? `<span class="sec-n">${opt.n}.</span> ` : ""}${esc(s.nombre)}</b>${s.regenerar_antes ? " 🔄" : ""}${s.renovar ? ' <span class="sec-ren" title="Se renueva en cada emisión">🔁</span>' : ""}
+      <span class="name"><b>${opt.n ? `<span class="sec-n">${opt.n}.</span> ` : ""}${esc(s.nombre)}</b>${s.regenerar_antes ? " 🔄" : ""}${s.url ? ' <span title="' + LG("Texto desde una dirección", "Text from an address") + '">🌐</span>' : ""}${s.renovar ? ' <span class="sec-ren" title="Se renueva en cada emisión">🔁</span>' : ""}
         <small>${otros.length ? (opt.evento ? LG("También en: ", "Also in: ") : LG("En: ", "In: ")) + otros.map(esc).join(", ") + " · " : ""}${esc(s.tipo === "TTS" ? s.texto_tts : s.ruta_archivo || "")}</small></span>
       <span class="num">${s.tiene_audio ? fmt(s.duracion) : "⚠"}</span>
       <span class="num sec-act">${act}</span>
@@ -1169,6 +1169,14 @@ async function seccionForm(s) {
         <div class="vars">${info.variables.map(([v, d]) => `<button type="button" title="${esc(d)}">${v}</button>`).join("")}</div>
         <div class="hz-box" id="sfHz"></div>
         <label class="check"><input type="checkbox" name="regenerar_antes" ${s.regenerar_antes ? "checked" : ""}> 🔄 Regenerar justo antes de transmitir (para {hora}, {fecha}, etc.)</label>
+        ${isAdmin() || s.url ? `<details class="sec-url" ${s.url ? "open" : ""}><summary>🌐 ${LG("Texto desde una dirección (opcional)", "Text from an address (optional)")}</summary>
+          <label>${LG("Dirección del texto", "Text address")}<input name="url" type="url" maxlength="500" value="${esc(s.url || "")}" placeholder="https://…/pronostico.txt" spellcheck="false" autocapitalize="off" ${isAdmin() ? "" : "readonly"}></label>
+          <small class="muted">ⓘ ${LG("Texto plano por https. Se baja justo antes de esta sección, con el evento ya al aire, y le aplica las variables y el diccionario. Si el servidor responde 204, o la cabecera X-HAMNA-Vence ya pasó, la sección se omite ese día. Con dirección, el «Texto» de arriba es el respaldo. 20 min antes del evento se prueba la dirección y, si falla, avisa por Telegram.",
+            "Plain text over https. It's downloaded right before this section, with the event already on air, and gets the variables and the dictionary. If the server answers 204, or the X-HAMNA-Vence header has passed, the section is skipped that day. With an address, the «Text» above is the fallback. 20 min before the event the address is tested and, if it fails, you get a Telegram alert.")}</small>
+          <label>${LG("Si la dirección falla", "If the address fails")}<select name="url_falla" ${isAdmin() ? "" : "disabled"}><option value="respaldo">${LG("Decir el texto de arriba", "Say the text above")}</option><option value="saltar">${LG("Omitir la sección", "Skip the section")}</option></select></label>
+          ${isAdmin() ? `<div class="row gap wrap"><button type="button" class="btn sm" id="sfUrlProbar">🔎 ${LG("Probar la dirección", "Test the address")}</button><button type="button" class="btn sm" id="sfUrlOir">▶ ${LG("Probar con voz", "Test with voice")}</button></div>` : ""}
+          <div id="sfUrlRes" class="an-urlres hidden"></div>
+        </details>` : ""}
         <div class="row gap"><button type="button" class="btn" id="sfPrev">▶ Escuchar prueba</button><audio id="sfAudio" controls class="hidden" style="flex:1"></audio></div>
         <p class="muted" id="sfResolved" style="font-size:.85rem"></p>
       </div>
@@ -1187,6 +1195,22 @@ async function seccionForm(s) {
     </form>`);
   const f = $("#sf");
   const repinta = pronResaltar(f.texto_tts, info.pronuncia || [], $("#sfDic"));
+  if (f.url_falla) f.url_falla.value = s.url_falla || "respaldo";
+  const secUrlProbar = async (conVoz, b) => {
+    const box = $("#sfUrlRes"); busy(b, true, conVoz ? LG("Generando voz…", "Generating voice…") : LG("Consultando…", "Checking…"));
+    try {
+      const r = await api("api/anuncios/url/probar", { method: "POST", json: { url: f.url.value.trim(), con_voz: conVoz, seccion: true,
+        respaldo: f.url_falla.value === "respaldo" ? f.texto_tts.value : "" } });
+      const est = { ok: ["ok", "✓ " + LG("Llegó el texto", "Text received")], vacio: ["", "○ " + LG("Hoy no hay nada: la sección se omitiría", "Nothing today: the section would be skipped")], error: ["bad", "✗ Error"] }[r.estado] || ["", r.estado];
+      box.innerHTML = `<p><span class="chip ${est[0]}">${est[1]}</span> <small class="muted">${esc(r.nota || "")}</small></p>` + (r.texto ? `
+        <details ${conVoz ? "" : "open"}><summary>${LG("Como llegó", "As received")} · ${r.texto.length.toLocaleString()} ${LG("caracteres", "characters")}</summary><pre translate="no">${esc(r.texto)}</pre></details>
+        <details><summary>${LG("Como se dirá (variables y diccionario)", "As it will be said (variables and dictionary)")}</summary><pre translate="no">${esc(r.dicho || "")}</pre></details>` : "") +
+        (r.url_audio ? `<p class="muted">${fmt(r.duracion)}${r.aviso ? " · ⚠ " + esc(r.aviso) : ""}</p>` : "");
+      box.classList.remove("hidden");
+      if (r.url_audio) { const a = $("#sfAudio"); a.src = r.url_audio; a.classList.remove("hidden"); a.play().catch(() => {}); }
+    } catch (e) { box.innerHTML = `<p class="note warn">${esc(e.message)}</p>`; box.classList.remove("hidden"); } finally { busy(b, false); }
+  };
+  if ($("#sfUrlProbar")) { $("#sfUrlProbar").onclick = (e) => secUrlProbar(false, e.currentTarget); $("#sfUrlOir").onclick = (e) => secUrlProbar(true, e.currentTarget); }
   let tipo = s.tipo;
   const apply = () => {
     $$(".only-tts", f).forEach((x) => x.classList.toggle("hidden", tipo !== "TTS"));
@@ -1235,6 +1259,7 @@ async function seccionForm(s) {
     if (tipo === "TTS") {
       ["titulo", "descripcion", "texto_tts"].forEach((k) => fd.append(k, f[k].value));
       fd.append("regenerar_antes", f.regenerar_antes.checked ? "1" : "0");
+      if (f.url) { fd.append("url", f.url.value.trim()); fd.append("url_falla", f.url_falla.value); }
       const changed = isNew || f.texto_tts.value !== (s.texto_tts || "") || f.titulo.value !== (s.titulo || "") || f.descripcion.value !== (s.descripcion || "") || !s.tiene_audio;
       fd.append("generar", changed ? "1" : "0");
     } else if (f.archivo.files[0]) {
@@ -3956,21 +3981,21 @@ function renderAnuncios() {
     $("#anList").innerHTML = `<p class="empty">${LG("Todavía no hay anuncios.", "No announcements yet.")}${puede && d.asl ? " " + LG("Crea el primero con «＋ Nuevo anuncio».", "Create the first one with «＋ New announcement».") : ""}</p>`;
   } else $("#anList").innerHTML = lst.map((a) => {
     const enCola = act && act.id === a.id ? act.estado : (d.emisor.en_cola || []).includes(a.id) ? "cola" : "";
-    const ult = a.ultimo ? `${LG("Último", "Last")}: ${anFecha(a.ultimo)} ${{ ok: "✓", saltado: "⚠ " + LG("saltado (canal ocupado)", "skipped (channel busy)"), error: "✗ " + LG("error", "error") }[a.ultimo_estado] || ""}` : LG("Todavía no ha salido", "Hasn't gone out yet");
+    const ult = a.ultimo ? `${LG("Último", "Last")}: ${anFecha(a.ultimo)} ${{ ok: "✓", saltado: "⚠ " + LG("saltado (canal ocupado)", "skipped (channel busy)"), vacio: "○ " + LG("sin contenido", "no content"), error: "✗ " + LG("error", "error") }[a.ultimo_estado] || ""}` : LG("Todavía no ha salido", "Hasn't gone out yet");
     return `<div class="card an-card ${a.activo ? "" : "off"} ${enCola ? "live" : ""}">
       <div class="an-top"><h3 translate="no">📢 ${esc(a.nombre)}</h3>
         ${puede ? `<label class="switch" title="${a.activo ? LG("Activo: clic para pausarlo", "Active: click to pause it") : LG("Pausado: clic para activarlo", "Paused: click to activate it")}"><input type="checkbox" data-anon="${a.id}" ${a.activo ? "checked" : ""}><span></span></label>`
           : `<span class="chip ${a.activo ? "ok" : ""}">${a.activo ? LG("Activo", "Active") : LG("Pausado", "Paused")}</span>`}</div>
       <div class="an-via">${anVia(a)}</div>
-      <div class="an-que">${a.tipo === "tts" ? `🗣 <span translate="no">«${esc(a.texto.length > 140 ? a.texto.slice(0, 140) + "…" : a.texto)}»</span>` : `🎵 <span translate="no">${esc(a.archivo_nombre || "audio.wav")}</span>`}<span class="an-dur">${fmt(a.duracion)}</span></div>
+      <div class="an-que">${a.tipo === "url" ? `🌐 <span translate="no" title="${esc(a.url)}">${esc(String(a.url || "").replace(/^https:\/\//, "").slice(0, 70))}</span> <span class="an-dur">${a.url_falla === "saltar" ? LG("sin respaldo", "no fallback") : LG("con respaldo", "with fallback")}</span>` : a.tipo === "tts" ? `🗣 <span translate="no">«${esc(a.texto.length > 140 ? a.texto.slice(0, 140) + "…" : a.texto)}»</span>` : `🎵 <span translate="no">${esc(a.archivo_nombre || "audio.wav")}</span>`}<span class="an-dur">${fmt(a.duracion)}</span></div>
       ${anVozDe(a) ? `<div class="meta">🎙 ${LG("Voz", "Voice")}: <span translate="no">${esc(anVozNombre(anVozDe(a)))}</span></div>` : ""}
       <div class="meta">${esc(anCuandoTxt(a))}</div>
       <div class="meta">${enCola === "al_aire" ? "📡 " + LG("Al aire ahora", "On air now") : enCola ? "⏳ " + LG("Esperando canal libre", "Waiting for a clear channel")
         : a.activo && a.proximo ? LG("Próximo", "Next") + ": " + anFecha(a.proximo) + (a.proximo_red ? " · 📻🌐 RF + Net" : " · 📻 RF") : a.activo ? LG("Sin próximos turnos", "No upcoming slots") : ""}${a.creado_por ? ` · <span class="muted">${LG("creado por", "created by")} ${esc(a.creado_por)}</span>` : ""}</div>
       <div class="meta muted">${ult}</div>
       <div class="actions">
-        <button type="button" class="btn sm ro" data-anplay="${a.id}" data-v="${esc(a.modificado)}">▶ ${LG("Escuchar", "Listen")}</button>
-        <a class="btn sm ro" href="api/anuncios/${a.id}/descargar" download title="${LG("Descargar el audio (WAV 8 kHz, el que sale al aire)", "Download the audio (8 kHz WAV, what goes on air)")}">⬇</a>
+        ${a.tipo === "url" ? "" : `<button type="button" class="btn sm ro" data-anplay="${a.id}" data-v="${esc(a.modificado)}">▶ ${LG("Escuchar", "Listen")}</button>`}
+        <a class="btn sm ro ${a.tipo === "url" ? "hidden" : ""}" href="api/anuncios/${a.id}/descargar" download title="${LG("Descargar el audio (WAV 8 kHz, el que sale al aire)", "Download the audio (8 kHz WAV, what goes on air)")}">⬇</a>
         ${puede && d.asl ? `<button type="button" class="btn sm danger-soft" data-anaire="${a.id}" ${enCola ? "disabled" : ""}>📡 ${LG("Transmitir ahora", "Transmit now")}</button>` : ""}
         ${puede ? `<button type="button" class="btn sm" data-anedit="${a.id}">✏️ ${LG("Editar", "Edit")}</button>
           <button type="button" class="btn sm ghost" data-andel="${a.id}" title="${LG("Borrar", "Delete")}">🗑</button>` : ""}
@@ -3979,7 +4004,7 @@ function renderAnuncios() {
   const log = d.bitacora || [];
   $("#anLogWrap").classList.toggle("hidden", !log.length);
   $("#anLog").innerHTML = log.map((l) => `<div class="an-log-row ${esc(l.estado)}"><span class="when">${anFecha(l.cuando)}</span>
-    <b translate="no">${esc(l.nombre)}</b><span>${{ ok: "✓ " + LG("Salió", "Went out"), saltado: "⚠ " + LG("Saltado", "Skipped"), error: "✗ Error" }[l.estado] || esc(l.estado)}</span>
+    <b translate="no">${esc(l.nombre)}</b><span>${{ ok: "✓ " + LG("Salió", "Went out"), saltado: "⚠ " + LG("Saltado", "Skipped"), vacio: "○ " + LG("Sin contenido", "No content"), error: "✗ Error" }[l.estado] || esc(l.estado)}</span>
     <small class="muted">${esc(anDetalle(l.detalle || ""))}</small></div>`).join("");
 }
 let anAudio = null;
@@ -4145,9 +4170,19 @@ function anuncioEditor(a) {
       <div class="seg" id="anTipo">
         <button type="button" data-tipo="tts">🗣 ${LG("Texto → voz", "Text → voice")}</button>
         <button type="button" data-tipo="audio">🎵 ${LG("Subir audio", "Upload audio")}</button>
+        ${isAdmin() || a.tipo === "url" ? `<button type="button" data-tipo="url" title="${LG("El texto se baja de una dirección justo antes de salir", "The text is downloaded from an address right before it goes out")}">🌐 ${LG("Desde una dirección", "From an address")}</button>` : ""}
         ${puedeGrabar ? `<button type="button" data-tipo="grabar">🎙 ${LG("Grabar aquí", "Record here")}</button>` : ""}
       </div>
-      <div data-pane="tts"><textarea name="texto" rows="3" maxlength="${d.max_chars || 2000}" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
+      <div data-pane="url" class="hidden an-url">
+        <label>${LG("Dirección del texto", "Text address")}<input name="url" type="url" maxlength="500" value="${esc(a.url || "")}" placeholder="https://…/pronostico.txt" spellcheck="false" autocapitalize="off" ${isAdmin() ? "" : "readonly title=\"" + LG("Solo un administrador cambia la dirección", "Only an administrator changes the address") + "\""}></label>
+        <small class="muted an-hint">ⓘ ${LG(`Texto plano por https. Se baja justo antes de salir, ya con el canal libre, y le aplica las variables y el diccionario. Si el servidor responde 204, o la cabecera X-HAMNA-Vence ya pasó, ese día no sale (no es error). Si dura más de ${d.max_seg} s se divide en tramos, solo entre párrafos (separados por un renglón en blanco), con una pausa entre ellos para que el TOT vuelva a empezar.`,
+          `Plain text over https. It's downloaded right before it goes out, with the channel already clear, and gets the variables and the dictionary. If the server answers 204, or the X-HAMNA-Vence header has passed, it doesn't go out that day (not an error). If it's longer than ${d.max_seg} s it's split into parts, only between paragraphs (separated by a blank line), with a pause between them so the TOT starts over.`)}</small>
+        <label>${LG("Si la dirección falla", "If the address fails")}<select name="url_falla"><option value="respaldo">${LG("Decir el texto de respaldo (abajo)", "Say the fallback text (below)")}</option><option value="saltar">${LG("No transmitir (queda en la bitácora)", "Don't transmit (it's logged)")}</option></select></label>
+        ${isAdmin() ? `<div class="row gap wrap"><button type="button" class="btn sm" id="anUrlProbar">🔎 ${LG("Probar la dirección", "Test the address")}</button><button type="button" class="btn sm" id="anUrlOir">▶ ${LG("Probar con voz", "Test with voice")}</button></div>` : ""}
+        <div id="anUrlRes" class="an-urlres hidden"></div>
+        <b class="an-resp-tit">${LG("Texto de respaldo", "Fallback text")}</b>
+      </div>
+      <div data-pane="tts url"><textarea name="texto" rows="3" maxlength="${d.max_chars || 2000}" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
         <div class="row gap wrap an-txtbar"><label class="btn sm ghost" style="margin:0" title="${LG("Llena el texto con un archivo .txt de tu equipo", "Fill the text from a .txt file on your computer")}">📄 ${LG("Cargar .txt", "Load .txt")}<input type="file" id="anTxt" accept=".txt,text/plain" hidden></label>
           <small class="muted" id="anCuenta"></small></div>
         <div class="an-dic hidden" id="anDic"></div>
@@ -4218,9 +4253,9 @@ function anuncioEditor(a) {
   if ($("#anVozSel")) anVozPanel(ed, d);
   horaPanel($("#anHz"), f.texto, repinta, !!d.eventos);
   const setTipo = (t) => {
-    ed.tipo = t === "tts" ? "tts" : "audio"; ed.pane = t;
+    ed.tipo = t === "tts" || t === "url" ? t : "audio"; ed.pane = t;
     $$("#anTipo button").forEach((b) => b.classList.toggle("active", b.dataset.tipo === t));
-    $$("#anForm [data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== t));
+    $$("#anForm [data-pane]").forEach((p) => p.classList.toggle("hidden", !p.dataset.pane.split(" ").includes(t)));
   };
   const setModo = (m) => {
     // Un anuncio nuevo «antes de un evento» casi siempre es para toda la red
@@ -4245,7 +4280,23 @@ function anuncioEditor(a) {
   };
   const oye = (url) => { prev.src = url; prev.classList.remove("hidden"); prev.play().catch(() => {}); };
   const red = () => $("#anRedAviso").classList.toggle("hidden", f.destino.value !== "red");
-  setTipo(a.tipo === "audio" ? "audio" : "tts"); setModo(a.modo); pintaHoras(); pintaAntes(); red();
+  setTipo(a.tipo === "audio" ? "audio" : a.tipo === "url" ? "url" : "tts"); setModo(a.modo);
+  if (f.url_falla) f.url_falla.value = a.url_falla || "respaldo";
+  const urlProbar = async (conVoz, b) => {
+    const box = $("#anUrlRes"); busy(b, true, conVoz ? LG("Generando voz…", "Generating voice…") : LG("Consultando…", "Checking…"));
+    try {
+      const r = await api("api/anuncios/url/probar", { method: "POST", json: { url: f.url.value.trim(), voz: anVozDatos(ed), con_voz: conVoz,
+        respaldo: f.url_falla.value === "respaldo" ? f.texto.value : "" } });
+      const est = { ok: ["ok", "✓ " + LG("Llegó el texto", "Text received")], vacio: ["", "○ " + LG("Hoy no hay nada", "Nothing today")], error: ["bad", "✗ Error"] }[r.estado] || ["", r.estado];
+      box.innerHTML = `<p><span class="chip ${est[0]}">${est[1]}</span> <small class="muted">${esc(r.nota || "")}</small></p>` + (r.texto ? `
+        <details ${conVoz ? "" : "open"}><summary>${LG("Como llegó", "As received")} · ${r.texto.length.toLocaleString()} ${LG("caracteres", "characters")} · ${r.parrafos} ${LG(r.parrafos === 1 ? "párrafo" : "párrafos", r.parrafos === 1 ? "paragraph" : "paragraphs")}</summary><pre translate="no">${esc(r.texto)}</pre></details>
+        <details><summary>${LG("Como se dirá (variables y diccionario)", "As it will be said (variables and dictionary)")}</summary><pre translate="no">${esc(r.dicho || "")}</pre></details>` : "") +
+        (r.url_audio ? `<p class="muted">${fmt(r.duracion)} · ${r.tramos.length > 1 ? LG(`${r.tramos.length} tramos: `, `${r.tramos.length} parts: `) + r.tramos.map((x) => fmt(x)).join(" + ") : LG("un solo tramo", "a single part")}${r.aviso ? " · ⚠ " + esc(r.aviso) : ""}</p>` : "");
+      box.classList.remove("hidden");
+      if (r.url_audio) oye(r.url_audio);
+    } catch (e) { box.innerHTML = `<p class="note warn">${esc(e.message)}</p>`; box.classList.remove("hidden"); } finally { busy(b, false); }
+  };
+  if ($("#anUrlProbar")) { $("#anUrlProbar").onclick = (e) => urlProbar(false, e.currentTarget); $("#anUrlOir").onclick = (e) => urlProbar(true, e.currentTarget); } pintaHoras(); pintaAntes(); red();
   if (!nuevo && a.tipo === "audio") oyeGuardado();
   function oyeGuardado() { prev.src = `api/anuncios/${a.id}/audio?v=${encodeURIComponent(a.modificado)}`; prev.classList.remove("hidden"); }
   $("#anTipo").onclick = (e) => { const b = e.target.closest("[data-tipo]"); if (b) setTipo(b.dataset.tipo); };
@@ -4337,6 +4388,7 @@ function anuncioEditor(a) {
       cada_min: f.cada_min.value, desde_h: f.desde_h.value, hasta_h: f.hasta_h.value, una_vez: f.una_vez.value,
       vig_desde: f.vig_desde.value, vig_hasta: f.vig_hasta.value, destino: f.destino.value, activo: a.activo,
       evento_id: f.evento_id ? f.evento_id.value : 0, antes: ed.antes, voz: anVozDatos(ed),
+      url: f.url ? f.url.value.trim() : "", url_falla: f.url_falla ? f.url_falla.value : "respaldo",
     };
     const fd = new FormData();
     fd.append("datos", JSON.stringify(datos));
@@ -4673,3 +4725,4 @@ function hzFormatos(k) {
     <label class="check"><input type="radio" name="hzf_${k}" value="24h"> 21:00</label>
     <label class="check"><input type="radio" name="hzf_${k}" value="12h"> 9 pm</label></div>`;
 }
+

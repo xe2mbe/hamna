@@ -195,13 +195,29 @@ class Engine:
                 out[key] = audio.prepare(p, self._pause_target(cfg))
         return out
 
+    @staticmethod
+    def _toca_regen(sec):
+        """Se vuelve a hacer la voz justo antes de salir: «regenerar antes» o texto desde una dirección."""
+        return bool(sec.get("url")) or bool(sec.get("regenerar_antes") and sec.get("texto_tts"))
+
     def _regen(self, sec, ev, secs, cfg):
         ctx = tts.event_context(ev, secs)
         ctx.update(titulo=sec.get("titulo") or sec.get("nombre"),
                    descripcion=sec.get("descripcion") or "")
+        texto = sec.get("texto_tts") or ""
+        if sec.get("url"):
+            # Texto desde una dirección: se baja ahora, ya con el evento al aire (anuncios.texto_url)
+            from . import anuncios
+            texto, nota, estado = anuncios.texto_url(sec["url"], sec.get("url_falla"), sec.get("texto_tts"), cfg, sec["nombre"])
+            if estado != "ok":
+                sec["_prep"] = None
+                self.note("«{}»: {} — se omite".format(sec["nombre"], nota), "info" if estado == "vacio" else "warn")
+                return
+            if nota != "texto de la dirección":
+                self.note("«{}»: {}".format(sec["nombre"], nota), "warn")
         out = paths.tmp_dir() / "regen_{}_{}".format(sec['id'], uuid.uuid4().hex[:6])
         try:
-            src = tts.synthesize(sec["texto_tts"], cfg, out, ctx)
+            src = tts.synthesize(texto, cfg, out, ctx)
             sec["_prep"] = audio.prepare(src, self._target(cfg))
             sec["duracion"] = audio.duration(sec["_prep"])
             self.note("TTS regenerado: {}".format(sec['nombre']))
@@ -347,7 +363,7 @@ class Engine:
                 if i > 0 and not back:
                     self._set(state="gap", cur_sec=i, sec_pos=0.0, ptt=False)
                     t0 = time.monotonic()
-                    if sec.get("regenerar_antes") and sec.get("texto_tts"):
+                    if self._toca_regen(sec):
                         self._regen(sec, ev, secs, cfg)
                         self._sync_secs(secs)
                     gap = float(cfg.get("section_gap", 3))
@@ -355,7 +371,7 @@ class Engine:
                     if c == "prev":         # en el intervalo: repetir la que acaba de terminar
                         i, back = anterior(i), True
                         continue
-                elif i == 0 and not back and sec.get("regenerar_antes") and sec.get("texto_tts"):
+                elif i == 0 and not back and self._toca_regen(sec):
                     self._regen(sec, ev, secs, cfg)
                     self._sync_secs(secs)
                 back = False
@@ -758,10 +774,23 @@ class Engine:
             secs = db.get_secciones_by_evento(row["evento_id"])
             if not secs:
                 problemas.append("El evento no tiene secciones")
-            sin_audio = [s["nombre"] for s in secs if not self._file_of(s) and not (s.get("texto_tts") or "").strip()]
+            sin_audio = [s["nombre"] for s in secs if not self._file_of(s) and not (s.get("texto_tts") or "").strip()
+                         and not s.get("url")]
             if sin_audio:
                 problemas.append("Secciones sin audio: " + ", ".join(sin_audio))
-            regen = [s for s in secs if s.get("regenerar_antes") and (s.get("texto_tts") or "").strip()]
+            regen = [s for s in secs if self._toca_regen(s)]
+            for s in secs:
+                if not s.get("url"):
+                    continue
+                from . import textourl
+                try:
+                    textourl.bajar(s["url"], cfg)
+                except textourl.SinContenido:
+                    pass                    # hoy no hay nada: no es un problema
+                except Exception as e:
+                    problemas.append("«{}»: la dirección del texto falló ({}){}".format(
+                        s["nombre"], e, "; saldría el texto de respaldo" if s.get("url_falla") != "saltar"
+                        and (s.get("texto_tts") or "").strip() else "; la sección se omitiría"))
             if regen and cfg.get("tts_engine") == "azure" and not cfg.get("azure_key"):
                 problemas.append("Hay secciones de voz para regenerar y falta la clave de Azure")
             try:

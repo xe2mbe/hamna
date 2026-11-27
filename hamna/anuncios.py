@@ -31,7 +31,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import audio, backends, db, paths, sessions, settings, tts
+from . import audio, backends, db, paths, sessions, settings, textourl, tts
 
 log = logging.getLogger("hamna.anuncios")
 
@@ -200,7 +200,7 @@ def init():
         c.execute("""CREATE TABLE IF NOT EXISTS anuncios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
-            tipo TEXT NOT NULL DEFAULT 'tts',       -- tts | audio
+            tipo TEXT NOT NULL DEFAULT 'tts',       -- tts | audio | url
             texto TEXT NOT NULL DEFAULT '',
             archivo TEXT NOT NULL DEFAULT '',       -- en anuncios/, WAV 8 kHz
             archivo_nombre TEXT NOT NULL DEFAULT '',
@@ -232,6 +232,10 @@ def init():
             c.execute("ALTER TABLE anuncios ADD COLUMN antes TEXT NOT NULL DEFAULT '[]'")
         if "voz" not in cols:                       # voz propia (JSON con azure_voice…); vacío = la de Ajustes
             c.execute("ALTER TABLE anuncios ADD COLUMN voz TEXT NOT NULL DEFAULT ''")
+        if "url" not in cols:                       # tipo url: de dónde se baja el texto (textourl.py)
+            c.execute("ALTER TABLE anuncios ADD COLUMN url TEXT NOT NULL DEFAULT ''")
+        if "url_falla" not in cols:                 # si la dirección falla: respaldo | saltar
+            c.execute("ALTER TABLE anuncios ADD COLUMN url_falla TEXT NOT NULL DEFAULT 'respaldo'")
 
 
 def _ahora():
@@ -417,14 +421,21 @@ def _limpio(d, actual=None):
     a["nombre"] = str(d.get("nombre") or "").strip()[:80]
     if not a["nombre"]:
         raise ValueError("Ponle un nombre al anuncio")
-    a["tipo"] = "audio" if d.get("tipo") == "audio" else "tts"
+    a["tipo"] = d.get("tipo") if d.get("tipo") in ("audio", "url") else "tts"
     a["texto"] = str(d.get("texto") or "").strip()
     tope = max_chars()
     if len(a["texto"]) > tope:
         raise ValueError("El texto tiene {} caracteres; el máximo es {} (Ajustes → Voz)".format(len(a["texto"]), tope))
     if a["tipo"] == "tts" and not a["texto"]:
         raise ValueError("Escribe lo que dirá el anuncio")
-    voz = voz_limpia(d.get("voz") or {}) if a["tipo"] == "tts" else {}
+    a["url"], a["url_falla"] = "", "respaldo"
+    if a["tipo"] == "url":
+        # En un anuncio «desde una dirección», texto = el de respaldo (opcional)
+        a["url"] = textourl.validar(d.get("url"))
+        a["url_falla"] = "saltar" if d.get("url_falla") == "saltar" else "respaldo"
+        if a["url_falla"] == "respaldo" and not a["texto"]:
+            raise ValueError("Escribe el texto de respaldo, o elige «no transmitir» si la dirección falla")
+    voz = voz_limpia(d.get("voz") or {}) if a["tipo"] in ("tts", "url") else {}
     a["voz"] = json.dumps(voz, sort_keys=True) if voz else ""
     a["modo"] = d.get("modo") if d.get("modo") in MODOS else "horas"
     dias = "".join(sorted({c for c in str(d.get("dias") or "") if c in "0123456"}))
@@ -529,6 +540,9 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
             a["duracion"], a["archivo_nombre"] = actual["duracion"], actual["archivo_nombre"]
         else:
             raise ValueError("Sube o graba el audio del anuncio")
+    elif a["tipo"] == "url":
+        # El texto se baja y se convierte en voz al momento de salir: no se guarda audio
+        a["archivo"], a["archivo_nombre"], a["duracion"] = "", "", 0
     else:
         a["archivo_nombre"] = ""
         if actual.get("tipo") == "tts" and actual.get("texto") == a["texto"] and viejo and \
@@ -553,7 +567,7 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
         if nuevo:
             paths.rm(carpeta() / nuevo)
         raise
-    if nuevo and viejo:
+    if viejo and (nuevo or a.get("archivo") == ""):
         paths.rm(carpeta() / viejo)
     log.info("%s %s el anuncio «%s»", usuario or "?", "editó" if actual else "creó", a["nombre"])
     return uno(aid)
@@ -584,6 +598,117 @@ def vista_previa(texto, cfg, voz=None):
     dur = _sintetizar(texto, c2, out, respaldo=c2 is cfg)
     from . import pronuncia
     return out.name, pronuncia.para_voz(tts.resolve_variables(texto, cfg), cfg), dur
+
+
+def _unir(wavs, out):
+    """Pega los WAV del aire (mismo formato) con medio segundo de silencio entre ellos."""
+    import wave
+    with wave.open(str(wavs[0]), "rb") as r0:
+        ch, sw, fr = r0.getnchannels(), r0.getsampwidth(), r0.getframerate()
+    with wave.open(str(out), "wb") as w:
+        w.setnchannels(ch)
+        w.setsampwidth(sw)
+        w.setframerate(fr)
+        for i, f in enumerate(wavs):
+            if i:
+                w.writeframes(b"\x00" * (sw * ch * fr // 2))
+            with wave.open(str(f), "rb") as r:
+                w.writeframes(r.readframes(r.getnframes()))
+    return audio.wav_duration(out)
+
+
+def tramos(texto, cfg, voz, tope=None):
+    """Voz del texto en tramos de hasta *tope* s, cortados solo entre párrafos.
+    Devuelve ([(wav, duración)], aviso). Lanza ValueError si un párrafo solo ya no cabe."""
+    tope = tope or max_seg(cfg)
+    parr = textourl.parrafos(texto) or [texto]
+    hechos, aviso, sueltos = [], "", []
+    try:
+        for i, t in enumerate(parr):
+            f = paths.tmp_dir() / "an_p{}_{}.wav".format(i, uuid.uuid4().hex[:6])
+            sueltos.append(f)
+            dur, av = sintetizar_voz(t, cfg, voz, f)
+            aviso = aviso or av
+            if dur > tope + 0.5:
+                raise ValueError("Un párrafo dura {:.0f} s y el tope es {} s: divídelo en párrafos más cortos "
+                                 "(separados por un renglón en blanco)".format(dur, tope))
+            hechos.append((f, dur))
+        grupos, actual, suma = [], [], 0.0
+        for f, dur in hechos:
+            if actual and suma + 0.5 + dur > tope:
+                grupos.append(actual)
+                actual, suma = [], 0.0
+            actual.append(f)
+            suma += dur + (0.5 if len(actual) > 1 else 0)
+        if actual:
+            grupos.append(actual)
+        out = []
+        for g in grupos:
+            f = paths.tmp_dir() / "an_tramo_{}.wav".format(uuid.uuid4().hex[:8])
+            out.append((f, _unir(g, f)))
+        return out, aviso
+    finally:
+        for f in sueltos:
+            paths.rm(f)
+
+
+def texto_url(url, falla, respaldo, cfg, nombre="", tope=None):
+    """(texto, nota, estado) del texto de una dirección. estado: ok | vacio | error.
+    También lo usan las secciones de un evento (engine.py)."""
+    try:
+        texto, _info = textourl.bajar(url, cfg)
+    except textourl.SinContenido as e:
+        return "", str(e), "vacio"
+    except Exception as e:
+        log.warning("«%s»: la dirección falló (%s)", nombre, e)
+        if falla != "saltar" and (respaldo or "").strip():
+            return respaldo, "La dirección falló ({}); salió el texto de respaldo".format(e), "ok"
+        return "", "La dirección falló: {}".format(e), "error"
+    nota = "texto de la dirección"
+    if tope and len(texto) > tope:
+        corto = ""
+        for p in textourl.parrafos(texto):
+            if len(corto) + len(p) + 2 > tope:
+                break
+            corto = (corto + "\n\n" + p).strip()
+        texto = corto or texto[:tope]
+        nota += " (se cortó a {} caracteres)".format(tope)
+    return texto, nota, "ok"
+
+
+def _texto_url(a, cfg):
+    return texto_url(a["url"], a.get("url_falla"), a.get("texto"), cfg, a["nombre"], max_chars(cfg))
+
+
+def probar_url(url, cfg, voz=None, con_voz=False, respaldo="", tramos_de=True):
+    """Para el botón «Probar» del editor: baja el texto y, si se pide, hace la voz (en tramos si tramos_de)."""
+    from . import pronuncia
+    a = {"nombre": "prueba", "url": textourl.validar(url), "url_falla": "respaldo" if respaldo else "saltar",
+         "texto": respaldo or ""}
+    texto, nota, estado = texto_url(a["url"], a["url_falla"], a["texto"], cfg, "prueba",
+                                    max_chars(cfg) if tramos_de else None)
+    r = {"estado": estado, "nota": nota, "texto": texto, "max_seg": max_seg(cfg), "max_chars": max_chars(cfg)}
+    if not texto:
+        return r
+    r["dicho"] = pronuncia.para_voz(tts.resolve_variables(texto, cfg), cfg)
+    r["parrafos"] = len(textourl.parrafos(texto))
+    if con_voz:
+        if tramos_de:
+            partes, aviso = tramos(texto, cfg, voz)
+        else:                                   # sección de un evento: sin tope, un solo audio
+            f = paths.tmp_dir() / "an_tramo_{}.wav".format(uuid.uuid4().hex[:8])
+            dur, aviso = sintetizar_voz(texto, cfg, voz, f)
+            partes = [(f, dur)]
+        try:
+            r["tramos"] = [round(d, 1) for _f, d in partes]
+            out = paths.tmp_dir() / "voz_{}.wav".format(uuid.uuid4().hex[:8])
+            r["duracion"] = round(_unir([f for f, _d in partes], out), 1)
+            r["url_audio"] = out.name
+            r["aviso"] = aviso
+        finally:
+            for f, _d in partes:
+                paths.rm(f)
+    return r
 
 
 def bitacora(limite=50):
@@ -679,6 +804,8 @@ class Emisor:
             log.info("Anuncio «%s» saltado: el canal no se liberó en %d min", a["nombre"], ESPERA_MAX // 60)
             _anotar(a, "saltado", "El canal estuvo ocupado {} min".format(ESPERA_MAX // 60))
             return
+        if a["tipo"] == "url":
+            return self._url(a, cfg, be, destino, motivo)
         wav, temporal, aviso = ruta(a), None, ""
         if a["tipo"] == "tts" and _tiene_variables(a["texto"]):
             temporal = paths.tmp_dir() / "an_aire_{}.wav".format(uuid.uuid4().hex[:8])
@@ -704,6 +831,44 @@ class Emisor:
             if temporal:
                 # Asterisk ya lo leyó; se borra un poco después por si va retrasado
                 threading.Timer(30, paths.rm, (temporal,)).start()
+
+    def _url(self, a, cfg, be, destino, motivo):
+        """Ya con el canal libre: baja el texto, lo hace voz y lo transmite en uno o varios tramos.
+        Entre tramos espera a que el nodo suelte el PTT y el canal quede libre (así el TOT vuelve a empezar)."""
+        texto, nota, estado = _texto_url(a, cfg)
+        if estado == "vacio":
+            log.info("Anuncio «%s»: %s", a["nombre"], nota)
+            _anotar(a, "vacio", nota)
+            return
+        if estado == "error":
+            _anotar(a, "error", nota)
+            return
+        try:
+            partes, aviso = tramos(texto, cfg, a.get("voz"))
+        except Exception as e:
+            _anotar(a, "error", "No pude generar la voz: {}".format(e))
+            return
+        try:
+            for i, (wav, dur) in enumerate(partes):
+                if i and not self._esperar_libre(be, cfg):
+                    _anotar(a, "saltado", "Salieron {} de {} tramos: el canal se ocupó".format(i, len(partes)))
+                    return
+                with self.lock:
+                    self.actual.update(estado="al_aire", desde=time.time(), dur=dur,
+                                       tramo="{}/{}".format(i + 1, len(partes)) if len(partes) > 1 else "")
+                log.info("Anuncio «%s» al aire (%s, tramo %d/%d, %.1f s, %s)", a["nombre"], be.name, i + 1, len(partes), dur, motivo)
+                be.play(str(wav), dur, lambda: False)
+                if i + 1 < len(partes):
+                    with self.lock:
+                        self.actual.update(estado="esperando")
+            _anotar(a, "ok", ("manual · " if motivo != "programado" else "") +
+                    ("nodo y enlaces" if destino == "red" else "solo este nodo") + " · " + nota +
+                    (" · {} tramos".format(len(partes)) if len(partes) > 1 else "") + (" · " + aviso if aviso else ""))
+        except Exception as e:
+            _anotar(a, "error", str(e)[:250])
+        finally:
+            for wav, _d in partes:
+                threading.Timer(30, paths.rm, (wav,)).start()
 
     def _esperar_libre(self, be, cfg):
         fin = time.time() + ESPERA_MAX
