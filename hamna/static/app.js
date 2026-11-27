@@ -4077,38 +4077,39 @@ function anVozDatos(ed) {
     azure_rate: +v.azure_rate || 100, azure_pitch: +v.azure_pitch || 0 } : {};
 }
 async function anVozPanel(ed, d) {
+  // Estilo, velocidad y tono se pueden cambiar también con la voz de Ajustes: si algo es distinto
+  // de Ajustes se guarda como voz propia del anuncio; si todo es igual, el anuncio sigue a Ajustes.
   const base = d.voz.ajustes || {}, selV = $("#anVozV"), selE = $("#anVozE"), r = $("#anVozR"), p = $("#anVozP");
-  const baseNom = anVozNombre(Object.assign({ azure_voice: base.azure_voice || "es-MX-DaliaNeural" }, base));
+  const bV = base.azure_voice || "es-MX-DaliaNeural", bE = base.azure_style || "general", bR = +base.azure_rate || 100, bP = +base.azure_pitch || 0;
+  const baseNom = anVozNombre({ azure_voice: bV, azure_style: bE, azure_rate: bR, azure_pitch: bP });
   const res = () => { $("#anVozRes").textContent = ed.voz.azure_voice ? anVozNombre(ed.voz) : LG("la de Ajustes", "the one in Settings") + " (" + baseNom + ")"; };
-  const estilos = (lista) => {
-    const ya = ed.voz.azure_style || "general";
-    selE.innerHTML = ["general"].concat(lista || []).filter((x, i, arr) => arr.indexOf(x) === i).map((x) => `<option ${x === ya ? "selected" : ""}>${esc(x)}</option>`).join("");
+  const estilos = (quiero) => {
+    const v = (S.anVoces || []).find((x) => x.name === (selV.value || bV));
+    const lista = ["general"].concat((v && v.styles) || []).concat(quiero && quiero !== "general" ? [quiero] : []);
+    const ok = lista.includes(quiero) ? quiero : "general";
+    selE.innerHTML = lista.filter((x, i, arr) => arr.indexOf(x) === i).map((x) => `<option ${x === ok ? "selected" : ""}>${esc(x)}</option>`).join("");
   };
   const usar = () => {
-    const on = !!selV.value;
-    [selE, r, p].forEach((x) => (x.disabled = !on));
-    if (!on) { ed.voz = {}; r.value = base.azure_rate || 100; p.value = base.azure_pitch || 0; estilos([]); }
-    else ed.voz = { azure_voice: selV.value, azure_style: selE.value || "general", azure_rate: +r.value || 100, azure_pitch: +p.value || 0 };
+    const st = selE.value || "general", rr = +r.value || 100, pp = +p.value || 0;
+    ed.voz = !selV.value && st === bE && rr === bR && pp === bP ? {}
+      : { azure_voice: selV.value || bV, azure_style: st, azure_rate: rr, azure_pitch: pp };
     res();
   };
-  r.value = ed.voz.azure_rate || base.azure_rate || 100; p.value = ed.voz.azure_pitch ?? base.azure_pitch ?? 0;
-  if (ed.voz.azure_voice) selV.insertAdjacentHTML("beforeend", `<option value="${esc(ed.voz.azure_voice)}" selected>${esc(ed.voz.azure_voice)}</option>`);
-  estilos(ed.voz.azure_style ? [ed.voz.azure_style] : []);
-  [selE, r, p].forEach((x) => (x.disabled = !ed.voz.azure_voice));
+  const ya = ed.voz.azure_voice || "";
+  r.value = ed.voz.azure_rate || bR; p.value = ed.voz.azure_pitch ?? bP;
+  if (ya) selV.insertAdjacentHTML("beforeend", `<option value="${esc(ya)}" selected>${esc(ya)}</option>`);
+  estilos(ed.voz.azure_style || bE);
   res();
-  selV.onchange = () => { const v = (S.anVoces || []).find((x) => x.name === selV.value); estilos(v && v.styles); usar(); };
+  selV.onchange = () => { estilos(selE.value); usar(); };
   selE.onchange = r.oninput = p.oninput = usar;
-  const cargar = async () => {
-    if (S.anVoces) return S.anVoces;
-    try { S.anVoces = (await api("api/anuncios/voces")).voces; } catch (e) { toast(e.message, true); S.anVoces = null; }
-    return S.anVoces;
-  };
-  const lista = await cargar(); if (!lista) return;
-  const ya = ed.voz.azure_voice;
+  if (!S.anVoces) {
+    try { S.anVoces = (await api("api/anuncios/voces")).voces; } catch (e) { toast(e.message, true); S.anVoces = null; return; }
+  }
+  const lista = S.anVoces;
   selV.innerHTML = `<option value="">${LG("La de Ajustes", "The one in Settings")} (${esc(baseNom)})</option>` + lista.map((v) =>
     `<option value="${esc(v.name)}" ${v.name === ya ? "selected" : ""}>${esc(v.display)} · ${esc(v.locale)} · ${esc(LG(v.gender, { Female: "Female", Male: "Male" }[v.gender] || v.gender))}</option>`).join("") +
     (ya && !lista.some((v) => v.name === ya) ? `<option value="${esc(ya)}" selected>⚠ ${esc(ya)} (${LG("ya no existe", "no longer exists")})</option>` : "");
-  const v = lista.find((x) => x.name === ya); if (v) estilos(v.styles);
+  estilos(ed.voz.azure_style || bE);
 }
 /* Archivo .txt → texto: UTF-8 y, si no lo es, Windows-1252 (el Bloc de notas viejo). Renglón en blanco = pausa breve. */
 async function leerTxt(file) {
