@@ -423,6 +423,25 @@ Each change is validated, rejected if the table changed while you were editing i
 - **Equipment health** (every minute, without root): SD card errors (dmesg and ext4), read-only disk, a write test every 10 min, **undervoltage**, temperature, disk and memory. If something gets worse a Telegram alert arrives with what to do, a reminder every 12 h and another when it's back to normal; the sidebar shows a **Check** badge. An unclean shutdown (power cut) is only noted.
 - **Check this node** (Settings → System): node, live audio (`outstreamcmd`, with commands to copy), pause and section audio readable, voices (if the Azure key returns 401 it looks for the right region and offers to change it; ElevenLabs key, voice and quota), Telegram, automatic backup, health, time and version, each with how to fix it.
 
+### API for scripts
+
+The page uses a JSON API under `https://<node>/hamna/api/` that a script can use too:
+
+1. Sign in once and keep the cookie: `curl -sc c.txt -H "Content-Type: application/json" -d '{"usuario":"USER","password":"PASS"}' https://<node>/hamna/api/login`
+2. Send the cookie with every request (`-b c.txt`) and, on everything that isn't GET, the header **`X-HAMNA: 1`** (the CSRF defense: without it the request is refused with 403).
+3. Uploads go as `multipart/form-data`: the fields, or a **`datos`** field with JSON, plus **`archivo`** with the audio file.
+
+```
+# A voice section (texto_tts) or an audio section (archivo); tipo: TTS | Audio | Sonido
+curl -sb c.txt -H "X-HAMNA: 1" -F nombre="Episode 1" -F tipo=Audio -F archivo=@ep1.wav \
+     -F descripcion="Notes" https://NODE/hamna/api/secciones
+# A scheduled announcement: datos is JSON (the same fields as the editor), archivo if tipo=audio
+curl -sb c.txt -H "X-HAMNA: 1" -F 'datos={"nombre":"Net","tipo":"tts","texto":"{saludo}…","modo":"horas","horas":[{"h":"21:00","red":true}],"dias":"0123456"}' \
+     https://NODE/hamna/api/anuncios
+```
+
+Use a user with the right role (operator or administrator) and, from outside the node, always https. Durations come back in seconds with 2 decimals.
+
 ### Files
 
 | Path | What's there |
@@ -928,6 +947,25 @@ Cada cambio se valida, se rechaza si la tabla cambió mientras la editabas y gua
 
 - **Salud del equipo** (cada minuto, sin root): errores de la tarjeta SD (dmesg y ext4), disco en solo lectura, una prueba de escritura cada 10 min, **bajo voltaje**, temperatura, disco y memoria. Si algo empeora llega un aviso por Telegram con qué hacer, un recordatorio cada 12 h y otro cuando se normaliza; la barra lateral muestra la insignia **Revisar**. Un apagado sin cerrar (corte de luz) queda solo como nota.
 - **Revisar este nodo** (Ajustes → Sistema): nodo, audio en vivo (`outstreamcmd`, con los comandos para copiar), audios de pausa y de secciones legibles, voces (si la clave de Azure da 401 busca la región correcta y ofrece cambiarla; clave, voz y cuota de ElevenLabs), Telegram, respaldo automático, salud, hora y versión, cada cosa con cómo arreglarla.
+
+### API para scripts
+
+La página usa una API JSON en `https://<nodo>/hamna/api/` que también puede usar un script:
+
+1. Entra una vez y guarda la cookie: `curl -sc c.txt -H "Content-Type: application/json" -d '{"usuario":"USUARIO","password":"CLAVE"}' https://<nodo>/hamna/api/login`
+2. Manda la cookie en cada petición (`-b c.txt`) y, en todo lo que no es GET, la cabecera **`X-HAMNA: 1`** (la defensa CSRF: sin ella la petición se rechaza con 403).
+3. Las subidas van como `multipart/form-data`: los campos, o un campo **`datos`** con JSON, más **`archivo`** con el audio.
+
+```
+# Una sección de voz (texto_tts) o de audio (archivo); tipo: TTS | Audio | Sonido
+curl -sb c.txt -H "X-HAMNA: 1" -F nombre="Episodio 1" -F tipo=Audio -F archivo=@ep1.wav \
+     -F descripcion="Notas" https://NODE/hamna/api/secciones
+# Un anuncio programado: datos es JSON (los mismos campos del editor), archivo si tipo=audio
+curl -sb c.txt -H "X-HAMNA: 1" -F 'datos={"nombre":"Net","tipo":"tts","texto":"{saludo}…","modo":"horas","horas":[{"h":"21:00","red":true}],"dias":"0123456"}' \
+     https://NODE/hamna/api/anuncios
+```
+
+Usa un usuario con el rol adecuado (operador o administrador) y, desde fuera del nodo, siempre https. Las duraciones vienen en segundos con 2 decimales.
 
 ### Archivos
 

@@ -1108,7 +1108,11 @@ def _bib_req(req, bid=None):
     except ValueError:
         raise ValueError("Datos inválidos")
     up = req.files.get("archivo")
-    return biblioteca.guardar(datos, up.path if up else None, up.filename if up else "", req.user["usuario"], bid)
+    b = biblioteca.guardar(datos, up.path if up else None, up.filename if up else "", req.user["usuario"], bid)
+    # Desde la v1.56 la biblioteca son las Secciones: lo que llegue por esta ruta (scripts de la v1.54) pasa ya
+    biblioteca.a_secciones()
+    s = db.row("SELECT id FROM secciones WHERE nombre=? ORDER BY id DESC LIMIT 1", (b["nombre"],))
+    return dict(b, seccion_id=s["id"] if s else None)
 
 
 @app.route("/api/biblioteca", rol="lectura")

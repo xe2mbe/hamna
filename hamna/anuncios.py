@@ -591,6 +591,8 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
     if nuevo:
         a["archivo"] = nuevo
     ahora = _fmt(dt.datetime.now())
+    if "duracion" in a:
+        a["duracion"] = round(float(a["duracion"] or 0), 2)
     a["modificado"] = ahora
     try:
         if aid:
@@ -714,7 +716,8 @@ def texto_url(url, falla, respaldo, cfg, nombre="", tope=None):
 
 
 def _texto_url(a, cfg):
-    return texto_url(a["url"], a.get("url_falla"), a.get("texto"), cfg, a["nombre"], max_chars(cfg))
+    # Texto de una dirección: hasta 4,000 caracteres (contrato); los tramos cuidan la duración
+    return texto_url(a["url"], a.get("url_falla"), a.get("texto"), cfg, a["nombre"], MAX_CHARS_RANGO[1])
 
 
 def probar_url(url, cfg, voz=None, con_voz=False, respaldo="", tramos_de=True):
@@ -723,7 +726,7 @@ def probar_url(url, cfg, voz=None, con_voz=False, respaldo="", tramos_de=True):
     a = {"nombre": "prueba", "url": textourl.validar(url), "url_falla": "respaldo" if respaldo else "saltar",
          "texto": respaldo or ""}
     texto, nota, estado = texto_url(a["url"], a["url_falla"], a["texto"], cfg, "prueba",
-                                    max_chars(cfg) if tramos_de else None)
+                                    MAX_CHARS_RANGO[1] if tramos_de else None)
     r = {"estado": estado, "nota": nota, "texto": texto, "max_seg": max_seg(cfg), "max_chars": max_chars(cfg)}
     if not texto:
         return r

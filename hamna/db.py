@@ -214,6 +214,8 @@ def update_seccion(sid, **fields):
     for k, v in fields.items():
         if k in allowed:
             sets.append(k + "=?")
+            if k in ("duracion", "anterior_duracion") and v is not None:
+                v = round(float(v), 2)
             vals.append(int(bool(v)) if k == "regenerar_antes" else v)
     if not sets:
         return

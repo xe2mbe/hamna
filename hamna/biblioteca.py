@@ -153,6 +153,8 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", bid=None):
             nuevo, b["duracion"] = _voz(b["texto"], settings.load(), b["voz"])
     if nuevo:
         b["archivo"] = nuevo
+    if "duracion" in b:
+        b["duracion"] = round(float(b["duracion"] or 0), 2)
     b["modificado"] = _ahora()
     try:
         if bid:
