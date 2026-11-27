@@ -1140,3 +1140,16 @@ textarea.pron-ta { position: relative; background: transparent !important; displ
   .hev { grid-template-columns: 52px 12px minmax(0, 1fr); }
   .hev .hext { grid-column: 3; }
 }
+
+
+/* ── Anuncios: voz propia, .txt, topes ──────────────────────────────────── */
+.an-txtbar { justify-content: space-between; margin: 4px 0; }
+.an-vozsel { margin: 6px 0; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
+.an-vozsel summary { cursor: pointer; font-size: .9rem; }
+.an-vozsel .grid2 { margin-top: 8px; }
+.warn-txt { color: var(--warn) !important; }
+
+.http-aviso { position: sticky; top: 0; z-index: 50; display: flex; gap: 10px; align-items: center; justify-content: center;
+  padding: 8px 14px; font-size: .86rem; background: color-mix(in srgb, var(--warn) 18%, var(--bg2)); color: var(--text);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+.http-aviso button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1rem; }

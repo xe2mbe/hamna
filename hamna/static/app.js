@@ -1317,6 +1317,7 @@ async function loadAjustes() {
     if (el.type === "checkbox") el.checked = !!S.cfg[el.name];
     else if (el.name !== "azure_key" && el.name !== "tg_token" && !("secret" in el.dataset)) el.value = S.cfg[el.name] ?? "";
   }
+  anTotAviso();
   f.azure_key.placeholder = S.cfg.azure_key_set ? "•••••• (guardada; escribe para cambiarla)" : "Pega aquí tu clave";
   f.tg_token.placeholder = S.cfg.tg_token_set ? "•••••• (guardado; escribe para cambiarlo)" : "123456789:ABC…";
   f.tg_token.value = "";
@@ -2664,6 +2665,21 @@ function cronTags(l, rels) {
   return tags.length ? `<div class="cron-rel">${tags.join("")}</div>` : "";
 }
 
+/* ── Aviso: la página se abrió por http sin cifrar desde otro equipo ──────── */
+(function avisoHttp() {
+  const h = location.hostname;
+  if (location.protocol !== "http:" || h === "localhost" || h === "127.0.0.1" || h === "[::1]") return;
+  let cerrado = false; try { cerrado = sessionStorage.getItem("hamna.http") === "1"; } catch {}
+  if (cerrado) return;
+  const d = document.createElement("div");
+  d.className = "http-aviso";
+  const seguro = esc("https://" + h + "/hamna/");
+  d.innerHTML = `<span>🔓 ${LG(`Entraste por http sin cifrar: tu contraseña y tu sesión viajan sin protección por la red. Úsalo así solo dentro de tu casa; desde fuera entra por ${seguro} o por un túnel SSH.`,
+    `You're on plain http: your password and session travel unprotected over the network. Use it like this only at home; from outside use ${seguro} or an SSH tunnel.`)}</span><button type="button" aria-label="${LG("Cerrar", "Close")}">✕</button>`;
+  d.querySelector("button").onclick = () => { d.remove(); try { sessionStorage.setItem("hamna.http", "1"); } catch {} };
+  document.body.prepend(d);
+})();
+
 /* ── Tema claro / oscuro ─────────────────────────────────────────────────── */
 function applyTheme(th) {
   if (th === "light" || th === "dark") document.documentElement.dataset.theme = th;
@@ -3947,12 +3963,14 @@ function renderAnuncios() {
           : `<span class="chip ${a.activo ? "ok" : ""}">${a.activo ? LG("Activo", "Active") : LG("Pausado", "Paused")}</span>`}</div>
       <div class="an-via">${anVia(a)}</div>
       <div class="an-que">${a.tipo === "tts" ? `🗣 <span translate="no">«${esc(a.texto.length > 140 ? a.texto.slice(0, 140) + "…" : a.texto)}»</span>` : `🎵 <span translate="no">${esc(a.archivo_nombre || "audio.wav")}</span>`}<span class="an-dur">${fmt(a.duracion)}</span></div>
+      ${anVozDe(a) ? `<div class="meta">🎙 ${LG("Voz", "Voice")}: <span translate="no">${esc(anVozNombre(anVozDe(a)))}</span></div>` : ""}
       <div class="meta">${esc(anCuandoTxt(a))}</div>
       <div class="meta">${enCola === "al_aire" ? "📡 " + LG("Al aire ahora", "On air now") : enCola ? "⏳ " + LG("Esperando canal libre", "Waiting for a clear channel")
         : a.activo && a.proximo ? LG("Próximo", "Next") + ": " + anFecha(a.proximo) + (a.proximo_red ? " · 📻🌐 RF + Net" : " · 📻 RF") : a.activo ? LG("Sin próximos turnos", "No upcoming slots") : ""}${a.creado_por ? ` · <span class="muted">${LG("creado por", "created by")} ${esc(a.creado_por)}</span>` : ""}</div>
       <div class="meta muted">${ult}</div>
       <div class="actions">
         <button type="button" class="btn sm ro" data-anplay="${a.id}" data-v="${esc(a.modificado)}">▶ ${LG("Escuchar", "Listen")}</button>
+        <a class="btn sm ro" href="api/anuncios/${a.id}/descargar" download title="${LG("Descargar el audio (WAV 8 kHz, el que sale al aire)", "Download the audio (8 kHz WAV, what goes on air)")}">⬇</a>
         ${puede && d.asl ? `<button type="button" class="btn sm danger-soft" data-anaire="${a.id}" ${enCola ? "disabled" : ""}>📡 ${LG("Transmitir ahora", "Transmit now")}</button>` : ""}
         ${puede ? `<button type="button" class="btn sm" data-anedit="${a.id}">✏️ ${LG("Editar", "Edit")}</button>
           <button type="button" class="btn sm ghost" data-andel="${a.id}" title="${LG("Borrar", "Delete")}">🗑</button>` : ""}
@@ -4041,6 +4059,78 @@ async function aWav8k(blob, nombre) {
   return { file: new File([dv.buffer], (nombre || "anuncio").replace(/\.[^.]+$/, "") + ".wav", { type: "audio/wav" }), dur: buf.duration };
 }
 
+/* Voz propia de un anuncio (Azure): {} o {azure_voice, azure_style, azure_rate, azure_pitch} */
+function anVozDe(a) {
+  let v = a && a.voz;
+  if (typeof v === "string") { try { v = v ? JSON.parse(v) : null; } catch { v = null; } }
+  return v && v.azure_voice ? v : null;
+}
+const anVozNombre = (v) => {
+  const n = String(v.azure_voice || "").replace(/^[a-z]{2,3}-[A-Z0-9]{2,8}-/, "").replace(/Neural$/, "");
+  const ex = [v.azure_style && v.azure_style !== "general" ? v.azure_style : "", +v.azure_rate && +v.azure_rate !== 100 ? v.azure_rate + " %" : "",
+    +v.azure_pitch ? (v.azure_pitch > 0 ? "+" : "") + v.azure_pitch + " Hz" : ""].filter(Boolean);
+  return n + (ex.length ? " · " + ex.join(" · ") : "");
+};
+function anVozDatos(ed) {
+  const v = ed.voz || {};
+  return v.azure_voice ? { azure_voice: v.azure_voice, azure_style: v.azure_style || "general",
+    azure_rate: +v.azure_rate || 100, azure_pitch: +v.azure_pitch || 0 } : {};
+}
+async function anVozPanel(ed, d) {
+  const base = d.voz.ajustes || {}, selV = $("#anVozV"), selE = $("#anVozE"), r = $("#anVozR"), p = $("#anVozP");
+  const baseNom = anVozNombre(Object.assign({ azure_voice: base.azure_voice || "es-MX-DaliaNeural" }, base));
+  const res = () => { $("#anVozRes").textContent = ed.voz.azure_voice ? anVozNombre(ed.voz) : LG("la de Ajustes", "the one in Settings") + " (" + baseNom + ")"; };
+  const estilos = (lista) => {
+    const ya = ed.voz.azure_style || "general";
+    selE.innerHTML = ["general"].concat(lista || []).filter((x, i, arr) => arr.indexOf(x) === i).map((x) => `<option ${x === ya ? "selected" : ""}>${esc(x)}</option>`).join("");
+  };
+  const usar = () => {
+    const on = !!selV.value;
+    [selE, r, p].forEach((x) => (x.disabled = !on));
+    if (!on) { ed.voz = {}; r.value = base.azure_rate || 100; p.value = base.azure_pitch || 0; estilos([]); }
+    else ed.voz = { azure_voice: selV.value, azure_style: selE.value || "general", azure_rate: +r.value || 100, azure_pitch: +p.value || 0 };
+    res();
+  };
+  r.value = ed.voz.azure_rate || base.azure_rate || 100; p.value = ed.voz.azure_pitch ?? base.azure_pitch ?? 0;
+  if (ed.voz.azure_voice) selV.insertAdjacentHTML("beforeend", `<option value="${esc(ed.voz.azure_voice)}" selected>${esc(ed.voz.azure_voice)}</option>`);
+  estilos(ed.voz.azure_style ? [ed.voz.azure_style] : []);
+  [selE, r, p].forEach((x) => (x.disabled = !ed.voz.azure_voice));
+  res();
+  selV.onchange = () => { const v = (S.anVoces || []).find((x) => x.name === selV.value); estilos(v && v.styles); usar(); };
+  selE.onchange = r.oninput = p.oninput = usar;
+  const cargar = async () => {
+    if (S.anVoces) return S.anVoces;
+    try { S.anVoces = (await api("api/anuncios/voces")).voces; } catch (e) { toast(e.message, true); S.anVoces = null; }
+    return S.anVoces;
+  };
+  const lista = await cargar(); if (!lista) return;
+  const ya = ed.voz.azure_voice;
+  selV.innerHTML = `<option value="">${LG("La de Ajustes", "The one in Settings")} (${esc(baseNom)})</option>` + lista.map((v) =>
+    `<option value="${esc(v.name)}" ${v.name === ya ? "selected" : ""}>${esc(v.display)} · ${esc(v.locale)} · ${esc(LG(v.gender, { Female: "Female", Male: "Male" }[v.gender] || v.gender))}</option>`).join("") +
+    (ya && !lista.some((v) => v.name === ya) ? `<option value="${esc(ya)}" selected>⚠ ${esc(ya)} (${LG("ya no existe", "no longer exists")})</option>` : "");
+  const v = lista.find((x) => x.name === ya); if (v) estilos(v.styles);
+}
+/* Archivo .txt → texto: UTF-8 y, si no lo es, Windows-1252 (el Bloc de notas viejo). Renglón en blanco = pausa breve. */
+async function leerTxt(file) {
+  if (file.size > 200000) throw new Error(LG("Ese archivo es muy grande para un anuncio", "That file is too big for an announcement"));
+  const buf = await file.arrayBuffer();
+  let t;
+  try { t = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { t = new TextDecoder("windows-1252").decode(buf); }
+  return t.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function anTotAviso() {
+  const f = $("#setForm"), h = $("#anTotHint"); if (!h) return;
+  if (S.vozTot === undefined) { try { S.vozTot = (await api("api/anuncios")).tot_s; } catch { S.vozTot = null; } }
+  const seg = +f.anuncio_max_seg.value || 60, tot = S.vozTot;
+  h.classList.toggle("warn-txt", !!(tot && seg >= tot - 5));
+  h.textContent = LG("De 30 a 170 s. Por omisión 60.", "From 30 to 170 s. Default 60.") + (tot
+    ? " " + (seg >= tot - 5 ? "⚠ " + LG(`El TOT de este nodo es de ${tot} s: un anuncio tan largo lo cortaría. Déjalo al menos 5 s abajo, y revisa el TOT de los nodos enlazados.`,
+        `This node's TOT is ${tot} s: an announcement that long would be cut. Keep it at least 5 s below, and check the TOT of the linked nodes.`)
+      : LG(`TOT de este nodo: ${tot} s (revisa también el de los nodos enlazados).`, `This node's TOT: ${tot} s (check the linked nodes' too).`)) : "");
+}
+$("#setForm").anuncio_max_seg.addEventListener("input", anTotAviso);
 function anuncioEditor(a) {
   const d = S.an, nuevo = !a;
   a = a || { nombre: "", tipo: d.voz.lista ? "tts" : "audio", texto: "", dias: "0123456", modo: "horas", horas: [{ h: "09:00", red: false }], antes: [15, 5], evento_id: 0, cada_min: 60,
@@ -4056,10 +4146,18 @@ function anuncioEditor(a) {
         <button type="button" data-tipo="audio">🎵 ${LG("Subir audio", "Upload audio")}</button>
         ${puedeGrabar ? `<button type="button" data-tipo="grabar">🎙 ${LG("Grabar aquí", "Record here")}</button>` : ""}
       </div>
-      <div data-pane="tts"><textarea name="texto" rows="3" maxlength="2000" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
+      <div data-pane="tts"><textarea name="texto" rows="3" maxlength="${d.max_chars || 2000}" placeholder="${LG("Les recordamos que hoy martes a las 21:00 tenemos la red…", "Remember that tonight at 9 pm we have the net…")}">${esc(a.texto)}</textarea>
+        <div class="row gap wrap an-txtbar"><label class="btn sm ghost" style="margin:0" title="${LG("Llena el texto con un archivo .txt de tu equipo", "Fill the text from a .txt file on your computer")}">📄 ${LG("Cargar .txt", "Load .txt")}<input type="file" id="anTxt" accept=".txt,text/plain" hidden></label>
+          <small class="muted" id="anCuenta"></small></div>
         <div class="an-dic hidden" id="anDic"></div>
         <div class="an-vars"><span class="muted">${LG("Variables", "Variables")}:</span> ${vars}</div>
         <div class="hz-box" id="anHz"></div>
+        ${d.voz.motor === "azure" ? `<details class="an-vozsel" id="anVozSel" ${anVozDe(a) ? "open" : ""}><summary>🎙 ${LG("Voz", "Voice")}: <span id="anVozRes"></span></summary>
+          <div class="grid2"><label>${LG("Voz", "Voice")}<select id="anVozV"><option value="">${LG("La de Ajustes", "The one in Settings")}</option></select></label>
+            <label>${LG("Estilo", "Style")}<select id="anVozE"><option value="general">general</option></select></label>
+            <label>${LG("Velocidad (%)", "Speed (%)")}<input id="anVozR" type="number" min="50" max="200"></label>
+            <label>${LG("Tono (Hz)", "Pitch (Hz)")}<input id="anVozP" type="number" min="-50" max="50"></label></div>
+          <small class="muted">${LG("Solo para este anuncio. Si un día esa voz falla, sale con la de Ajustes y queda anotado en la bitácora.", "Only for this announcement. If that voice ever fails, it goes out with the one in Settings and it's noted in the log.")}</small></details>` : ""}
         <div class="row gap wrap"><button type="button" class="btn sm" id="anVozPlay">▶ ${LG("Escuchar", "Listen")}</button><span class="muted" id="anVozMsg">${esc(d.voz.nombre || "")}${d.voz.lista ? "" : " · ⚠ " + LG("sin configurar", "not set up")}</span></div></div>
       <div data-pane="audio" class="hidden"><label class="btn sm" style="margin:0">📁 ${LG("Elegir archivo", "Choose file")}<input type="file" id="anFile" accept="audio/*" hidden></label>
         <span class="muted" id="anFileMsg">${ed.archivoNombre ? esc(ed.archivoNombre) + " · " + fmt(ed.dur) : LG("MP3, WAV, M4A u OGG", "MP3, WAV, M4A or OGG")}</span></div>
@@ -4102,6 +4200,21 @@ function anuncioEditor(a) {
   </form>`);
   const f = $("#anForm"), prev = $("#anPrev");
   const repinta = pronResaltar(f.texto, d.pronuncia || [], $("#anDic"));
+  const maxC = d.max_chars || 2000;
+  const cuenta = () => { const n = f.texto.value.length; $("#anCuenta").textContent = `${n.toLocaleString()} / ${maxC.toLocaleString()} ${LG("caracteres", "characters")}`; $("#anCuenta").classList.toggle("warn-txt", n > maxC * 0.95); };
+  f.texto.addEventListener("input", cuenta); cuenta();
+  $("#anTxt").onchange = async (e) => {
+    const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+    try {
+      let t = await leerTxt(file);
+      if (t.length > maxC) { toast(LG(`El archivo tiene ${t.length} caracteres; se cortó a ${maxC} (Ajustes → Voz cambia el tope)`, `The file has ${t.length} characters; it was cut to ${maxC} (Settings → Voice changes the limit)`), true); t = t.slice(0, maxC); }
+      if (f.texto.value.trim() && !(await confirmBox(LG("¿Reemplazar el texto que ya está escrito?", "Replace the text already written?"), LG("Reemplazar", "Replace")))) return;
+      f.texto.value = t; if (!f.nombre.value.trim()) f.nombre.value = file.name.replace(/\.[^.]+$/, "").slice(0, 80);
+      repinta(); cuenta(); setTipo("tts");
+    } catch (err) { toast(err.message, true); }
+  };
+  ed.voz = Object.assign({}, anVozDe(a) || {});
+  if ($("#anVozSel")) anVozPanel(ed, d);
   horaPanel($("#anHz"), f.texto, repinta, !!d.eventos);
   const setTipo = (t) => {
     ed.tipo = t === "tts" ? "tts" : "audio"; ed.pane = t;
@@ -4173,7 +4286,7 @@ function anuncioEditor(a) {
   $("#anVozPlay").onclick = async () => {
     const b = $("#anVozPlay"); busy(b, true, LG("Generando…", "Generating…"));
     try {
-      const r = await api("api/anuncios/voz", { method: "POST", json: { texto: f.texto.value } });
+      const r = await api("api/anuncios/voz", { method: "POST", json: { texto: f.texto.value, voz: anVozDatos(ed) } });
       $("#anVozMsg").textContent = `${fmt(r.duracion)} ${LG("de", "of")} ${r.max_seg} s` + (r.duracion > r.max_seg ? " · ⚠ " + LG("muy largo", "too long") : "");
       oye(r.url);
     } catch (e) { toast(e.message, true); } finally { busy(b, false); }
@@ -4222,7 +4335,7 @@ function anuncioEditor(a) {
       dias: $$("#anForm [data-dia].on").map((x) => x.dataset.dia).join(""), horas: ed.horas,
       cada_min: f.cada_min.value, desde_h: f.desde_h.value, hasta_h: f.hasta_h.value, una_vez: f.una_vez.value,
       vig_desde: f.vig_desde.value, vig_hasta: f.vig_hasta.value, destino: f.destino.value, activo: a.activo,
-      evento_id: f.evento_id ? f.evento_id.value : 0, antes: ed.antes,
+      evento_id: f.evento_id ? f.evento_id.value : 0, antes: ed.antes, voz: anVozDatos(ed),
     };
     const fd = new FormData();
     fd.append("datos", JSON.stringify(datos));

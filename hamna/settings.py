@@ -42,6 +42,8 @@ DEFAULTS = {
     "azure_style": "general",
     "azure_rate": 100,
     "azure_pitch": 0,
+    "anuncio_max_seg": 60,      # duración máxima de un anuncio (30–170 s)
+    "anuncio_max_chars": 2000,  # caracteres máximos del texto (200–4000)
     "espeak_voice": "es-419",
     "espeak_speed": 150,
     "espeak_pitch": 50,

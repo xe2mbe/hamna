@@ -375,14 +375,24 @@ if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>
       c_ok "Port $PORT closed in firewalld (zone $ZONE): use /hamna/"
     fi
   else
-    firewall-cmd -q --zone="$ZONE" --add-port="$PORT"/tcp --permanent && firewall-cmd -q --reload
-    c_ok "Port $PORT opened in firewalld (zone $ZONE)"
+    # Only from the local network: the page goes over plain http on this port
+    firewall-cmd -q --zone="$ZONE" --remove-port="$PORT"/tcp --permanent 2>/dev/null || true
+    for NET in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+      firewall-cmd -q --zone="$ZONE" --permanent --add-rich-rule="rule family=ipv4 source address=$NET port port=$PORT protocol=tcp accept" 2>/dev/null || true
+    done
+    firewall-cmd -q --reload
+    c_ok "Port $PORT opened in firewalld (zone $ZONE) for the local network only (10.x, 172.16-31.x, 192.168.x)"
   fi
 elif command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
   if [ "$HOST" = 127.0.0.1 ]; then
     ufw status 2>/dev/null | grep -q "^$PORT/tcp" && ufw delete allow "$PORT"/tcp >/dev/null && c_ok "Port $PORT closed in ufw: use /hamna/"
   else
-    ufw allow "$PORT"/tcp >/dev/null && c_ok "Port $PORT opened in ufw"
+    # Only from the local network: the page goes over plain http on this port
+    ufw status 2>/dev/null | grep -qE "^$PORT/tcp +ALLOW +Anywhere" && ufw delete allow "$PORT"/tcp >/dev/null
+    for NET in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+      ufw allow from "$NET" to any port "$PORT" proto tcp >/dev/null
+    done
+    c_ok "Port $PORT opened in ufw for the local network only (10.x, 172.16-31.x, 192.168.x)"
   fi
 fi
 

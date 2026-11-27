@@ -180,7 +180,7 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 
 ### Short announcements
 
-**Schedule → Announcements** (next to **Events**): short announcements (up to 60 s) that the node transmits on its own.
+**Schedule → Announcements** (next to **Events**): short announcements (60 s by default; up to 170 s in Settings → Voice) that the node transmits on its own.
 
 - **What it says**: text read by the voice of Settings → Voice (with `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; if the text has variables the voice is generated again right before it goes out), an uploaded audio file, or a recording made from the page (needs https). Uploads and recordings are converted in the browser.
 - **When**: at given times on the chosen days, every N minutes within a time window, just once, or **N minutes before an event** (it follows the event's time, time zone and pauses); optionally only between two dates.
@@ -188,6 +188,10 @@ On the page, the version tag next to "HAMNA Web" turns **green** when you're up 
 - **Where**: only this node's radio (`localplay`, or IRLP local) or also the linked nodes / reflector (`playback`, or IRLP network).
 - **It never interrupts**: it waits for the channel to be quiet (nobody receiving, transmitting or talking through a link, and no HAMNA event on the air) for 3 s; if the channel doesn't clear in 5 min, that slot is skipped and logged. An event that starts while an announcement is playing waits for it to finish.
 - Each card has ▶ Listen, 📡 Transmit now, pause/activate, edit and delete, plus the next slot and the last result; the **announcement log** shows what went out, what was skipped and why. Administrators and operators create them; read-only users see them.
+- **📄 Load .txt** fills the text from a file on your computer (UTF-8 or the old Notepad's Windows-1252); a blank line is a short pause. The editor counts the characters against the limit.
+- **🎙 Voice per announcement** (Azure): a different voice, style, speed and pitch for each one, with ▶ Listen; empty = the one in Settings → Voice. If that voice ever fails, it goes out with the one in Settings and it's noted in the log.
+- **⬇ Download** the audio of each announcement (the 8 kHz WAV that goes on air).
+- **Limits** in Settings → Voice: maximum length (30–170 s, default 60) and maximum characters (200–4000, default 2000). It shows the node's TOT (`totime` in rpt.conf) and warns if an announcement that long would be cut; check the TOT of the linked nodes too.
 - They're included in backups.
 
 ### Times from another time zone
@@ -383,6 +387,17 @@ With **"The bot answers commands"** turned on (Settings → Alerts) (on only one
 - The last active administrator can't be deleted, deactivated or have their role removed.
 - The page can't be embedded in an iframe on another site, and it accepts no files without a session.
 - With Apache, the page only opens through `https://…/hamna/` (the password travels encrypted) and 8090 only listens inside the node. To reach 8090 from outside the node (not recommended), install with `--listen-all`, or use an SSH tunnel: `ssh -L 8090:127.0.0.1:8090 user@node`.
+
+
+**Checklist for whoever installs it**
+
+1. Install with `--no-cron` if nobody needs to edit the cron from the page (the Cron tab runs commands as root).
+2. Long, unique passwords for administrators; **operator** users for day-to-day use.
+3. Always https (the node's Apache) or an SSH tunnel; never forward 8090 on the router. With `--listen-all` or on IRLP the installer opens 8090 only to the local network (10.x, 172.16–31.x, 192.168.x), and the page warns when it's opened over plain http.
+4. Treat every backup as a secret: it carries all the keys.
+5. Download the release tag, check its SHA-256 (in the release notes) and read `install.sh` instead of `curl | sudo bash`.
+6. Asterisk's **AMI (port 5038)** must not be reachable from the internet: **Health** warns if it listens beyond 127.0.0.1.
+
 
 ### Cron
 
@@ -667,7 +682,7 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 
 ### Anuncios
 
-**Programación → Anuncios** (junto a **Eventos**): anuncios cortos (hasta 60 s) que el nodo transmite solo.
+**Programación → Anuncios** (junto a **Eventos**): anuncios cortos (60 s de fábrica; hasta 170 s en Ajustes → Voz) que el nodo transmite solo.
 
 - **Qué dice**: un texto que lee la voz de Ajustes → Voz (con `{hora}`, `{dia}`, `{fecha}`, `{fecha_larga}`, `{saludo}`, `{despedida}`, `{nodo}`; si el texto lleva variables la voz se genera otra vez justo antes de salir), un audio subido o una grabación hecha desde la página (requiere https). Lo subido y lo grabado se convierte en el navegador.
 - **Cuándo**: a ciertas horas los días elegidos, cada N minutos dentro de un horario, una sola vez o **N minutos antes de un evento** (sigue la hora, la zona horaria y las pausas del evento); si quieres, solo entre dos fechas.
@@ -675,6 +690,10 @@ En la página, la etiqueta de versión junto a "HAMNA Web" se pone **verde** si 
 - **Dónde**: solo el radio de este nodo (`localplay`, o IRLP local) o también los nodos enlazados / el reflector (`playback`, o IRLP con la red).
 - **Nunca interrumpe**: espera a que el canal esté en silencio 3 s (nadie recibiendo, transmitiendo ni hablando por un enlace, y ningún evento de HAMNA al aire); si en 5 min no se libera, ese turno se salta y queda en la bitácora. Un evento que empieza mientras suena un anuncio espera a que termine.
 - Cada tarjeta tiene ▶ Escuchar, 📡 Transmitir ahora, pausar/activar, editar y borrar, con el próximo turno y el último resultado; la **bitácora de anuncios** dice qué salió, qué se saltó y por qué. Los crean el administrador y los operadores; solo lectura los ve.
+- **📄 Cargar .txt** llena el texto con un archivo de tu equipo (UTF-8 o el Windows-1252 del Bloc de notas viejo); un renglón en blanco es una pausa breve. El editor cuenta los caracteres contra el tope.
+- **🎙 Voz por anuncio** (Azure): otra voz, estilo, velocidad y tono para cada uno, con ▶ Escuchar; vacío = la de Ajustes → Voz. Si un día esa voz falla, sale con la de Ajustes y queda en la bitácora.
+- **⬇ Descargar** el audio de cada anuncio (el WAV de 8 kHz que sale al aire).
+- **Topes** en Ajustes → Voz: duración máxima (30–170 s, de fábrica 60) y caracteres máximos (200–4000, de fábrica 2000). Muestra el TOT del nodo (`totime` de rpt.conf) y avisa si un anuncio tan largo lo cortaría; revisa también el TOT de los nodos enlazados.
 - Entran en los respaldos.
 
 ### Horas de otra zona horaria
@@ -870,6 +889,16 @@ Con **"El bot responde comandos"** activado (Ajustes → Avisos) (solo en un nod
 - No se puede borrar, desactivar ni quitar el rol al último administrador activo.
 - La página no se deja meter en un iframe de otro sitio, y sin sesión no acepta archivos.
 - Con Apache, la página solo se abre por `https://…/hamna/` (la contraseña viaja cifrada) y el 8090 escucha solo dentro del nodo. Para entrar al 8090 desde fuera del nodo (no recomendado), instala con `--listen-all`, o usa un túnel SSH: `ssh -L 8090:127.0.0.1:8090 usuario@nodo`.
+
+
+**Lista para quien instala**
+
+1. Instala con `--no-cron` si nadie necesita editar el cron desde la página (la pestaña Cron corre comandos como root).
+2. Contraseñas largas y únicas para los administradores; usuarios **operador** para el día a día.
+3. Siempre por https (el Apache del nodo) o por túnel SSH; nunca reenvíes el 8090 en el router. Con `--listen-all` o en IRLP el instalador abre el 8090 solo a la red local (10.x, 172.16–31.x, 192.168.x), y la página avisa si entras por http sin cifrar.
+4. Trata cada respaldo como secreto: lleva todas las claves.
+5. Baja la etiqueta del release, revisa su SHA-256 (en las notas del release) y lee `install.sh` en lugar de `curl | sudo bash`.
+6. El **AMI de Asterisk (puerto 5038)** no debe verse desde internet: **Salud** avisa si escucha fuera de 127.0.0.1.
 
 ### Cron
 

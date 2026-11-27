@@ -396,6 +396,10 @@
               <label>Velocidad (ppm)<input name="espeak_speed" type="number" min="80" max="300"></label>
               <label>Tono (0-99)<input name="espeak_pitch" type="number" min="0" max="99"></label>
             </div>
+            <div class="grid2 an-topes">
+              <label>Duración máxima de un anuncio (s)<input name="anuncio_max_seg" type="number" min="30" max="170" step="1"><small id="anTotHint">De 30 a 170 s. Por omisión 60.</small></label>
+              <label>Caracteres máximos del texto<input name="anuncio_max_chars" type="number" min="200" max="4000" step="100"><small>De 200 a 4000. Por omisión 2000.</small></label>
+            </div>
             <label>Probar voz<textarea id="ttsTestText" rows="2">Buenas noches colegas, bienvenidos a la red del {dia}.</textarea></label>
             <div class="row gap"><button type="button" class="btn" id="btnTtsTest">▶ Escuchar</button><audio id="ttsTestAudio" controls class="hidden"></audio></div>
             <div class="pron" id="pronBox"></div>

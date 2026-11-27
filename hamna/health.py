@@ -32,9 +32,11 @@ log = logging.getLogger("hamna.salud")
 INTERVAL = 60
 WRITE_EVERY = 600
 REMIND = 12 * 3600
-ORDER = ["sd", "escritura", "voltaje", "temperatura", "disco", "memoria"]
+ORDER = ["sd", "escritura", "voltaje", "temperatura", "disco", "memoria", "ami"]
+SOLO_PAGINA = {"ami"}      # se ve en Salud, pero no manda avisos por Telegram
 NOMBRE = {"sd": "Tarjeta SD", "escritura": "Escritura en la SD", "voltaje": "Alimentación",
-          "temperatura": "Temperatura", "disco": "Espacio en disco", "memoria": "Memoria"}
+          "temperatura": "Temperatura", "disco": "Espacio en disco", "memoria": "Memoria",
+          "ami": "AMI de Asterisk (5038)"}
 NIVEL = {"ok": 0, "nd": 0, "aviso": 1, "grave": 2}
 ICONO = {"ok": "✅", "nd": "➖", "aviso": "⚠️", "grave": "❌"}
 
@@ -52,6 +54,7 @@ CONSEJO = {
     "temperatura": "La Raspberry está muy caliente y puede frenarse. Mejora la ventilación, agrega disipador o ventilador y revisa que no esté encerrada.",
     "disco": "Queda poco espacio. Borra audios que ya no uses, compacta las secciones (Ajustes → Nivel de audio) o revisa la bitácora del sistema.",
     "memoria": "Queda muy poca memoria libre. Revisa qué programas están corriendo en el nodo.",
+    "ami": "El AMI de Asterisk escucha en toda la red. Si el router lo reenvía, cualquiera en internet puede intentar entrar (en nodos HamVOIP se ven intentos como «admin»). Si nadie de fuera lo usa (Allmon o Supermon en otro equipo), pon bindaddr = 127.0.0.1 en /etc/asterisk/manager.conf y reinicia Asterisk; si sí lo usan, que el router NO reenvíe el 5038 y usa contraseñas largas en manager.conf.",
 }
 
 _lock = threading.Lock()
@@ -156,6 +159,33 @@ def _write_probe():
 
 
 # ── Revisión ─────────────────────────────────────────────────────────────────
+def _ami():
+    """¿El 5038 escucha fuera de 127.0.0.1? Se lee /proc/net/tcp(6): no necesita root."""
+    abiertos, visto = [], False
+    for f, v6 in (("/proc/net/tcp", False), ("/proc/net/tcp6", True)):
+        try:
+            lineas = open(f).read().splitlines()[1:]
+        except OSError:
+            continue
+        visto = True
+        for ln in lineas:
+            p = ln.split()
+            if len(p) < 4 or p[3] != "0A":           # 0A = LISTEN
+                continue
+            ip, _, puerto = p[1].partition(":")
+            if int(puerto, 16) != 5038:
+                continue
+            local = ip in ("0100007F",) or (v6 and ip == "00000000000000000000000001000000")
+            if not local:
+                todas = set(ip) == {"0"}
+                abiertos.append("todas las direcciones" + (" (IPv6)" if v6 else "") if todas else "una dirección de la red")
+    if not visto:
+        return ("nd", "No se pudo revisar")
+    if abiertos:
+        return ("aviso", "Escucha en " + ", ".join(sorted(set(abiertos))) + ", no solo en 127.0.0.1")
+    return ("ok", "Solo escucha dentro del nodo (127.0.0.1) o no está activo")
+
+
 def _check(prev):
     out = {}
     snap = sysmon.snapshot()
@@ -236,6 +266,8 @@ def _check(prev):
         libre = (m["total"] - m["usada"]) // 2**20
         det = "{} MB libres de {} MB".format(libre, m["total"] // 2**20)
         out["memoria"] = ("aviso" if libre < 40 else "ok", det)
+
+    out["ami"] = _ami()
     return out
 
 
@@ -265,6 +297,8 @@ def _alert(results):
     antes = dict(_alerted)
     peor, mejor = [], []
     for k in ORDER:
+        if k in SOLO_PAGINA:
+            continue
         nivel, det = results[k]
         n = NIVEL[nivel]
         prev_n, prev_t = _alerted.get(k, ("ok", 0))

@@ -960,6 +960,39 @@ def anuncios_audio(req, aid):
     return send_file(p, "audio/wav")
 
 
+@app.route("/api/anuncios/<int:aid>/descargar", rol="lectura")
+def anuncios_descargar(req, aid):
+    """El WAV del anuncio (8 kHz, el que sale al aire) con el nombre del anuncio."""
+    a = anuncios.uno(aid)
+    p = anuncios.ruta(a)
+    if not p or not p.is_file():
+        raise HTTPError(404, "El anuncio no tiene audio")
+    nombre = (re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", a.get("nombre") or "").strip(" .") or "anuncio")[:120]
+    nombre = re.sub(r"\s{2,}", " ", nombre) + ".wav"
+    ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "_", nombre)
+    r = send_file(p, "audio/wav")
+    r.headers["Content-Disposition"] = "attachment; filename=\"{}\"; filename*=UTF-8''{}".format(
+        ascii_name, urllib.parse.quote(nombre))
+    log.info("%s descargó el anuncio «%s»", req.user["usuario"], a["nombre"])
+    return r
+
+
+_voces_cache = {"t": 0.0, "key": "", "voces": []}
+
+
+@app.route("/api/anuncios/voces", rol="operador")
+def anuncios_voces(req):
+    """Voces de Azure con la clave guardada, para elegir la voz de un anuncio (1 h en memoria)."""
+    cfg = settings.load()
+    key, region = (cfg.get("azure_key") or "").strip(), (cfg.get("azure_region") or "").strip()
+    if not key or not region:
+        raise ValueError("Falta la clave o la región de Azure (Ajustes → Voz)")
+    marca = region + ":" + key[-6:]
+    if _voces_cache["key"] != marca or time.time() - _voces_cache["t"] > 3600 or not _voces_cache["voces"]:
+        _voces_cache.update(voces=tts.azure_voices(key, region), key=marca, t=time.time())
+    return jsonr({"voces": _voces_cache["voces"]})
+
+
 @app.route("/api/anuncios/voz", ("POST",), rol="operador")
 def anuncios_voz(req):
     """Escuchar el texto con la voz configurada antes de guardar."""
@@ -967,8 +1000,9 @@ def anuncios_voz(req):
     cfg = settings.load()
     if isinstance(b.get("diccionario"), list):
         cfg = dict(cfg, pron_dict=pronuncia.normalizar(b["diccionario"]))
-    nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:2000], cfg)
-    return ok(url="api/archivo/tmp/" + nombre, texto=dicho, duracion=round(dur, 1), max_seg=anuncios.MAX_SEG)
+    voz = anuncios.voz_limpia(b.get("voz") or {})
+    nombre, dicho, dur = anuncios.vista_previa(str(b.get("texto") or "")[:anuncios.max_chars(cfg)], cfg, voz)
+    return ok(url="api/archivo/tmp/" + nombre, texto=dicho, duracion=round(dur, 1), max_seg=anuncios.max_seg(cfg))
 
 
 # ── Variables de hora con zona ({hora 21:00 America/Chicago}, {hora_evento …}) ──
@@ -1694,7 +1728,7 @@ def irlp_accion(req, accion):
 
 
 # ── Ajustes ──────────────────────────────────────────────────────────────────
-NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "espeak_speed": int, "espeak_pitch": int,
+NUM_KEYS = {"azure_rate": int, "azure_pitch": int, "anuncio_max_seg": int, "anuncio_max_chars": int, "espeak_speed": int, "espeak_pitch": int,
             "google_rate": int, "google_pitch": float, "eleven_stability": int, "eleven_similarity": int,
             "eleven_speed": int,
             "pause_tx_time": float, "pause_duration": float, "pause_alert_before": float,
@@ -1766,6 +1800,12 @@ def ajustes_save(req):
         raise ValueError("Modo IRLP inválido")
     if upd.get("backend") not in (None, "auto", "asl", "irlp", "simulado"):
         raise ValueError("Tipo de nodo inválido")
+    lo, hi = anuncios.MAX_SEG_RANGO
+    if "anuncio_max_seg" in upd and not lo <= upd["anuncio_max_seg"] <= hi:
+        raise ValueError("Duración máxima de un anuncio: de {} a {} s".format(lo, hi))
+    lo, hi = anuncios.MAX_CHARS_RANGO
+    if "anuncio_max_chars" in upd and not lo <= upd["anuncio_max_chars"] <= hi:
+        raise ValueError("Caracteres máximos de un anuncio: de {} a {}".format(lo, hi))
     settings.save(upd)
     return ok(ajustes=settings.public())
 
