@@ -70,6 +70,19 @@ def _dominio_ok(host, cfg):
     return any(host == d or host.endswith("." + d) for d in lista)
 
 
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+
+def _es_global(ip):
+    """ip.is_global no existe en el ipaddress de Python 3.5 (HamVOIP). Arreglo de XE1E."""
+    g = getattr(ip, "is_global", None)
+    if g is not None:
+        return g
+    if ip.version == 4 and ip in _CGNAT:        # CGNAT: is_private no la cuenta en 3.5
+        return False
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified)
+
+
 def _ip_publica(host, port):
     """Todas las direcciones del nombre deben ser públicas (nada de la red local ni del equipo)."""
     try:
@@ -80,7 +93,7 @@ def _ip_publica(host, port):
         ip = ipaddress.ip_address(info[4][0].split("%")[0])
         if getattr(ip, "ipv4_mapped", None):
             ip = ip.ipv4_mapped
-        if not ip.is_global or ip.is_multicast:
+        if not _es_global(ip) or ip.is_multicast:
             raise RuntimeError("«{}» apunta a una dirección privada o del propio equipo ({}); no se permite".format(host, ip))
 
 
