@@ -527,12 +527,29 @@ def _voz(texto, cfg, voz=""):
     return nombre, dur
 
 
+def _de_seccion_como_bib(sid):
+    """Una sección vista como un audio de la biblioteca (para «Programar como anuncio»)."""
+    s = db.get_seccion(sid)
+    if not s or not s.get("ruta_archivo") or not (paths.audios_dir() / s["ruta_archivo"]).is_file():
+        raise ValueError("Esa sección no tiene audio")
+    return {"tipo": "tts" if s["tipo"] == "TTS" else "audio", "texto": s.get("texto_tts") or "",
+            "voz": s.get("voz") or "", "duracion": float(s.get("duracion") or 0), "nombre": s["nombre"],
+            "archivo_nombre": s["ruta_archivo"], "_ruta": paths.audios_dir() / s["ruta_archivo"]}
+
+
 def _de_biblioteca(bib):
     """Copia el audio de la biblioteca a anuncios/ (no se comparte: cada uno queda con el suyo)."""
     from . import biblioteca
     tope = max_seg()
     if bib["duracion"] > tope + 0.5:
         raise ValueError("Ese audio dura {:.0f} s; el máximo de un anuncio es {} s (Ajustes → Voz)".format(bib["duracion"], tope))
+    if bib.get("_ruta"):                # de una sección: cualquier formato → WAV del aire
+        nombre = "an_{}.wav".format(uuid.uuid4().hex[:10])
+        dur = _a_aire(bib["_ruta"], carpeta() / nombre, settings.load())
+        if dur > tope + 0.5:
+            paths.rm(carpeta() / nombre)
+            raise ValueError("Esa sección dura {:.0f} s; el máximo de un anuncio es {} s (Ajustes → Voz)".format(dur, tope))
+        return nombre, dur
     return biblioteca.copiar_a(bib, carpeta()), bib["duracion"]
 
 
@@ -543,6 +560,8 @@ def guardar(datos, archivo_subido=None, nombre_subido="", usuario="", aid=None):
     if datos.get("biblioteca_id") and not aid:
         from . import biblioteca
         bib = biblioteca.uno(int(datos["biblioteca_id"]))
+    elif datos.get("seccion_id") and not aid:
+        bib = _de_seccion_como_bib(int(datos["seccion_id"]))
     viejo = actual.get("archivo") or ""
     nuevo = None
     if a["tipo"] == "audio":

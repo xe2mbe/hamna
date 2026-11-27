@@ -1,5 +1,8 @@
 """
-HAMNA Web — biblioteca de voz: audios guardados sin horario.
+HAMNA Web — biblioteca de voz (v1.54). Desde la v1.56 la biblioteca son las
+Secciones: lo que haya aquí se pasa solo a secciones sin evento (a_secciones).
+
+Lo de abajo describe la biblioteca original: audios guardados sin horario.
 
 Cada audio de la biblioteca es texto → voz (con su voz propia, como un
 anuncio) o un audio subido/grabado, siempre WAV 8 kHz mono, listo para el aire.
@@ -248,3 +251,35 @@ def como_subida(bid):
     tmp = paths.tmp_dir() / "bi_sec_{}.wav".format(uuid.uuid4().hex[:8])
     shutil.copyfile(str(p), str(tmp))
     return b, _Subida(str(tmp), (b["nombre"] or "biblioteca") + ".wav")
+
+
+def a_secciones():
+    """Cada audio de la biblioteca pasa a ser una sección sin evento (texto → voz conserva texto y voz;
+    lo demás, como sección de audio). El archivo se mueve a audios/. Devuelve cuántos pasó."""
+    import re
+    import time
+    n = 0
+    try:
+        items = db.rows("SELECT * FROM biblioteca ORDER BY id")
+    except Exception:
+        return 0
+    for b in items:
+        p = ruta(b)
+        try:
+            sid = db.insert_seccion(b["nombre"], "TTS" if b["tipo"] == "tts" else "Audio",
+                                    texto_tts=b["texto"] if b["tipo"] == "tts" else None,
+                                    descripcion=b.get("notas") or None)
+            campos = {"voz": b.get("voz") or ""}
+            if p and p.is_file():
+                stem = re.sub(r"[^A-Za-z0-9_-]+", "_", b["nombre"]).strip("_")[:50] or "audio"
+                dest = paths.audios_dir() / "{}_{}.wav".format(sid, stem)
+                shutil.move(str(p), str(dest))
+                campos.update(ruta_archivo=dest.name, duracion=b["duracion"], audio_ts=time.time())
+            db.update_seccion(sid, **campos)
+            db.execute("DELETE FROM biblioteca WHERE id=?", (b["id"],))
+            n += 1
+        except Exception:
+            log.exception("No pude pasar «%s» de la biblioteca a Secciones", b["nombre"])
+    if n:
+        log.info("Biblioteca: %d audios pasaron a Secciones (sin evento)", n)
+    return n

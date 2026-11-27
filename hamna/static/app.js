@@ -1083,7 +1083,9 @@ function secFila(s, opt = {}) {
       <span class="mini">
         <button class="btn ro" data-act="play" title="Escuchar aquí" ${s.tiene_audio ? "" : "disabled"}>▶</button>
         ${s.tiene_audio ? `<a class="btn ro" href="api/secciones/${s.id}/descargar" download title="Descargar el audio">⬇</a>` : `<button class="btn ro" title="Descargar el audio" disabled>⬇</button>`}
-        <button class="btn" data-act="air" title="Transmitir por el nodo" ${s.tiene_audio ? "" : "disabled"}>📡</button>
+        <button class="btn" data-act="air" title="${LG("Transmitir ahora (espera canal libre)", "Transmit now (waits for a clear channel)")}" ${s.tiene_audio ? "" : "disabled"}>📡</button>
+        <button class="btn" data-act="anuncio" title="${LG("Programar como anuncio (se copia el audio)", "Schedule as announcement (the audio is copied)")}" ${s.tiene_audio ? "" : "disabled"}>📢</button>
+        <button class="btn" data-act="dup" title="${LG("Duplicar", "Duplicate")}">⧉</button>
         <button class="btn" data-act="edit" title="Editar">✎</button>
         <button class="btn" data-act="del" title="Borrar">🗑</button>
       </span>
@@ -1129,6 +1131,18 @@ $("#secVista").onchange = () => { try { localStorage.setItem("hamna.secvista", $
 $("#secSearch").oninput = renderSecciones;
 $("#secFilter").onchange = renderSecciones;
 $("#btnNewSec").onclick = () => seccionForm(null);
+$("#secTxtMany").onchange = async (e) => {
+  const files = [...e.target.files]; e.target.value = ""; if (!files.length) return;
+  if (files.length > 20) return toast(LG("Máximo 20 archivos a la vez", "20 files at most"), true);
+  try {
+    const archivos = [];
+    for (const f of files) archivos.push({ nombre: f.name, texto: await leerTxt(f) });
+    const r = await run(() => api("api/secciones/txt", { method: "POST", json: { archivos } }), LG(`Generando ${files.length} secciones…`, `Generating ${files.length} sections…`));
+    const mal = r.resultados.filter((x) => !x.ok);
+    toast(LG(`${r.resultados.length - mal.length} secciones nuevas (sin evento)`, `${r.resultados.length - mal.length} new sections (no event)`) + (mal.length ? " · ⚠ " + mal.map((x) => x.nombre + ": " + x.error).join(" · ") : ""), !!mal.length);
+  } catch (err) { toast(err.message, true); }
+  loadSecciones();
+};
 $("#secList").onclick = async (e) => {
   const b = e.target.closest("button[data-act]"); if (!b) return;
   const s = S.secciones.find((x) => x.id === +b.closest(".trow").dataset.id);
@@ -1136,8 +1150,16 @@ $("#secList").onclick = async (e) => {
     openModal(s.nombre, `<audio controls autoplay src="api/secciones/${s.id}/audio" style="width:100%"></audio>
       ${s.tipo === "TTS" ? `<p class="muted">${esc(s.texto_tts)}</p>` : ""}`);
   } else if (b.dataset.act === "air") {
-    if (await confirmBox(`¿Transmitir «${s.nombre}» (${fmt(s.duracion)}) por el nodo ahora?`, "📡 Transmitir"))
-      run(() => api(`api/secciones/${s.id}/aire`, { method: "POST" }), "Transmitiendo…");
+    const destino = await anElegirVia({ nombre: s.nombre, destino: "local" });
+    if (destino) run(() => api(`api/secciones/${s.id}/aire`, { method: "POST", json: { destino } }), LG("En camino al aire", "On its way to air")).catch(() => {});
+  } else if (b.dataset.act === "anuncio") {
+    if (!S.an) { try { S.an = await api("api/anuncios"); } catch (err) { return toast(err.message, true); } }
+    showTab("prog"); progSubTab("anuncios");
+    anuncioEditor(null, { id: s.id, seccion: true, nombre: s.nombre, tipo: s.tipo === "TTS" ? "tts" : "audio", texto: s.tipo === "TTS" ? s.texto_tts || "" : "",
+      voz: s.voz || "", archivo_nombre: s.ruta_archivo || "", duracion: s.duracion || 0 });
+  } else if (b.dataset.act === "dup") {
+    await run(() => api(`api/secciones/${s.id}/duplicar`, { method: "POST" }), LG("Duplicada", "Duplicated")).catch(() => {});
+    loadSecciones();
   } else if (b.dataset.act === "edit") seccionForm(s);
   else if (b.dataset.act === "del") {
     const warn = s.usos ? ` Se quitará de ${s.usos} evento(s).` : "";
@@ -1150,6 +1172,9 @@ async function getInfo() { if (!S.info) S.info = await api("api/info"); return S
 
 async function seccionForm(s) {
   const info = await getInfo();
+  if (!S.an) { try { S.an = await api("api/anuncios"); } catch {} }
+  const dv = S.an && S.an.voz && S.an.voz.motor === "azure" ? S.an : null;
+  const puedeGrabar = !!(window.isSecureContext && navigator.mediaDevices && window.MediaRecorder);
   const isNew = !s;
   s = s || { tipo: "TTS", nombre: "", texto_tts: "", titulo: "", descripcion: "", regenerar_antes: 0 };
   openModal(isNew ? "Nueva sección" : "Editar sección", `
@@ -1165,6 +1190,13 @@ async function seccionForm(s) {
           <label>Descripción<input name="descripcion" value="${esc(s.descripcion || "")}"><small>Se lee con {descripcion}</small></label>
         </div>
         <label>Texto<textarea name="texto_tts" rows="6">${esc(s.texto_tts || "")}</textarea></label>
+        <div class="row gap wrap an-txtbar"><label class="btn sm ghost" style="margin:0">📄 ${LG("Cargar .txt", "Load .txt")}<input type="file" id="sfTxt" accept=".txt,text/plain" hidden></label><small class="muted" id="sfCuenta"></small></div>
+        ${dv ? `<details class="an-vozsel" id="anVozSel" ${anVozDe(s) ? "open" : ""}><summary>🎙 ${LG("Voz", "Voice")}: <span id="anVozRes"></span></summary>
+          <div class="grid2"><label>${LG("Voz", "Voice")}<select id="anVozV"><option value="">${LG("La de Ajustes", "The one in Settings")}</option></select></label>
+            <label>${LG("Estilo", "Style")}<select id="anVozE"><option value="general">general</option></select></label>
+            <label>${LG("Velocidad (%)", "Speed (%)")}<input id="anVozR" type="number" min="50" max="200"></label>
+            <label>${LG("Tono (Hz)", "Pitch (Hz)")}<input id="anVozP" type="number" min="-50" max="50"></label></div>
+          <small class="muted">${LG("Solo para esta sección. Si un día esa voz falla al regenerarse, sale con la de Ajustes.", "Only for this section. If that voice ever fails when regenerating, it goes out with the one in Settings.")}</small></details>` : ""}
         <div class="an-dic hidden" id="sfDic"></div>
         <div class="vars">${info.variables.map(([v, d]) => `<button type="button" title="${esc(d)}">${v}</button>`).join("")}</div>
         <div class="hz-box" id="sfHz"></div>
@@ -1185,6 +1217,7 @@ async function seccionForm(s) {
           <small>${!isNew && s.ruta_archivo ? "Actual: " + esc(s.ruta_archivo) + " · " + fmt(s.duracion) + ". Sube otro solo si quieres reemplazarlo." : info.formatos.map((f) => f.slice(1).toUpperCase()).join(", ") + ". Se convierte solo al formato del nodo."}</small></label>
         <label class="sf-bib hidden">📚 ${LG("O un audio de la biblioteca", "Or an audio from the library")}<select name="biblioteca_id"><option value="">—</option></select>
           <small>${LG("La sección se queda con una copia: cambiar la biblioteca después no la cambia.", "The section keeps a copy: changing the library later doesn't change it.")}</small></label>
+        ${puedeGrabar ? `<div class="row gap wrap"><button type="button" class="btn sm" id="sfRec">⏺ ${LG("O grabar aquí", "Or record here")}</button><span class="muted" id="sfRecMsg"></span></div>` : ""}
         <div id="sfProg" class="bar hidden"><div></div></div>
         ${!isNew && s.tiene_anterior ? `<div class="prev-box"><span>↩ Versión anterior: ${fmt(s.anterior_duracion)}${s.anterior_fecha ? " · reemplazada " + esc(fechaCorta(s.anterior_fecha)) : ""}</span>
           <audio controls preload="none" src="api/secciones/${s.id}/anterior?t=${encodeURIComponent(s.anterior_fecha || "")}"></audio>
@@ -1203,6 +1236,40 @@ async function seccionForm(s) {
     $(".sf-bib", f).classList.remove("hidden");
   }).catch(() => {});
   if (f.url_falla) f.url_falla.value = s.url_falla || "respaldo";
+  const ed = { voz: Object.assign({}, anVozDe(s) || {}), grabado: null };
+  if (dv && $("#anVozSel")) anVozPanel(ed, dv);
+  const sfCuenta = () => { $("#sfCuenta").textContent = `${f.texto_tts.value.length.toLocaleString()} ${LG("caracteres", "characters")}`; };
+  f.texto_tts.addEventListener("input", sfCuenta); sfCuenta();
+  $("#sfTxt").onchange = async (e) => {
+    const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+    try {
+      const t = await leerTxt(file);
+      if (f.texto_tts.value.trim() && !(await confirmBox(LG("¿Reemplazar el texto que ya está escrito?", "Replace the text already written?"), LG("Reemplazar", "Replace")))) return;
+      f.texto_tts.value = t; if (!f.nombre.value.trim()) f.nombre.value = file.name.replace(/\.[^.]+$/, "").slice(0, 120);
+      repinta(); sfCuenta();
+    } catch (err) { toast(err.message, true); }
+  };
+  if ($("#sfRec")) $("#sfRec").onclick = async () => {
+    const x = $("#sfRec");
+    if (ed.rec) { ed.rec.stop(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch { toast(LG("No hay permiso para usar el micrófono", "No permission to use the microphone"), true); return; }
+    const trozos = [], rec = new MediaRecorder(stream); ed.rec = rec;
+    const t0 = Date.now(), reloj = setInterval(() => { $("#sfRecMsg").textContent = `⏺ ${fmt((Date.now() - t0) / 1000)}`; }, 250);
+    rec.ondataavailable = (ev) => ev.data.size && trozos.push(ev.data);
+    rec.onstop = async () => {
+      clearInterval(reloj); stream.getTracks().forEach((t) => t.stop()); ed.rec = null;
+      x.textContent = "⏺ " + LG("Grabar otra vez", "Record again");
+      try {
+        const r = await aWav8k(new Blob(trozos, { type: rec.mimeType }), (f.nombre.value || "grabacion").slice(0, 60));
+        ed.grabado = r.file; f.archivo.value = "";
+        $("#sfRecMsg").textContent = `${LG("Grabado", "Recorded")} · ${fmt(r.dur)} · ${LG("se usa al guardar", "used when you save")}`;
+        const a = $("#sfAudio"); if (a) { a.src = URL.createObjectURL(r.file); a.classList.remove("hidden"); }
+      } catch (err) { $("#sfRecMsg").textContent = "⚠ " + err.message; }
+    };
+    rec.start(); x.textContent = "⏹ " + LG("Terminar", "Stop");
+  };
   const secUrlProbar = async (conVoz, b) => {
     const box = $("#sfUrlRes"); busy(b, true, conVoz ? LG("Generando voz…", "Generating voice…") : LG("Consultando…", "Checking…"));
     try {
@@ -1248,7 +1315,7 @@ async function seccionForm(s) {
   $("#sfPrev").onclick = async () => {
     const b = $("#sfPrev"); busy(b, true, "Generando…");
     try {
-      const r = await api("api/tts/preview", { method: "POST", json: { texto: f.texto_tts.value, titulo: f.titulo.value || f.nombre.value, descripcion: f.descripcion.value } });
+      const r = await api("api/tts/preview", { method: "POST", json: { texto: f.texto_tts.value, titulo: f.titulo.value || f.nombre.value, descripcion: f.descripcion.value, voz: anVozDatos(ed) } });
       const a = $("#sfAudio"); a.src = r.url; a.classList.remove("hidden"); a.play();
       $("#sfResolved").textContent = "Se leerá: " + r.texto;
     } catch (e) { toast(e.message, true); } finally { busy(b, false); }
@@ -1266,12 +1333,16 @@ async function seccionForm(s) {
     if (tipo === "TTS") {
       ["titulo", "descripcion", "texto_tts"].forEach((k) => fd.append(k, f[k].value));
       fd.append("regenerar_antes", f.regenerar_antes.checked ? "1" : "0");
+      const vozNueva = JSON.stringify(anVozDatos(ed)), vozAntes = JSON.stringify(anVozDatos({ voz: anVozDe(s) || {} }));
+      if (dv) fd.append("voz", vozNueva);
       if (f.url) { fd.append("url", f.url.value.trim()); fd.append("url_falla", f.url_falla.value); }
-      const changed = isNew || f.texto_tts.value !== (s.texto_tts || "") || f.titulo.value !== (s.titulo || "") || f.descripcion.value !== (s.descripcion || "") || !s.tiene_audio;
+      const changed = isNew || (dv && vozNueva !== vozAntes) || f.texto_tts.value !== (s.texto_tts || "") || f.titulo.value !== (s.titulo || "") || f.descripcion.value !== (s.descripcion || "") || !s.tiene_audio;
       fd.append("generar", changed ? "1" : "0");
     } else if (f.archivo.files[0]) {
       const af = await nodeReadyAudio(f.archivo.files[0]);
       fd.append("archivo", af, af.name);
+    } else if (ed.grabado) {
+      fd.append("archivo", ed.grabado, ed.grabado.name);
     } else if (f.biblioteca_id.value) {
       fd.append("biblioteca_id", f.biblioteca_id.value);
     }
@@ -4511,7 +4582,7 @@ function anuncioEditor(a, base) {
   };
   if ($("#anUrlProbar")) { $("#anUrlProbar").onclick = (e) => urlProbar(false, e.currentTarget); $("#anUrlOir").onclick = (e) => urlProbar(true, e.currentTarget); } pintaHoras(); pintaAntes(); red();
   if (!nuevo && a.tipo === "audio") oyeGuardado();
-  if (base && base.tipo === "audio") { prev.src = `api/biblioteca/${base.id}/audio`; prev.classList.remove("hidden"); }
+  if (base && base.tipo === "audio") { prev.src = `api/${base.seccion ? "secciones" : "biblioteca"}/${base.id}/audio`; prev.classList.remove("hidden"); }
   function oyeGuardado() { prev.src = `api/anuncios/${a.id}/audio?v=${encodeURIComponent(a.modificado)}`; prev.classList.remove("hidden"); }
   $("#anTipo").onclick = (e) => { const b = e.target.closest("[data-tipo]"); if (b) setTipo(b.dataset.tipo); };
   $("#anModo").onclick = (e) => { const b = e.target.closest("[data-modo]"); if (b) setModo(b.dataset.modo); };
@@ -4605,7 +4676,7 @@ function anuncioEditor(a, base) {
       url: f.url ? f.url.value.trim() : "", url_falla: f.url_falla ? f.url_falla.value : "respaldo",
     };
     const fd = new FormData();
-    if (base) datos.biblioteca_id = base.id;
+    if (base) datos[base.seccion ? "seccion_id" : "biblioteca_id"] = base.id;
     fd.append("datos", JSON.stringify(datos));
     if (ed.tipo === "audio" && ed.archivo) fd.append("archivo", ed.archivo, ed.archivo.name);
     const b = $("#anSave"); busy(b, true, ed.tipo === "tts" ? LG("Generando voz…", "Generating voice…") : LG("Guardando…", "Saving…"));

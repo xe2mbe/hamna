@@ -38,6 +38,7 @@ def init_app():
     anuncios.init()
     from . import biblioteca
     biblioteca.init()
+    biblioteca.a_secciones()           # desde la v1.56 la biblioteca son las Secciones
     from . import historial
     historial.init()
     anuncios.emisor.start()
@@ -576,7 +577,8 @@ def _generate_tts(sid):
         return
     cfg = settings.load()
     ctx = {"titulo": s.get("titulo") or s["nombre"], "descripcion": s.get("descripcion") or ""}
-    src = tts.synthesize(s["texto_tts"], cfg, paths.tmp_dir() / ("tts_" + uuid.uuid4().hex[:8]), ctx)
+    c2 = anuncios.cfg_con_voz(cfg, s.get("voz"))
+    src = tts.synthesize(s["texto_tts"], c2, paths.tmp_dir() / ("tts_" + uuid.uuid4().hex[:8]), ctx, respaldo=c2 is cfg)
     dest = paths.audios_dir() / "{}_{}{}".format(sid, safe_name(s["nombre"]), src.suffix)
     shutil.move(str(src), str(dest))
     if s.get("ruta_archivo") and s["ruta_archivo"] != dest.name:
@@ -594,6 +596,12 @@ def _apply_section(req, sid, tipo, is_new):
             fields[k] = form[k].strip()
     if "regenerar_antes" in form:
         fields["regenerar_antes"] = truthy(form["regenerar_antes"])
+    if tipo == "TTS" and "voz" in form:
+        try:
+            v = anuncios.voz_limpia(json.loads(form.get("voz") or "{}"))
+        except ValueError as e:
+            raise ValueError(str(e))
+        fields["voz"] = json.dumps(v, sort_keys=True) if v else ""
     if "renovar" in form:
         fields["renovar"] = 1 if truthy(form["renovar"]) else 0
     if "nombre" in fields and not fields["nombre"]:
@@ -876,11 +884,70 @@ def seccion_descargar(req, sid):
 
 @app.route("/api/secciones/<int:sid>/aire", ("POST",))
 def seccion_aire(req, sid):
+    """Transmite la sección una vez por la cola de los anuncios: espera canal libre y nunca corta
+    lo que esté al aire. destino: local (solo este nodo) | red (también los enlazados)."""
     s = db.get_seccion(sid)
-    if not s or not s.get("ruta_archivo"):
+    if not s or not s.get("ruta_archivo") or not (paths.audios_dir() / s["ruta_archivo"]).is_file():
         raise ValueError("La sección no tiene audio")
-    engine.play_single(paths.audios_dir() / s["ruta_archivo"], s["nombre"])
+    destino = (req.json() or {}).get("destino") or "local"
+    if destino not in ("local", "red"):
+        raise ValueError("Destino inválido")
+    wav = audio.prepare(paths.audios_dir() / s["ruta_archivo"], _air_target(settings.load()))
+    if not anuncios.emisor.encolar_audio({"clave": "sec:{}".format(sid), "nombre": "🎚 " + s["nombre"], "wav": str(wav),
+                                          "texto": "", "voz": ""}, "sección · " + req.user["usuario"], destino):
+        raise ValueError("Esa sección ya está en espera o al aire")
+    log.info("%s mandó al aire la sección «%s»", req.user["usuario"], s["nombre"])
     return ok()
+
+
+@app.route("/api/secciones/<int:sid>/duplicar", ("POST",))
+def seccion_duplicar(req, sid):
+    s = db.get_seccion(sid)
+    if not s:
+        raise HTTPError(404)
+    nid = db.insert_seccion((s["nombre"] + " (copia)")[:120], s["tipo"], s.get("texto_tts"), s.get("regenerar_antes"),
+                            s.get("titulo"), s.get("descripcion"))
+    campos = {"renovar": s.get("renovar") or 0, "voz": s.get("voz") or ""}
+    if req.user["rol"] == "admin":          # la dirección del texto solo la pone un administrador
+        campos.update(url=s.get("url") or "", url_falla=s.get("url_falla") or "respaldo")
+    p = paths.audios_dir() / s["ruta_archivo"] if s.get("ruta_archivo") else None
+    if p and p.is_file():
+        dest = paths.audios_dir() / "{}_{}{}".format(nid, safe_name(s["nombre"]), p.suffix)
+        shutil.copyfile(str(p), str(dest))
+        campos.update(ruta_archivo=dest.name, duracion=s.get("duracion") or 0, audio_ts=time.time())
+    db.update_seccion(nid, **campos)
+    log.info("%s duplicó la sección «%s»", req.user["usuario"], s["nombre"])
+    return ok(seccion=_sec_out(db.get_seccion(nid)))
+
+
+@app.route("/api/secciones/txt", ("POST",))
+def secciones_txt(req):
+    """«Cargar varios .txt»: una sección de voz por archivo, con el nombre del archivo."""
+    b = req.json()
+    archivos = b.get("archivos")
+    if not isinstance(archivos, list) or not archivos:
+        raise ValueError("No llegó ningún archivo")
+    if len(archivos) > 20:
+        raise ValueError("Máximo 20 archivos a la vez")
+    voz = anuncios.voz_limpia(b.get("voz") or {})
+    out = []
+    for f in archivos:
+        nombre = os.path.splitext(str((f or {}).get("nombre") or "texto").strip())[0][:120] or "texto"
+        texto = str((f or {}).get("texto") or "").strip()
+        if not texto:
+            out.append({"nombre": nombre, "ok": False, "error": "El archivo está vacío"})
+            continue
+        sid = db.insert_seccion(nombre, "TTS", texto)
+        try:
+            if voz:
+                db.update_seccion(sid, voz=json.dumps(voz, sort_keys=True))
+            _generate_tts(sid)
+            out.append({"nombre": nombre, "ok": True, "id": sid})
+        except Exception as e:
+            db.delete_seccion(sid)
+            out.append({"nombre": nombre, "ok": False, "error": str(e)[:200]})
+    log.info("%s cargó %d secciones desde .txt", req.user["usuario"], sum(1 for x in out if x["ok"]))
+    return ok(resultados=out)
 
 
 @app.route("/api/secciones/compactar", ("POST",), rol="admin")
@@ -915,8 +982,9 @@ def tts_preview(req):
     ctx = {"titulo": b.get("titulo") or "", "descripcion": b.get("descripcion") or "",
            "evento": "Evento de prueba", "numero": "92", "emision": "92", "emision_anio": "46"}
     # La prueba de Ajustes → Voz oye exactamente el motor elegido (sin respaldo)
-    src = tts.synthesize(text, cfg, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx,
-                         respaldo=not b.get("sin_respaldo"))
+    c2 = anuncios.cfg_con_voz(cfg, anuncios.voz_limpia(b.get("voz") or {}))
+    src = tts.synthesize(text, c2, paths.tmp_dir() / ("preview_" + uuid.uuid4().hex[:8]), ctx,
+                         respaldo=not b.get("sin_respaldo") and c2 is cfg)
     if not audio.can_play_in_browser(src):
         src = audio.prepare(src, None)
     return ok(url="api/archivo/" + src.parent.name + "/" + src.name,

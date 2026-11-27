@@ -140,6 +140,10 @@ def init_db():
         if "url" not in cols:
             c.execute("ALTER TABLE secciones ADD COLUMN url TEXT DEFAULT ''")
             c.execute("ALTER TABLE secciones ADD COLUMN url_falla TEXT DEFAULT 'respaldo'")
+        # Voz propia de una sección de voz (como en los anuncios: JSON con azure_voice…; vacío = la de Ajustes)
+        cols = [r[1] for r in c.execute("PRAGMA table_info(secciones)")]
+        if "voz" not in cols:
+            c.execute("ALTER TABLE secciones ADD COLUMN voz TEXT DEFAULT ''")
         # Numeración automática de emisiones (ver numeracion.py)
         cols = [r[1] for r in c.execute("PRAGMA table_info(eventos)")]
         if "num_auto" not in cols:
@@ -173,7 +177,7 @@ _SEC_SELECT = """
     SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
            s.duracion, s.regenerar_antes, s.titulo, s.descripcion, s.creado_en,
            s.anterior_archivo, s.anterior_duracion, s.anterior_fecha,
-           s.renovar, s.audio_ts, s.anterior_ts, s.url, s.url_falla
+           s.renovar, s.audio_ts, s.anterior_ts, s.url, s.url_falla, s.voz
     FROM secciones s LEFT JOIN tipos_seccion ts ON ts.id = s.tipo_seccion_id
 """
 
@@ -205,7 +209,7 @@ def update_seccion(sid, **fields):
     allowed = {"nombre", "ruta_archivo", "texto_tts", "duracion",
                "regenerar_antes", "titulo", "descripcion",
                "anterior_archivo", "anterior_duracion", "anterior_fecha",
-               "renovar", "audio_ts", "anterior_ts", "url", "url_falla"}
+               "renovar", "audio_ts", "anterior_ts", "url", "url_falla", "voz"}
     sets, vals = [], []
     for k, v in fields.items():
         if k in allowed:
@@ -270,7 +274,7 @@ def get_secciones_by_evento(eid):
     return rows("""
         SELECT s.id, s.nombre, ts.nombre AS tipo, s.ruta_archivo, s.texto_tts,
                s.duracion, s.regenerar_antes, s.titulo, s.descripcion,
-               s.renovar, s.audio_ts, s.url, s.url_falla, es.orden, es.contabilizable
+               s.renovar, s.audio_ts, s.url, s.url_falla, s.voz, es.orden, es.contabilizable
         FROM secciones s
         JOIN evento_secciones es ON es.seccion_id = s.id
         LEFT JOIN tipos_seccion ts ON ts.id = s.tipo_seccion_id

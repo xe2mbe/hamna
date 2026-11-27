@@ -216,8 +216,16 @@ class Engine:
             if nota != "texto de la dirección":
                 self.note("«{}»: {}".format(sec["nombre"], nota), "warn")
         out = paths.tmp_dir() / "regen_{}_{}".format(sec['id'], uuid.uuid4().hex[:6])
+        from . import anuncios
+        c2 = anuncios.cfg_con_voz(cfg, sec.get("voz"))
         try:
-            src = tts.synthesize(texto, cfg, out, ctx)
+            try:
+                src = tts.synthesize(texto, c2, out, ctx, respaldo=c2 is cfg)
+            except Exception as e:
+                if c2 is cfg:
+                    raise
+                self.note("«{}»: la voz {} falló ({}); uso la de Ajustes".format(sec["nombre"], c2.get("azure_voice"), e), "warn")
+                src = tts.synthesize(texto, cfg, out, ctx)
             sec["_prep"] = audio.prepare(src, self._target(cfg))
             sec["duracion"] = audio.duration(sec["_prep"])
             self.note("TTS regenerado: {}".format(sec['nombre']))
