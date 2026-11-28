@@ -1053,3 +1053,12 @@ Lo que se sube a `main` sin etiqueta no se ofrece a los nodos. Para convertir au
 | `hub.py` | Panel de nodos (latidos) |
 | `backup.py` / `autobackup.py` | Respaldo, restauración y respaldo automático |
 | `cron.py` | Pestaña Cron |
+
+## Licencia
+
+HAMNA es software libre: puedes redistribuirlo y modificarlo bajo los términos de la
+[Licencia Pública General de GNU, versión 3](LICENSE) (GPL-3.0) publicada por la Free Software Foundation.
+
+Copyright © 2026 Helliud Bueno Moreno, XE2MBE, y colaboradores.
+
+Las contribuciones (*pull requests*) se aceptan bajo la misma licencia.
